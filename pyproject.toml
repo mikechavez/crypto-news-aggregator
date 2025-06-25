@@ -20,12 +20,19 @@ dependencies = [
     "textblob (>=0.19.0,<0.20.0)",
     "pydantic-settings (>=2.10.0,<3.0.0)",
     "alembic (>=1.16.2,<2.0.0)",
-    "newsapi-python (>=0.2.7,<0.3.0)"
+    "newsapi-python (>=0.2.7,<0.3.0)",
+    "aiosqlite (>=0.21.0,<0.22.0)"
 ]
 
 [tool.poetry]
 packages = [{include = "crypto_news_aggregator", from = "src"}]
 
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+pytest-asyncio = "^1.0.0"
+pytest-mock = "^3.14.1"
+pytest-cov = "^6.2.1"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
