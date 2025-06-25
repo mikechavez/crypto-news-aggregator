@@ -129,7 +129,7 @@ pytest tests/integration/
 
 ## License
 
-This project and all its contents are Copyright © 2025 [Your Full Name]. All rights reserved.
+This project and all its contents are Copyright © 2025 Michael Lee Chavez. All rights reserved.
 
 **All rights reserved.** No part of this project may be reproduced, distributed, or transmitted in any form or by any means, including photocopying, recording, or other electronic or mechanical methods, without the prior written permission of the copyright owner.
 
