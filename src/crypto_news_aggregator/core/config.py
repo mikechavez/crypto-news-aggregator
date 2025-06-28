@@ -7,12 +7,19 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Crypto News Aggregator"
     VERSION: str = "0.1.0"
 
-    # Database settings
+    # PostgreSQL settings (kept for backward compatibility)
     POSTGRES_SERVER: str = "localhost"
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"
     POSTGRES_DB: str = "crypto_news"
-    DATABASE_URL: str = f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_SERVER}/{POSTGRES_DB}"
+    POSTGRES_URL: str = f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_SERVER}/{POSTGRES_DB}"
+    
+    # MongoDB settings
+    MONGODB_URI: str = ""  # e.g., "mongodb+srv://<username>:<password>@<cluster>.mongodb.net/"
+    MONGODB_NAME: str = "crypto_news"  # Default database name
+    
+    # For backward compatibility
+    DATABASE_URL: str = POSTGRES_URL
 
     # API Keys (these will be loaded from environment variables)
     NEWS_API_KEY: str = ""  # Kept for backward compatibility
@@ -24,12 +31,16 @@ class Settings(BaseSettings):
     REALTIME_NEWSAPI_TIMEOUT: int = 30  # Request timeout in seconds
     REALTIME_NEWSAPI_MAX_RETRIES: int = 3  # Max retries for API calls
 
-    # Redis settings
+    # Redis settings (for direct Redis protocol - optional)
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
-
-    # Celery settings
+    
+    # Upstash Redis REST API settings
+    UPSTASH_REDIS_REST_URL: str = ""  # e.g., "https://your-instance.upstash.io"
+    UPSTASH_REDIS_TOKEN: str = ""     # Your Upstash REST token
+    
+    # Celery settings (using Redis for local development)
     CELERY_BROKER_URL: str = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
     CELERY_RESULT_BACKEND: str = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
