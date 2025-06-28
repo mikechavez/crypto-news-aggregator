@@ -133,4 +133,4 @@ This project and all its contents are Copyright © 2025 Michael Lee Chavez. All 
 
 **All rights reserved.** No part of this project may be reproduced, distributed, or transmitted in any form or by any means, including photocopying, recording, or other electronic or mechanical methods, without the prior written permission of the copyright owner.
 
-For permission requests, please contact [Your Email Address].
+For permission requests, please contact the author.

@@ -15,9 +15,14 @@ class Settings(BaseSettings):
     DATABASE_URL: str = f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_SERVER}/{POSTGRES_DB}"
 
     # API Keys (these will be loaded from environment variables)
-    NEWS_API_KEY: str = ""
+    NEWS_API_KEY: str = ""  # Kept for backward compatibility
     TWITTER_BEARER_TOKEN: str = ""
     POLYMARKET_API_KEY: str = ""
+    
+    # Realtime NewsAPI settings
+    REALTIME_NEWSAPI_URL: str = "http://localhost:3000"  # URL of the self-hosted realtime-newsapi
+    REALTIME_NEWSAPI_TIMEOUT: int = 30  # Request timeout in seconds
+    REALTIME_NEWSAPI_MAX_RETRIES: int = 3  # Max retries for API calls
 
     # Redis settings
     REDIS_HOST: str = "localhost"
