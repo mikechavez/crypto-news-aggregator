@@ -49,11 +49,15 @@ class TestSettings(Settings):
     REDIS_DB: int = 0
     
     # Celery settings
-    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+    CELERY_BROKER_URL: str = "memory://"  # Use in-memory broker for tests
+    CELERY_RESULT_BACKEND: str = "cache+memory://"  # Use in-memory result backend for tests
+    CELERY_TASK_ALWAYS_EAGER: bool = True  # Run tasks synchronously in tests
+    CELERY_TASK_EAGER_PROPAGATES: bool = True  # Propagate exceptions in eager mode
     
     # Real-time news API settings
     REALTIME_NEWSAPI_URL: str = "http://test-server:3000"
+    REALTIME_NEWSAPI_TIMEOUT: int = 30
+    REALTIME_NEWSAPI_MAX_RETRIES: int = 3
     
     # Upstash Redis settings
     UPSTASH_REDIS_REST_URL: str = "https://test-upstash-redis.example.com"
@@ -68,6 +72,26 @@ class TestSettings(Settings):
     
     # Cache settings
     CACHE_EXPIRE: int = 300  # 5 minutes for tests
+    
+    # Database sync settings
+    ENABLE_DB_SYNC: bool = False  # Disable database sync for tests
+    
+    # Task status settings
+    ENABLE_TASK_STATUS_CACHE: bool = False  # Disable task status cache for tests
+    TASK_STATUS_CACHE_EXPIRE: int = 300  # 5 minutes
+    
+    # Twitter API settings
+    TWITTER_BEARER_TOKEN: str = "test-twitter-bearer-token"
+    
+    # Polymarket API settings
+    POLYMARKET_API_KEY: str = "test-polymarket-api-key"
+    
+    # PostgreSQL settings (for backward compatibility)
+    POSTGRES_SERVER: str = "localhost"
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgres"
+    POSTGRES_DB: str = "test_crypto_news"
+    POSTGRES_URL: str = "postgresql+asyncpg://postgres:postgres@localhost/test_crypto_news"
     
     def __init__(self, **data):
         # Set default values if not provided
@@ -325,10 +349,49 @@ def mock_article_data() -> Dict[str, Any]:
 # Configure pytest to use asyncio
 pytest_plugins = ('pytest_asyncio',)
 
+@pytest.fixture(scope='session', autouse=True)
+def configure_celery_for_tests():
+    """Configure Celery for testing before any tests run."""
+    # This runs before any tests, so we can configure Celery here
+    import os
+    from celery import current_app
+    
+    # Set test configuration in environment
+    os.environ['CELERY_BROKER_URL'] = 'memory://'
+    os.environ['CELERY_RESULT_BACKEND'] = 'cache+memory://'
+    os.environ['CELERY_TASK_ALWAYS_EAGER'] = 'True'
+    os.environ['CELERY_TASK_EAGER_PROPAGATES'] = 'True'
+    
+    # Store original config
+    original_config = {
+        'broker_url': current_app.conf.get('broker_url'),
+        'result_backend': current_app.conf.get('result_backend'),
+        'task_always_eager': current_app.conf.get('task_always_eager'),
+        'task_eager_propagates': current_app.conf.get('task_eager_propagates'),
+    }
+    
+    # Apply test configuration
+    current_app.conf.update(
+        broker_url='memory://',
+        result_backend='cache+memory://',
+        task_always_eager=True,
+        task_eager_propagates=True,
+        task_serializer='json',
+        result_serializer='json',
+        accept_content=['json'],
+        timezone='UTC',
+        enable_utc=True,
+    )
+    
+    yield
+    
+    # Restore original configuration
+    current_app.conf.update(**original_config)
+
 @pytest.fixture(autouse=True)
 def mock_celery_app(monkeypatch):
     """Mock the Celery app to avoid using a real backend in tests."""
-    from unittest.mock import MagicMock
+    from unittest.mock import MagicMock, patch
     
     # Create a mock Celery app
     mock_app = MagicMock()
@@ -368,11 +431,13 @@ def mock_celery_app(monkeypatch):
                 self._ready = True
                 self.ready.return_value = True
     
-    # Patch the Celery app and AsyncResult
-    monkeypatch.setattr('crypto_news_aggregator.tasks.app', mock_app)
-    monkeypatch.setattr('crypto_news_aggregator.api.v1.tasks.AsyncResult', MockAsyncResult)
-    
-    return mock_app
+    # Patch the Celery app and AsyncResult in the correct module
+    with patch('crypto_news_aggregator.tasks.app', mock_app), \
+         patch('celery.result.AsyncResult', MockAsyncResult):
+        
+        # Also patch the AsyncResult in the API module where it's imported
+        with patch('crypto_news_aggregator.api.AsyncResult', MockAsyncResult):
+            yield mock_app
 
 def pytest_configure(config):
     """Configure pytest with custom markers."""

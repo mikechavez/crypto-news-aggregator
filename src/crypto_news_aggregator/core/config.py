@@ -53,6 +53,9 @@ class Settings(BaseSettings):
 
     # Cache settings
     CACHE_EXPIRE: int = 3600  # 1 hour
+    
+    # Database sync settings
+    ENABLE_DB_SYNC: bool = False  # Enable/disable database synchronization
 
     class Config:
         env_file = ".env"
