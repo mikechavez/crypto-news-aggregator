@@ -1,117 +1,179 @@
-"""News collection module for fetching and processing cryptocurrency news."""
-import logging
+"""News collection module for fetching and processing cryptocurrency news.
+
+This module provides the NewsCollector class which handles fetching news articles
+from various sources using the NewsAPI, processing them, and storing them in MongoDB
+"""
+
 import asyncio
-import time
+import logging
 import random
-from typing import List, Dict, Any, Optional, Set, Tuple, cast
-from datetime import datetime, timedelta, timezone
+import time
+from datetime import datetime, timedelta
 from functools import wraps
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, cast, TYPE_CHECKING
 
 from newsapi import NewsApiClient
-from newsapi.newsapi_client import NewsApiClient as NewsApiClientType
-from sqlalchemy.future import select
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import or_
 
-# Use absolute imports to avoid duplicate model registration
-from crypto_news_aggregator.db.session import get_sessionmaker
-from crypto_news_aggregator.db.models import Article, Source
 from crypto_news_aggregator.core.config import get_settings
 
-# Configure logger
-logger = logging.getLogger(__name__)
+# Avoid circular imports
+if TYPE_CHECKING:
+    from crypto_news_aggregator.services.article_service import ArticleService
 
-# Get settings
-settings = get_settings()
+# Type variable for generic function type
+F = TypeVar('F', bound=Callable[..., Any])
 
 # Constants
-DEFAULT_PAGE_SIZE = 100  # Max allowed by NewsAPI
+DEFAULT_PAGE_SIZE = 50
+RATE_LIMIT_DELAY = 0.1  # seconds between API calls to respect rate limits
 MAX_RETRIES = 3
-RATE_LIMIT_DELAY = 1.0  # Base delay between API calls in seconds
 NEWS_API_MAX_PAGES = 5  # Maximum number of pages to fetch per source
 
+logger = logging.getLogger(__name__)
+settings = get_settings()
 
 def retry_with_backoff(retries: int = 3, backoff_in_seconds: float = 1.0):
-    """Decorator to retry a function with exponential backoff.
+    """Retry decorator with exponential backoff.
     
     Args:
         retries: Number of retry attempts
         backoff_in_seconds: Initial backoff time in seconds
+        
+    Returns:
+        Decorated function with retry logic
     """
-    def decorator(func):
+    def decorator(func: F) -> F:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             last_exception = None
-            for attempt in range(retries):
+            current_delay = backoff_in_seconds
+            
+            for attempt in range(retries + 1):
                 try:
                     return await func(*args, **kwargs)
                 except Exception as e:
                     last_exception = e
-                    if attempt == retries - 1:  # Last attempt
-                        raise
-                    
-                    # Calculate backoff with jitter
-                    backoff = min(
-                        backoff_in_seconds * (2 ** attempt) + random.uniform(0, 1),
-                        30.0  # Max 30 seconds
-                    )
-                    logger.warning(
-                        f"Attempt {attempt + 1} failed. Retrying in {backoff:.2f} seconds. Error: {str(e)}"
-                    )
-                    await asyncio.sleep(backoff)
+                    if attempt < retries:
+                        # Exponential backoff with jitter
+                        sleep_time = current_delay * (2 ** attempt) + (random.uniform(0, 0.1) * current_delay)
+                        logger.warning(
+                            f"Attempt {attempt + 1}/{retries} failed with error: {str(e)}. "
+                            f"Retrying in {sleep_time:.2f} seconds..."
+                        )
+                        await asyncio.sleep(sleep_time)
             
-            # This should never be reached due to the raise in the loop
-            raise last_exception  # type: ignore
-        return wrapper
+            # If we've exhausted all retries, log and re-raise the last exception
+            logger.error(f"All {retries} attempts failed. Last error: {str(last_exception)}")
+            raise last_exception if last_exception else Exception("Unknown error in retry decorator")
+            
+        return cast(F, wrapper)
     return decorator
 
 class NewsCollector:
     """Collects news from various sources using the NewsAPI.
     
     Handles rate limiting, retries, and deduplication of articles.
+    Uses the article_service for MongoDB storage.
     """
     
-    def __init__(self, newsapi_client: Optional[NewsApiClient] = None):
-        """Initialize the NewsCollector with API clients and configuration."""
+    def __init__(self, 
+                 newsapi_client: Optional[NewsApiClient] = None,
+                 article_service: Optional['ArticleService'] = None):
+        """Initialize the NewsCollector with API clients and configuration.
+        
+        Args:
+            newsapi_client: Optional pre-configured NewsApiClient instance.
+                           If not provided, a new one will be created using NEWS_API_KEY.
+            article_service: Optional ArticleService instance for saving articles.
+                            If not provided, will be obtained from get_article_service().
+        """
         if not settings.NEWS_API_KEY and newsapi_client is None:
             raise ValueError("NewsAPI key is not configured. Set NEWS_API_KEY in your environment.")
             
         self.newsapi = newsapi_client or NewsApiClient(api_key=settings.NEWS_API_KEY)
-        self.session_maker = get_sessionmaker()
-        self.processed_urls: Set[str] = set()
+        
+        # Lazy import to avoid circular imports
+        if article_service is None:
+            from crypto_news_aggregator.services.article_service import get_article_service
+            self.article_service = get_article_service()
+        else:
+            self.article_service = article_service
+            
         self._last_request_time: float = 0
-        self._initialized = False
+        self._metrics = {
+            'articles_processed': 0,
+            'articles_skipped': 0,
+            'api_errors': 0,
+            'last_success': None,
+            'start_time': datetime.utcnow().isoformat()
+        }
+        logger.info("NewsCollector initialized with MongoDB storage")
     
-    async def initialize(self) -> None:
-        """Initialize the collector asynchronously."""
-        if not self._initialized:
-            await self._load_processed_urls()
-            self._initialized = True
+    def get_metrics(self) -> Dict[str, Any]:
+        """Get current collection metrics.
+        
+        Returns:
+            Dict containing various metrics about the collector's operation.
+        """
+        metrics = self._metrics.copy()
+        metrics['uptime'] = str(
+            datetime.utcnow() - datetime.fromisoformat(metrics['start_time'])
+        )
+        return metrics
     
-    async def _load_processed_urls(self) -> None:
-        """Load already processed article URLs from the database to avoid duplicates."""
-        try:
-            async with self.session_maker() as session:
-                result = await session.execute(select(Article.url))
-                self.processed_urls = {row[0] for row in result.all()}
-                logger.info(f"Loaded {len(self.processed_urls)} processed article URLs")
-        except SQLAlchemyError as e:
-            logger.error(f"Database error loading processed URLs: {str(e)}")
-            self.processed_urls = set()
-        except Exception as e:
-            logger.error(f"Unexpected error loading processed URLs: {str(e)}")
-            self.processed_urls = set()
+    def _update_metric(self, metric: str, value: Any = None, increment: int = 1) -> None:
+        """Update a metric value.
+        
+        Args:
+            metric: Name of the metric to update
+            value: Value to set (if None, increments existing value)
+            increment: Amount to increment by (used when value is None)
+        """
+        if value is not None:
+            self._metrics[metric] = value
+        else:
+            self._metrics[metric] = self._metrics.get(metric, 0) + increment
     
-    async def _enforce_rate_limit(self) -> None:
-        """Enforce rate limiting between API calls."""
+    async def _respect_rate_limit(self) -> None:
+        """Ensure we respect the rate limit by waiting if needed."""
         now = time.time()
         time_since_last = now - self._last_request_time
         
         if time_since_last < RATE_LIMIT_DELAY:
             sleep_time = RATE_LIMIT_DELAY - time_since_last
+            logger.debug(f"Rate limiting: sleeping for {sleep_time:.2f} seconds")
             await asyncio.sleep(sleep_time)
-        
+            
         self._last_request_time = time.time()
+    
+    def _parse_date(self, date_str: Optional[str]) -> datetime:
+        """Parse a date string from the API into a timezone-aware datetime.
+        
+        Args:
+            date_str: Date string from the API (e.g., "2023-01-01T12:00:00Z")
+            
+        Returns:
+            Timezone-aware datetime object, or current UTC time if parsing fails
+        """
+        if not date_str:
+            return datetime.utcnow().replace(tzinfo=timezone.utc)
+            
+        try:
+            # Handle ISO 8601 format with timezone
+            if 'Z' in date_str:
+                date_str = date_str.replace('Z', '+00:00')
+                
+            dt = datetime.fromisoformat(date_str)
+            
+            # Ensure timezone-aware
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+                
+            return dt
+            
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Failed to parse date '{date_str}': {str(e)}")
+            return datetime.utcnow().replace(tzinfo=timezone.utc)
     
     @retry_with_backoff(retries=MAX_RETRIES, backoff_in_seconds=RATE_LIMIT_DELAY)
     async def _fetch_articles_page(
@@ -132,7 +194,7 @@ class NewsCollector:
         Returns:
             Tuple of (articles, total_results)
         """
-        await self._enforce_rate_limit()
+        await self._respect_rate_limit()
         
         try:
             response = self.newsapi.get_everything(
@@ -156,123 +218,174 @@ class NewsCollector:
             logger.error(f"Error fetching page {page} from {source_id}: {str(e)}")
             raise
     
-    async def collect_from_source(self, source_id: str) -> int:
-        """
-        Collect news articles from a specific source with pagination support.
+    async def _save_article(self, article_data: Dict[str, Any]) -> bool:
+        """Save an article using the article service.
         
         Args:
-            source_id: The ID of the source to collect from
+            article_data: Raw article data from the API
+            
+        Returns:
+            bool: True if article was saved, False if it was a duplicate or had an error
+        """
+        try:
+            # Prepare article data for MongoDB
+            article = {
+                'source_id': article_data.get('source', {}).get('id', 'unknown'),
+                'source_name': article_data.get('source', {}).get('name', 'Unknown'),
+                'author': article_data.get('author'),
+                'title': article_data.get('title', 'Untitled'),
+                'description': article_data.get('description'),
+                'content': article_data.get('content') or article_data.get('description', ''),
+                'url': article_data.get('url', ''),
+                'url_to_image': article_data.get('urlToImage'),
+                'published_at': self._parse_date(article_data.get('publishedAt')),
+                'raw_data': article_data  # Store the raw data for reference
+            }
+            
+            # Save the article using the article service
+            saved = await self.article_service.create_article(article)
+            
+            if saved:
+                self._update_metric('articles_processed')
+                self._metrics['last_success'] = datetime.utcnow().isoformat()
+                logger.debug(f"Saved article: {article['title']}")
+            else:
+                self._update_metric('articles_skipped')
+                logger.debug(f"Skipped duplicate article: {article['title']}")
+                
+            return saved
+            
+        except Exception as e:
+            self._update_metric('api_errors')
+            logger.error(f"Error saving article: {str(e)}", exc_info=True)
+            return False
+    
+    async def collect_from_source(self, source_name: str, days: int = 1) -> int:
+        """Collect articles from a specific source.
+        
+        Args:
+            source_name: Name of the source to collect from
+            days: Number of days of articles to collect
             
         Returns:
             int: Number of new articles collected
         """
-        if not self._initialized:
-            await self.initialize()
-            
-        logger.info(f"Collecting news from source: {source_id}")
-        total_new_articles = 0
+        logger.info(f"Starting collection from {source_name} for the last {days} days")
+        
+        # Calculate date range
+        to_date = datetime.utcnow()
+        from_date = to_date - timedelta(days=days)
+        
+        page = 1
+        total_articles = 0
+        errors = 0
         
         try:
-            # Get articles from the last 24 hours
-            from_date = (datetime.now(timezone.utc) - timedelta(days=1)).strftime('%Y-%m-%d')
-            
-            # Fetch first page to get total results
-            articles, total_results = await self._fetch_articles_page(
-                source_id=source_id,
-                from_date=from_date,
-                page=1,
-                page_size=10  # Small page size to quickly check if there are any results
-            )
-            
-            if not articles:
-                logger.info(f"No articles found for source {source_id}")
-                return 0
+            while True:
+                # Respect rate limiting
+                await self._respect_rate_limit()
                 
-            logger.info(f"Found {total_results} total articles from {source_id}")
-            
-            # Process first page
-            new_articles = await self._process_articles(articles, source_id)
-            total_new_articles += new_articles
-            
-            # Calculate total pages to fetch (capped at NEWS_API_MAX_PAGES)
-            total_pages = min(
-                (total_results + DEFAULT_PAGE_SIZE - 1) // DEFAULT_PAGE_SIZE,
-                NEWS_API_MAX_PAGES
-            )
-            
-            # Fetch remaining pages
-            for page in range(2, total_pages + 1):
                 try:
-                    page_articles, _ = await self._fetch_articles_page(
-                        source_id=source_id,
-                        from_date=from_date,
-                        page=page,
-                        page_size=DEFAULT_PAGE_SIZE
+                    # Fetch a page of articles
+                    response = await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        lambda: self.newsapi.get_everything(
+                            sources=source_name,
+                            from_param=from_date.strftime('%Y-%m-%d'),
+                            to=to_date.strftime('%Y-%m-%d'),
+                            page=page,
+                            page_size=min(100, DEFAULT_PAGE_SIZE),  # NewsAPI max is 100
+                            language='en',
+                            sort_by='publishedAt',
+                            q='crypto OR cryptocurrency OR bitcoin OR ethereum OR blockchain'
+                        )
                     )
                     
-                    if not page_articles:
+                    articles = response.get('articles', [])
+                    if not articles:
+                        logger.info(f"No more articles found on page {page}")
                         break
-                        
-                    new_articles = await self._process_articles(page_articles, source_id)
-                    total_new_articles += new_articles
                     
-                    # If we got fewer articles than requested, we've reached the end
-                    if len(page_articles) < DEFAULT_PAGE_SIZE:
+                    # Process articles in parallel with limited concurrency
+                    saved_count = 0
+                    batch_size = 10  # Process in batches to avoid overwhelming the database
+                    
+                    for i in range(0, len(articles), batch_size):
+                        batch = articles[i:i + batch_size]
+                        tasks = [self._save_article(article) for article in batch]
+                        results = await asyncio.gather(*tasks, return_exceptions=True)
+                        
+                        # Count successful saves
+                        for result in results:
+                            if isinstance(result, Exception):
+                                errors += 1
+                                logger.error(f"Error processing article: {str(result)}")
+                            elif result:
+                                saved_count += 1
+                    
+                    total_articles += saved_count
+                    logger.info(
+                        f"Page {page}: Processed {len(articles)} articles, "
+                        f"saved {saved_count}, errors: {errors}"
+                    )
+                    
+                    # Check if we've reached the maximum number of pages
+                    if page >= NEWS_API_MAX_PAGES:
+                        logger.info(f"Reached maximum number of pages ({NEWS_API_MAX_PAGES}) for {source_name}")
                         break
                         
+                    page += 1
+                    
+                    # Small delay between pages to be nice to the API
+                    await asyncio.sleep(1)
+                    
                 except Exception as e:
-                    logger.error(f"Error processing page {page} for {source_id}: {str(e)}")
-                    break
-            
-            logger.info(f"Collected {total_new_articles} new articles from {source_id}")
-            return total_new_articles
-            
-        except Exception as e:
-            logger.error(f"Error collecting from {source_id}: {str(e)}", exc_info=True)
-            return total_new_articles  # Return whatever we've collected so far
-    
-    @retry_with_backoff()
-    async def _fetch_available_sources(self) -> List[Dict[str, Any]]:
-        """Fetch available news sources from NewsAPI."""
-        await self._enforce_rate_limit()
-        
-        try:
-            response = self.newsapi.get_sources(
-                language='en',
-                country='us'
-            )
-            
-            if response['status'] != 'ok':
-                raise Exception(f"Failed to fetch sources: {response.get('message')}")
+                    errors += 1
+                    self._update_metric('api_errors')
+                    logger.error(f"Error on page {page} for {source_name}: {str(e)}")
+                    
+                    # If we get multiple errors in a row, give up
+                    if errors >= 3:
+                        logger.error("Too many errors, aborting collection")
+                        break
+                    
+                    # Wait before retrying
+                    await asyncio.sleep(5)
                 
-            return response.get('sources', [])
-            
         except Exception as e:
-            logger.error(f"Error fetching sources: {str(e)}")
+            logger.error(f"Fatal error collecting from {source_name}: {str(e)}", exc_info=True)
             raise
+            
+        # Log collection summary
+        logger.info(
+            f"Finished collection from {source_name}. "
+            f"Total articles processed: {total_articles}, errors: {errors}"
+        )
+            
+        return total_articles
     
     async def collect_all_sources(self, max_sources: Optional[int] = None) -> int:
-        """
-        Collect news from all available sources with rate limiting.
+        """Collect articles from all available sources.
         
         Args:
-            max_sources: Maximum number of sources to process (None for all)
+            max_sources: Maximum number of sources to process (for testing)
             
         Returns:
             int: Total number of new articles collected
         """
-        if not self._initialized:
-            await self.initialize()
-            
-        logger.info("Collecting news from all available sources")
+        logger.info("Starting collection from all sources")
         total_articles = 0
         
         try:
             # Get all available sources
-            sources = await self._fetch_available_sources()
+            sources_response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.newsapi.get_sources(language='en', country='us')
+            )
             
+            sources = sources_response.get('sources', [])
             if not sources:
-                logger.warning("No sources available to collect from")
+                logger.warning("No sources found")
                 return 0
                 
             # Limit number of sources if specified
@@ -305,109 +418,3 @@ class NewsCollector:
         except Exception as e:
             logger.error(f"Error in collect_all_sources: {str(e)}", exc_info=True)
             return total_articles  # Return whatever we've collected so far
-    
-    async def _process_articles(
-        self, 
-        articles: List[Dict[str, Any]], 
-        source_id: str
-    ) -> int:
-        """
-        Process and store articles in the database with deduplication.
-        
-        Args:
-            articles: List of article dictionaries from the API
-            source_id: ID of the source
-            
-        Returns:
-            int: Number of new articles stored
-        """
-        if not articles:
-            return 0
-            
-        new_articles = 0
-        
-        try:
-            async with self.session_maker() as session:
-                # Get or create the source
-                result = await session.execute(
-                    select(Source).filter(Source.id == source_id)
-                )
-                source = result.scalar_one_or_none()
-                
-                # Create source if it doesn't exist
-                if not source:
-                    source = Source(
-                        id=source_id,
-                        name=source_id,
-                        url=f"https://{source_id}.com",  # Default URL
-                        type="news"  # Default type
-                    )
-                    session.add(source)
-                    await session.commit()
-                
-                # Process articles in batches
-                batch_size = 50
-                for i in range(0, len(articles), batch_size):
-                    batch = articles[i:i + batch_size]
-                    batch_new_articles = 0
-                    
-                    for article_data in batch:
-                        try:
-                            url = article_data.get('url')
-                            if not url or url in self.processed_urls:
-                                continue
-                            
-                            # Parse published_at with timezone support
-                            published_str = article_data.get('publishedAt')
-                            if not published_str:
-                                continue
-                                
-                            try:
-                                # Handle different datetime formats
-                                if 'Z' in published_str:
-                                    published_str = published_str.replace('Z', '+00:00')
-                                published_at = datetime.fromisoformat(published_str)
-                                
-                                # Ensure timezone-aware datetime
-                                if published_at.tzinfo is None:
-                                    published_at = published_at.replace(tzinfo=timezone.utc)
-                                    
-                            except (ValueError, TypeError) as e:
-                                logger.warning(f"Invalid date format for article {url}: {published_str}")
-                                published_at = datetime.now(timezone.utc)
-                            
-                            # Create article
-                            article = Article(
-                                title=article_data.get('title', 'No title'),
-                                url=url,
-                                description=article_data.get('description', ''),
-                                content=article_data.get('content', ''),
-                                published_at=published_at,
-                                source_id=source_id,
-                                author=article_data.get('author'),
-                                url_to_image=article_data.get('urlToImage'),
-                                raw_data=article_data  # Store the full raw data
-                            )
-                            
-                            session.add(article)
-                            self.processed_urls.add(url)
-                            batch_new_articles += 1
-                            
-                        except Exception as e:
-                            logger.error(f"Error processing article {url}: {str(e)}", exc_info=True)
-                    
-                    # Commit after each batch
-                    try:
-                        await session.commit()
-                        new_articles += batch_new_articles
-                        logger.debug(f"Committed batch of {batch_new_articles} new articles")
-                    except SQLAlchemyError as e:
-                        await session.rollback()
-                        logger.error(f"Database error committing batch: {str(e)}")
-                        # Continue with next batch even if one fails
-                    
-            return new_articles
-            
-        except Exception as e:
-            logger.error(f"Error in _process_articles: {str(e)}", exc_info=True)
-            return new_articles  # Return whatever we've processed so far

@@ -1,0 +1,145 @@
+"""
+MongoDB models for the Crypto News Aggregator.
+"""
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, HttpUrl
+from bson import ObjectId
+from enum import Enum
+
+class PyObjectId(ObjectId):
+    """Custom type for MongoDB ObjectId that works with Pydantic v2."""
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v):
+        if not ObjectId.is_valid(v):
+            raise ValueError("Invalid ObjectId")
+        return ObjectId(v)
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, field_schema):
+        field_schema.update(type="string", format="objectid")
+
+
+class SentimentLabel(str, Enum):
+    POSITIVE = "positive"
+    NEGATIVE = "negative"
+    NEUTRAL = "neutral"
+
+
+class SentimentAnalysis(BaseModel):
+    """Sentiment analysis result for an article."""
+    score: float = Field(..., ge=-1.0, le=1.0, description="Sentiment score between -1 (negative) and 1 (positive)")
+    magnitude: float = Field(..., ge=0, description="Magnitude of the sentiment")
+    label: SentimentLabel = Field(..., description="Sentiment label")
+    subjectivity: float = Field(..., ge=0, le=1.0, description="Subjectivity score between 0 (objective) and 1 (subjective)")
+    analyzed_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ArticleSource(BaseModel):
+    """Source information for an article."""
+    id: Optional[str] = None
+    name: str
+    url: Optional[HttpUrl] = None
+    type: Optional[str] = None
+
+
+class ArticleBase(BaseModel):
+    """Base model for article data."""
+    title: str
+    description: Optional[str] = None
+    content: str
+    url: HttpUrl
+    url_to_image: Optional[HttpUrl] = None
+    author: Optional[str] = None
+    published_at: datetime
+    source: ArticleSource
+    language: str = "en"
+    category: Optional[str] = None
+    keywords: List[str] = Field(default_factory=list)
+    entities: Dict[str, List[str]] = Field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ArticleCreate(ArticleBase):
+    """Model for creating a new article."""
+    pass
+
+
+class ArticleUpdate(BaseModel):
+    """Model for updating an existing article."""
+    title: Optional[str] = None
+    description: Optional[str] = None
+    content: Optional[str] = None
+    url_to_image: Optional[HttpUrl] = None
+    keywords: Optional[List[str]] = None
+    entities: Optional[Dict[str, List[str]]] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class ArticleInDB(ArticleBase):
+    """Article model as stored in MongoDB."""
+    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
+    sentiment: Optional[SentimentAnalysis] = None
+    is_duplicate: bool = False
+    duplicate_of: Optional[PyObjectId] = None
+    processed: bool = False
+    
+    class Config:
+        json_encoders = {ObjectId: str}
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
+
+
+class ArticleResponse(ArticleInDB):
+    """Article model for API responses."""
+    id: str = Field(..., alias="_id")
+    
+    class Config:
+        json_encoders = {ObjectId: str}
+        allow_population_by_field_name = True
+
+
+# Indexes to be created on MongoDB collections
+ARTICLE_INDEXES = [
+    {
+        "keys": [("url", 1)],
+        "name": "url_unique",
+        "unique": True
+    },
+    {
+        "keys": [("title", "text"), ("content", "text"), ("description", "text")],
+        "name": "full_text_search",
+        "default_language": "english",
+        "weights": {"title": 10, "description": 5, "content": 1}
+    },
+    {
+        "keys": [("published_at", -1)],
+        "name": "published_at_desc"
+    },
+    {
+        "keys": [("source.id", 1)],
+        "name": "source_id"
+    },
+    {
+        "keys": [("sentiment.score", 1)],
+        "name": "sentiment_score"
+    },
+    {
+        "keys": [("keywords", 1)],
+        "name": "keywords_idx"
+    },
+    {
+        "keys": [("is_duplicate", 1)],
+        "name": "is_duplicate"
+    },
+    {
+        "keys": [("processed", 1)],
+        "name": "processed_flag"
+    }
+]

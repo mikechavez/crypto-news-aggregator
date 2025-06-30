@@ -30,7 +30,7 @@ async def test_mongodb_connection():
     # Log the MongoDB URI (masking the password for security)
     masked_uri = ""
     if settings.MONGODB_URI:
-        parts = settings.MONGODB_uri.split("//")
+        parts = settings.MONGODB_URI.split("//")
         if len(parts) > 1:
             masked_uri = f"{parts[0]}//****:****@{'@'.join(parts[1:])}"
     

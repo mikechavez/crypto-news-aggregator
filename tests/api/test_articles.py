@@ -17,6 +17,7 @@ class MockAsyncResult:
         self._result = None
         self._status = 'PENDING'
         self._ready = False
+        self._kwargs = kwargs
     
     @property
     def id(self):
@@ -56,6 +57,19 @@ class MockAsyncResult:
     
     def successful(self):
         return self._status == 'SUCCESS'
+        
+    def failed(self):
+        return self._status == 'FAILURE'
+        
+    def wait(self, *args, **kwargs):
+        return self._result
+        
+    def forget(self):
+        pass
+        
+    def revoke(self, *args, **kwargs):
+        self._status = 'REVOKED'
+        return True
 
 # Mock Celery task class
 class MockTask:
@@ -84,7 +98,7 @@ def mock_db_session():
 def mock_async_result():
     # Create a mock async result that won't try to connect to a broker
     mock_result = MockAsyncResult('test-task-id')
-    with patch('crypto_news_aggregator.api.AsyncResult', return_value=mock_result):
+    with patch('crypto_news_aggregator.api.v1.tasks.AsyncResult', return_value=mock_result):
         yield mock_result
 
 @pytest.fixture
@@ -108,22 +122,58 @@ def mock_celery_tasks():
         }
 
 @pytest.mark.asyncio
-async def test_get_task_status(mock_async_result):
+async def test_get_task_status(client, mock_celery_app):
     """Test getting the status of a background task."""
-    # Mock the AsyncResult
-    mock_async_result.status = "SUCCESS"
-    mock_async_result.ready.return_value = True
-    mock_async_result.result = {"status": "completed", "result": "Task completed"}
+    # Create a mock task result with SUCCESS status
+    task_id = 'test-task-id'
+    expected_result = "Task completed"
     
-    # Make request
-    response = client.get("/api/v1/tasks/test-task-id")
+    # Create a mock AsyncResult instance
+    mock_result = MockAsyncResult(task_id)
+    mock_result.set_result(expected_result, status='SUCCESS')
+    
+    # Patch the AsyncResult class to return our mock
+    with patch('crypto_news_aggregator.api.v1.tasks.AsyncResult', return_value=mock_result):
+        # Make the API request
+        response = client.get(f"/api/v1/tasks/{task_id}")
+        
+        # Verify the response
+        assert response.status_code == 200
+        data = response.json()
+        assert data["task_id"] == task_id
+        assert data["status"] == "SUCCESS"
+        assert data["result"] == expected_result
+        def __str__(self):
+            return f"<MockAsyncResult: {self.task_id} status={self.status} result={self.result}>"
+    
+    # Replace the AsyncResult class with our mock
+    monkeypatch.setattr('crypto_news_aggregator.api.v1.tasks.AsyncResult', MockAsyncResult)
+    
+    # Now get a new reference to the patched AsyncResult
+    from crypto_news_aggregator.api.v1.tasks import AsyncResult as PatchedAsyncResult
+    
+    # Create an instance of our mock
+    mock_result = PatchedAsyncResult(task_id)
+    print(f"[DEBUG] Created mock_result: {mock_result}")
+    print(f"[DEBUG] mock_result.ready() returns: {mock_result.ready()}")
+    
+    # Make request - this will use our patched AsyncResult
+    with caplog.at_level('DEBUG'):
+        response = client.get(f"/api/v1/tasks/{task_id}")
+        print(f"[DEBUG] Response status: {response.status_code}")
+        print(f"[DEBUG] Response data: {response.json()}")
     
     # Verify response
-    assert response.status_code == 200
+    assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
     data = response.json()
-    assert data["task_id"] == "test-task-id"
-    assert data["status"] == "SUCCESS"
-    assert data["result"] == {"status": "completed", "result": "Task completed"}
+    
+    print(f"[DEBUG] Response task_id: {data.get('task_id')} (expected: {task_id})")
+    print(f"[DEBUG] Response status: {data.get('status')} (expected: SUCCESS)")
+    print(f"[DEBUG] Response result: {data.get('result')} (expected: {expected_result})")
+    
+    assert data["task_id"] == task_id, f"Expected task_id {task_id}, got {data['task_id']}"
+    assert data["status"] == "SUCCESS", f"Expected status 'SUCCESS', got {data['status']}"
+    assert data["result"] == expected_result, f"Expected result {expected_result}, got {data['result']}"
 
 @pytest.mark.asyncio
 async def test_trigger_news_fetch(mock_celery_tasks):
@@ -170,23 +220,7 @@ async def test_trigger_trends_update(mock_celery_tasks):
     # Verify the task was called
     mock_celery_tasks['update_trends'].delay.assert_called_once()
 
-@pytest.mark.asyncio
-async def test_get_task_status():
-    """Test getting the status of a task."""
-    # Create a mock result with a completed task
-    mock_result = MockAsyncResult('test-task-id')
-    mock_result.set_result({"status": "completed"}, status='SUCCESS')
-    
-    with patch('crypto_news_aggregator.api.AsyncResult', return_value=mock_result):
-        # Make request
-        response = client.get("/api/v1/tasks/test-task-id")
-        
-        # Verify response
-        assert response.status_code == 200
-        data = response.json()
-        assert data["task_id"] == "test-task-id"
-        assert data["status"] == "SUCCESS"
-        assert data["result"] == {"status": "completed"}
+
 
 @pytest.mark.asyncio
 async def test_get_task_status_not_found():
