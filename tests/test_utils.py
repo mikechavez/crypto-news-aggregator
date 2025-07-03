@@ -15,12 +15,21 @@ class MockAsyncResult:
         Args:
             task_id: The ID of the task.
             **kwargs: Additional keyword arguments to store as attributes.
+                - result: The task result (default: None)
+                - status: The task status (default: 'PENDING')
+                - ready: Whether the task is ready (default: determined by status)
         """
         self._id = task_id
-        self._result = None
-        self._status = 'PENDING'
-        # Initialize _ready based on status
-        self._ready = kwargs.get('ready', False)
+        self._result = kwargs.get('result')
+        self._status = kwargs.get('status', 'PENDING')
+        
+        # Set ready based on status if not explicitly provided
+        ready = kwargs.get('ready')
+        if ready is None:
+            self._ready = self._status in ['SUCCESS', 'FAILURE', 'REVOKED', 'RETRY']
+        else:
+            self._ready = ready
+            
         self._kwargs = kwargs
     
     @property
@@ -44,8 +53,16 @@ class MockAsyncResult:
         self._status = value
     
     def ready(self) -> bool:
-        """Check if the task is ready."""
-        return self._ready
+        """Check if the task is ready.
+        
+        In Celery, a task is ready if it has completed execution, regardless of success or failure.
+        """
+        # If ready was explicitly set, use that
+        if hasattr(self, '_ready') and self._ready is not None:
+            return self._ready
+            
+        # Otherwise, determine based on status
+        return self.status in ['SUCCESS', 'FAILURE', 'REVOKED', 'RETRY']
     
     @property
     def result(self) -> Any:
@@ -75,21 +92,24 @@ class MockAsyncResult:
             The MockAsyncResult instance for method chaining.
         """
         self._result = result
-        self._status = status
+        self.status = status  # Use property setter to handle ready state
         
-        # Default ready to True for terminal states
-        if ready is None:
-            self._ready = status in ['SUCCESS', 'FAILURE', 'REVOKED', 'RETRY']
-        else:
+        # Only override ready if explicitly provided
+        if ready is not None:
             self._ready = ready
             
         return self
         
     def set_status(self, status: str) -> None:
-        """Set the task status and update ready state accordingly."""
+        """Set the task status and update ready state accordingly.
+        
+        Args:
+            status: The new status to set.
+        """
         self._status = status
-        # Update ready state based on the new status
-        self._ready = status in ['SUCCESS', 'FAILURE', 'REVOKED', 'RETRY']
+        # Only update ready state if it wasn't explicitly set
+        if not hasattr(self, '_ready') or self._ready is None:
+            self._ready = status in ['SUCCESS', 'FAILURE', 'REVOKED', 'RETRY']
     
     def get(self, *args, **kwargs) -> Any:
         """Get the task result (mimics AsyncResult.get)."""
@@ -145,15 +165,17 @@ def create_mock_async_result(task_id: str = 'test-task-id',
     Returns:
         A configured MockAsyncResult instance.
     """
-    mock_result = MockAsyncResult(task_id)
+    # Create the mock with basic parameters
+    mock_result = MockAsyncResult(task_id=task_id)
+    
+    # Set status and result using the set_result method to ensure proper state
     if result is not None:
-        mock_result.set_result(result, status, ready=ready)
+        mock_result.set_result(result, status=status, ready=ready)
     else:
         mock_result.status = status
-        # Only set ready if explicitly provided
         if ready is not None:
             mock_result._ready = ready
-            
+    
     return mock_result
 
 
