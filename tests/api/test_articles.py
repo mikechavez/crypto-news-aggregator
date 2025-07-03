@@ -96,7 +96,8 @@ def test_get_task_status_pending(client, monkeypatch):
     # Create a mock AsyncResult using our test utility
     mock_result = create_mock_async_result(
         task_id=task_id,
-        status='PENDING'
+        status='PENDING',
+        ready=False
     )
     
     # Patch the AsyncResult import in the API module
@@ -113,7 +114,8 @@ def test_get_task_status_pending(client, monkeypatch):
     data = response.json()
     assert data["task_id"] == task_id
     assert data["status"] == "PENDING"
-    assert "result" not in data  # Should not include result for pending tasks
+    # The API includes result: None even for pending tasks due to the Pydantic model
+    assert data["result"] is None
 
 def test_get_task_status_failed(client, monkeypatch):
     """Test getting the status of a failed task."""
