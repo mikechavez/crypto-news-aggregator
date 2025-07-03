@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, status
 from typing import Any, Optional, Type, Callable
 from pydantic import BaseModel
 from celery.result import AsyncResult as CeleryAsyncResult
+from src.crypto_news_aggregator.tasks import fetch_news, analyze_sentiment, update_trends
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -66,3 +67,36 @@ async def get_task_status(
     
     logger.info(f"[DEBUG] Final response: {response}")
     return response
+
+@router.post("/news/fetch", response_model=TaskResponse, status_code=status.HTTP_202_ACCEPTED)
+async def trigger_news_fetch(source: Optional[str] = None):
+    """
+    Trigger a news fetch task
+    """
+    task = fetch_news.delay(source)
+    return {
+        "task_id": task.id,
+        "status": "PENDING"
+    }
+
+@router.post("/sentiment/analyze/{article_id}", response_model=TaskResponse, status_code=status.HTTP_202_ACCEPTED)
+async def trigger_sentiment_analysis(article_id: int):
+    """
+    Trigger sentiment analysis for a specific article
+    """
+    task = analyze_sentiment.delay(article_id)
+    return {
+        "task_id": task.id,
+        "status": "PENDING"
+    }
+
+@router.post("/trends/update", response_model=TaskResponse, status_code=status.HTTP_202_ACCEPTED)
+async def trigger_trends_update():
+    """
+    Trigger an update of the trends data
+    """
+    task = update_trends.delay()
+    return {
+        "task_id": task.id,
+        "status": "PENDING"
+    }

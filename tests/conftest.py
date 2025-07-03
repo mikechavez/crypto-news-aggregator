@@ -396,48 +396,9 @@ def mock_celery_app(monkeypatch):
     # Create a mock Celery app
     mock_app = MagicMock()
     
-    # Mock the AsyncResult class
-    class MockAsyncResult:
-        def __init__(self, task_id, **kwargs):
-            self.task_id = task_id
-            self._status = kwargs.get('status', 'PENDING')
-            self._result = kwargs.get('result', None)
-            self._ready = self._status != 'PENDING' and self._status != 'STARTED'
-            
-            # Mock methods
-            self.ready = MagicMock(return_value=self._ready)
-            self.successful = MagicMock(return_value=self._status == 'SUCCESS')
-            self.failed = MagicMock(return_value=self._status == 'FAILURE')
-            self.get = MagicMock(return_value=self._result)
-        
-        @property
-        def status(self):
-            return self._status
-            
-        @status.setter
-        def status(self, value):
-            self._status = value
-            self._ready = value not in ['PENDING', 'STARTED']
-            self.ready.return_value = self._ready
-            
-        @property
-        def result(self):
-            return self._result
-            
-        @result.setter
-        def result(self, value):
-            self._result = value
-            if value is not None:
-                self._ready = True
-                self.ready.return_value = True
-    
-    # Patch the Celery app and AsyncResult in the correct module
-    with patch('crypto_news_aggregator.tasks.app', mock_app), \
-         patch('celery.result.AsyncResult', MockAsyncResult):
-        
-        # Also patch the AsyncResult in the API module where it's imported
-        with patch('crypto_news_aggregator.api.AsyncResult', MockAsyncResult):
-            yield mock_app
+    # Patch the Celery app in the tasks module
+    with patch('crypto_news_aggregator.tasks.app', mock_app):
+        yield mock_app
 
 def pytest_configure(config):
     """Configure pytest with custom markers."""
