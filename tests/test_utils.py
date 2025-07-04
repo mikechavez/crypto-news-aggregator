@@ -17,18 +17,19 @@ class MockAsyncResult:
             **kwargs: Additional keyword arguments to store as attributes.
                 - result: The task result (default: None)
                 - status: The task status (default: 'PENDING')
-                - ready: Whether the task is ready (default: determined by status)
+                - ready: Either a boolean indicating if the task is ready,
+                        or a callable that will be called when ready() is called.
+                        If a callable, it will be called with no arguments and
+                        its return value will be used as the ready state.
         """
         self._id = task_id
         self._result = kwargs.get('result')
         self._status = kwargs.get('status', 'PENDING')
         
-        # Set ready based on status if not explicitly provided
-        ready = kwargs.get('ready')
-        if ready is None:
+        # Store the ready callable or boolean
+        self._ready = kwargs.get('ready')
+        if self._ready is None:
             self._ready = self._status in ['SUCCESS', 'FAILURE', 'REVOKED', 'RETRY']
-        else:
-            self._ready = ready
             
         self._kwargs = kwargs
     
@@ -56,12 +57,24 @@ class MockAsyncResult:
         """Check if the task is ready.
         
         In Celery, a task is ready if it has completed execution, regardless of success or failure.
+        
+        If _ready is callable, it will be called and its return value used.
+        If _ready is a boolean, it will be returned directly.
         """
-        # If ready was explicitly set, use that
+        # If ready was explicitly set
         if hasattr(self, '_ready') and self._ready is not None:
+            if callable(self._ready):
+                # If it's a callable, call it and return the result
+                return self._ready()
+            # Otherwise, return the boolean value directly
             return self._ready
             
-        # Otherwise, determine based on status
+        # If no explicit ready state, check if the task is in a terminal state
+        # For custom statuses, we'll assume the task is ready if we have a result
+        if hasattr(self, '_result') and self._result is not None:
+            return True
+            
+        # Otherwise, determine based on standard status values
         return self.status in ['SUCCESS', 'FAILURE', 'REVOKED', 'RETRY']
     
     @property

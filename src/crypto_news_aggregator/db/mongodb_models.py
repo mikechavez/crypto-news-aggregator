@@ -1,7 +1,7 @@
 """
 MongoDB models for the Crypto News Aggregator.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, HttpUrl
 from bson import ObjectId
@@ -36,7 +36,7 @@ class SentimentAnalysis(BaseModel):
     magnitude: float = Field(..., ge=0, description="Magnitude of the sentiment")
     label: SentimentLabel = Field(..., description="Sentiment label")
     subjectivity: float = Field(..., ge=0, le=1.0, description="Subjectivity score between 0 (objective) and 1 (subjective)")
-    analyzed_at: datetime = Field(default_factory=datetime.utcnow)
+    analyzed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ArticleSource(BaseModel):
@@ -62,8 +62,8 @@ class ArticleBase(BaseModel):
     keywords: List[str] = Field(default_factory=list)
     entities: Dict[str, List[str]] = Field(default_factory=dict)
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ArticleCreate(ArticleBase):
@@ -90,19 +90,32 @@ class ArticleInDB(ArticleBase):
     duplicate_of: Optional[PyObjectId] = None
     processed: bool = False
     
-    class Config:
-        json_encoders = {ObjectId: str}
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {ObjectId: str},
+        "json_schema_extra": {
+            "example": {
+                "title": "Bitcoin Reaches New All-Time High",
+                "description": "Bitcoin price surges past $100,000",
+                "content": "Full article content...",
+                "url": "https://example.com/bitcoin-news",
+                "source": {"name": "Crypto News"},
+                "published_at": "2023-01-01T00:00:00Z"
+            }
+        }
+    }
 
 
 class ArticleResponse(ArticleInDB):
     """Article model for API responses."""
     id: str = Field(..., alias="_id")
     
-    class Config:
-        json_encoders = {ObjectId: str}
-        allow_population_by_field_name = True
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {ObjectId: str}
+    }
 
 
 # Indexes to be created on MongoDB collections

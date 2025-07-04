@@ -23,7 +23,7 @@ class TestNewsTasks:
             'articles_processed': 5,
             'articles_skipped': 0,
             'api_errors': 0,
-            'start_time': datetime.utcnow().isoformat()
+            'start_time': datetime.now(timezone.utc).isoformat()
         }
         
         # Patch the NewsCollector to return our mock

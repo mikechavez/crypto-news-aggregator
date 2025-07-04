@@ -33,7 +33,7 @@ TEST_ARTICLE = Article(
     content="This is a test article content.",
     url_to_image="https://example.com/test-image.jpg",
     url="https://example.com/test-article",
-    published_at=datetime.utcnow()
+    published_at=datetime.now(timezone.utc)
 )
 
 TEST_SOURCE = Source(
@@ -1056,11 +1056,17 @@ async def test_get_task_status_with_timeout():
     def get_mock_async_result():
         def _mock_async_result(task_id):
             # Create a mock result that will raise TimeoutError when ready() is called
+            mock_ready = MagicMock()
+            mock_ready.side_effect = TimeoutError("Task timed out")
+            
             mock_result = MockAsyncResult(
                 task_id=task_id,
                 status='PENDING',
-                ready=MagicMock(side_effect=TimeoutError("Task timed out"))
+                ready=mock_ready
             )
+            # Add debug logging
+            print(f"[DEBUG] Created mock AsyncResult with id={mock_result.id}, status={mock_result.status}")
+            print(f"[DEBUG] Mock ready() will raise: {mock_ready.side_effect}")
             return mock_result
         return _mock_async_result
     
@@ -1112,7 +1118,7 @@ async def test_get_task_status_with_connection_error():
     
     # Create a mock AsyncResult that raises ConnectionError when status is accessed
     from tests.test_utils import MockAsyncResult
-    from unittest.mock import PropertyMock
+    from unittest.mock import PropertyMock, Mock
     
     # Create a function that will return our mock AsyncResult
     def get_mock_async_result():
@@ -1130,8 +1136,8 @@ async def test_get_task_status_with_connection_error():
                 side_effect=ConnectionError(error_message)
             )
             
-            # Ensure ready() returns False to simulate a pending task
-            mock_result.ready.return_value = False
+            # Mock the ready() method to return False
+            mock_result.ready = Mock(return_value=False)
             
             return mock_result
             

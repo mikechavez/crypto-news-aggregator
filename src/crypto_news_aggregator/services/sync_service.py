@@ -3,7 +3,7 @@ Database synchronization service to keep PostgreSQL and MongoDB in sync.
 """
 import logging
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Any
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +23,7 @@ class SyncService:
     
     def __init__(self, batch_size: int = 100):
         self.batch_size = batch_size
-        self.last_sync_time = datetime.utcnow() - timedelta(minutes=5)  # Initial sync window
+        self.last_sync_time = datetime.now(timezone.utc) - timedelta(minutes=5)  # Initial sync window
     
     async def _convert_pg_to_mongo_article(self, pg_article: PGArticle) -> Dict[str, Any]:
         """Convert a PostgreSQL article to MongoDB format."""
@@ -52,10 +52,10 @@ class SyncService:
             } if pg_article.sentiment_score is not None else None,
             "metadata": {
                 "postgres_id": str(pg_article.id),
-                "imported_at": datetime.utcnow()
+                "imported_at": datetime.now(timezone.utc)
             },
-            "created_at": pg_article.created_at or datetime.utcnow(),
-            "updated_at": pg_article.updated_at or datetime.utcnow()
+            "created_at": pg_article.created_at or datetime.now(timezone.utc),
+            "updated_at": pg_article.updated_at or datetime.now(timezone.utc)
         }
     
     async def sync_articles_to_mongodb(self):
@@ -107,7 +107,7 @@ class SyncService:
                         continue
             
             # Update the last sync time
-            self.last_sync_time = datetime.utcnow()
+            self.last_sync_time = datetime.now(timezone.utc)
             logger.info(f"Successfully synced {synced_count} articles to MongoDB")
             return synced_count
             
@@ -150,10 +150,10 @@ class SyncService:
                         "country": pg_source.country,
                         "metadata": {
                             "postgres_id": str(pg_source.id),
-                            "imported_at": datetime.utcnow()
+                            "imported_at": datetime.now(timezone.utc)
                         },
-                        "created_at": pg_source.created_at or datetime.utcnow(),
-                        "updated_at": pg_source.updated_at or datetime.utcnow()
+                        "created_at": pg_source.created_at or datetime.now(timezone.utc),
+                        "updated_at": pg_source.updated_at or datetime.now(timezone.utc)
                     }
                     
                     # Use the article service to handle deduplication

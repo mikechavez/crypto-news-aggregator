@@ -8,7 +8,7 @@ import asyncio
 import logging
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, cast, TYPE_CHECKING
 
@@ -105,7 +105,7 @@ class NewsCollector:
             'articles_skipped': 0,
             'api_errors': 0,
             'last_success': None,
-            'start_time': datetime.utcnow().isoformat()
+            'start_time': datetime.now(timezone.utc).isoformat()
         }
         logger.info("NewsCollector initialized with MongoDB storage")
     
@@ -117,7 +117,7 @@ class NewsCollector:
         """
         metrics = self._metrics.copy()
         metrics['uptime'] = str(
-            datetime.utcnow() - datetime.fromisoformat(metrics['start_time'])
+            datetime.now(timezone.utc) - datetime.fromisoformat(metrics['start_time'])
         )
         return metrics
     
@@ -156,7 +156,7 @@ class NewsCollector:
             Timezone-aware datetime object, or current UTC time if parsing fails
         """
         if not date_str:
-            return datetime.utcnow().replace(tzinfo=timezone.utc)
+            return datetime.now(timezone.utc)
             
         try:
             # Handle ISO 8601 format with timezone
@@ -173,7 +173,7 @@ class NewsCollector:
             
         except (ValueError, TypeError) as e:
             logger.warning(f"Failed to parse date '{date_str}': {str(e)}")
-            return datetime.utcnow().replace(tzinfo=timezone.utc)
+            return datetime.now(timezone.utc)
     
     @retry_with_backoff(retries=MAX_RETRIES, backoff_in_seconds=RATE_LIMIT_DELAY)
     async def _fetch_articles_page(
@@ -247,7 +247,7 @@ class NewsCollector:
             
             if saved:
                 self._update_metric('articles_processed')
-                self._metrics['last_success'] = datetime.utcnow().isoformat()
+                self._metrics['last_success'] = datetime.now(timezone.utc).isoformat()
                 logger.debug(f"Saved article: {article['title']}")
             else:
                 self._update_metric('articles_skipped')
@@ -273,7 +273,7 @@ class NewsCollector:
         logger.info(f"Starting collection from {source_name} for the last {days} days")
         
         # Calculate date range
-        to_date = datetime.utcnow()
+        to_date = datetime.now(timezone.utc)
         from_date = to_date - timedelta(days=days)
         
         page = 1

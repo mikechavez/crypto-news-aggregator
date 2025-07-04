@@ -28,7 +28,7 @@ TEST_ARTICLE = {
     "description": "This is a test article",
     "url": "https://test.article/1",
     "urlToImage": "https://test.article/1/image.jpg",
-    "publishedAt": (datetime.utcnow() - timedelta(hours=1)).isoformat() + "Z",
+    "publishedAt": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
     "content": "This is the full content of the test article."
 }
 

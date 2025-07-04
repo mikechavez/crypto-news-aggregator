@@ -139,8 +139,8 @@ class RealtimeNewsCollector:
         logger.info(f"Collecting news from source: {source_id}")
         
         # Calculate date range (last 3 days by default)
-        to_date = datetime.utcnow().date()
-        from_date = (datetime.utcnow() - timedelta(days=3)).strftime('%Y-%m-%d')
+        to_date = datetime.now(timezone.utc).date()
+        from_date = (datetime.now(timezone.utc) - timedelta(days=3)).strftime('%Y-%m-%d')
         
         total_new_articles = 0
         page = 1
@@ -201,7 +201,7 @@ class RealtimeNewsCollector:
                     # Create article object
                     published_at = datetime.fromisoformat(
                         article['publishedAt'].replace('Z', '+00:00')
-                    ) if article.get('publishedAt') else datetime.utcnow()
+                    ) if article.get('publishedAt') else datetime.now(timezone.utc)
                     
                     db_article = Article(
                         title=article.get('title', ''),
@@ -212,8 +212,8 @@ class RealtimeNewsCollector:
                         content=article.get('content'),
                         url_to_image=article.get('urlToImage'),
                         published_at=published_at,
-                        created_at=datetime.utcnow(),
-                        updated_at=datetime.utcnow()
+                        created_at=datetime.now(timezone.utc),
+                        updated_at=datetime.now(timezone.utc)
                     )
                     
                     session.add(db_article)

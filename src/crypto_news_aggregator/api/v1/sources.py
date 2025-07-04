@@ -1,7 +1,7 @@
 """News source-related API endpoints."""
 from typing import List
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 router = APIRouter()
 
@@ -18,8 +18,7 @@ class Source(SourceBase):
     created_at: str
     updated_at: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Temporary data storage - will be replaced with database
 sources_db = {}

@@ -1,7 +1,7 @@
 """Celery tasks for news collection and processing."""
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional, Tuple
 
 from celery import shared_task
@@ -35,7 +35,7 @@ def fetch_news(self, source_name: Optional[str] = None, days: int = 1) -> Dict[s
     logger.info(f"Starting news fetch task {task_id} for source: {source_name or 'all'}")
     
     collector = NewsCollector()
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
     
     async def _fetch() -> Tuple[bool, Dict[str, Any]]:
         """Async function to perform the actual collection."""
@@ -80,7 +80,7 @@ def fetch_news(self, source_name: Optional[str] = None, days: int = 1) -> Dict[s
         success, result = loop.run_until_complete(_fetch())
         
         # Calculate duration
-        duration = (datetime.utcnow() - start_time).total_seconds()
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
         result["duration_seconds"] = round(duration, 2)
         
         if success:

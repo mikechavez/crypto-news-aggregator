@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any
 from celery import shared_task
 from sqlalchemy import func, select
@@ -24,7 +24,7 @@ def update_trends(time_window: str = "24h"):
     
     try:
         # Calculate time cutoff based on window
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if time_window == "1h":
             cutoff = now - timedelta(hours=1)
         elif time_window == "24h":

@@ -3,7 +3,7 @@ Article service for handling article-related operations including deduplication.
 """
 import logging
 from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 import hashlib
 import re
 from unidecode import unidecode
@@ -127,7 +127,7 @@ class ArticleService:
             title=article_data.get("title", ""),
             content=article_data.get("content", ""),
             source_id=article_data.get("source", {}).get("id", ""),
-            published_at=article_data.get("published_at", datetime.utcnow())
+            published_at=article_data.get("published_at", datetime.now(timezone.utc))
         )
         
         if is_duplicate:
@@ -144,8 +144,8 @@ class ArticleService:
         
         # Add fingerprint and timestamps
         article_data["fingerprint"] = fingerprint
-        article_data["created_at"] = datetime.utcnow()
-        article_data["updated_at"] = datetime.utcnow()
+        article_data["created_at"] = datetime.now(timezone.utc)
+        article_data["updated_at"] = datetime.now(timezone.utc)
         
         # Create the article in MongoDB
         collection = await self._get_collection()
@@ -169,7 +169,7 @@ class ArticleService:
         update_fields = {}
             
         # Update the updated_at timestamp
-        update_fields["updated_at"] = datetime.utcnow()
+        update_fields["updated_at"] = datetime.now(timezone.utc)
         
         # If the new article has a higher quality image, update it
         if new_data.get("url_to_image") and not new_data["url_to_image"].endswith("placeholder.jpg"):
@@ -344,7 +344,7 @@ class ArticleService:
                 {
                     "$set": {
                         "sentiment": sentiment.dict(),
-                        "updated_at": datetime.utcnow()
+                        "updated_at": datetime.now(timezone.utc)
                     }
                 }
             )
