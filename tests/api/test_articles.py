@@ -470,391 +470,241 @@ async def test_get_task_status_not_found():
         print(f"[DEBUG] Final dependency overrides: {app.dependency_overrides}")
 
 @pytest.mark.asyncio
-async def test_get_task_status_with_exception(client):
+@patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
+async def test_get_task_status_with_exception(mock_celery_async_result, client):
     """Test handling of exceptions when getting task status."""
-    # Import necessary modules
-    from fastapi import FastAPI
-    from crypto_news_aggregator.api.v1.tasks import router, get_async_result_class
-    from crypto_news_aggregator.main import app
-    
     # Arrange
     task_id = 'exceptional-task-id'
     
     print("\n[DEBUG] Starting test_get_task_status_with_exception")
     
-    # Create a mock AsyncResult that raises an exception
-    class ExceptionalMockAsyncResult:
-        def __init__(self, task_id):
-            print(f"[DEBUG] Creating ExceptionalMockAsyncResult for task_id: {task_id}")
-            self._id = task_id
-            
-        @property
-        def id(self):
-            return self._id
-            
-        @property
-        def status(self):
-            print("[DEBUG] Accessing status property")
-            raise Exception("Failed to get status")
-            
-        @property
-        def result(self):
-            print("[DEBUG] Accessing result property")
-            return None
-            
-        def ready(self):
-            print("[DEBUG] Calling ready() method")
-            return False
+    # Create a mock AsyncResult that raises an exception when status is accessed
+    mock_result = MagicMock()
+    mock_result.id = task_id
+    mock_result.task_id = task_id
     
-    # Create a function that will return our mock AsyncResult
-    def get_mock_async_result_class():
-        print("[DEBUG] In get_mock_async_result_class, returning ExceptionalMockAsyncResult")
-        def _mock_async_result(task_id):
-            print(f"[DEBUG] Creating new ExceptionalMockAsyncResult for task_id: {task_id}")
-            return ExceptionalMockAsyncResult(task_id)
-        return _mock_async_result
+    # Configure the status property to raise an exception
+    type(mock_result).status = PropertyMock(side_effect=Exception("Failed to get status"))
+    mock_result.ready.return_value = False
     
-    # Apply the dependency override
-    print("[DEBUG] Setting up dependency override...")
-    app.dependency_overrides[get_async_result_class] = get_mock_async_result_class
-    print(f"[DEBUG] Updated dependency overrides: {app.dependency_overrides}")
+    # Configure the CeleryAsyncResult mock to return our mock result
+    mock_celery_async_result.return_value = mock_result
     
-    try:
-        # Use the authenticated client fixture
-        test_client = client
-        
-        # Act
-        print(f"\n[DEBUG] Sending request to API for task that raises an exception...")
-        print(f"[DEBUG] Request URL: /api/v1/tasks/{task_id}")
-        
-        # Call the endpoint using the authenticated client
-        response = test_client.get(f"/api/v1/tasks/{task_id}")
-        print(f"[DEBUG] Response status: {response.status_code}")
-        print(f"[DEBUG] Response content: {response.text}")
-        
-        # Assert
-        # The API should return a 200 status with an error in the response
-        assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
-        
-        data = response.json()
-        print(f"[DEBUG] Response data: {data}")
-        
-        # The endpoint should include the task_id and status in the response
-        assert "task_id" in data, "Expected 'task_id' in response"
-        assert data["task_id"] == task_id, f"Expected task_id '{task_id}', got '{data.get('task_id')}'"
-        
-        # The endpoint should include the error message in the response
-        assert "error" in data, "Expected 'error' in response"
-        assert "Failed to get status" in data["error"], \
-            f"Expected error message to contain 'Failed to get status', got: {data.get('error')}"
-        
-        print("[DEBUG] All assertions passed!")
-        
-    except Exception as e:
-        print(f"[DEBUG] Test failed with exception: {str(e)}")
-        print("[DEBUG] Current app.dependency_overrides:", app.dependency_overrides)
-        raise
-    finally:
-        # Clean up the overrides
-        print("\n[DEBUG] Cleaning up dependency overrides")
-        app.dependency_overrides.clear()
-        print(f"[DEBUG] Final dependency overrides: {app.dependency_overrides}")
+    # Act
+    print(f"\n[DEBUG] Making request to /api/v1/tasks/{task_id}")
+    response = client.get(f"/api/v1/tasks/{task_id}")
+    print(f"[DEBUG] Response status: {response.status_code}")
+    print(f"[DEBUG] Response content: {response.text}")
+    
+    # Assert
+    # The API should return a 200 status with an error in the response
+    assert response.status_code == 200, (
+        f"Expected status code 200, got {response.status_code}"
+    )
+    
+    data = response.json()
+    print(f"[DEBUG] Response data: {data}")
+    
+    # The endpoint should include the task_id in the response
+    assert "task_id" in data, "Expected 'task_id' in response"
+    assert data["task_id"] == task_id, (
+        f"Expected task_id '{task_id}', got '{data.get('task_id')}'"
+    )
+    
+    # The endpoint should include the error message in the response
+    assert "error" in data, "Expected 'error' in response"
+    assert "Failed to get status" in data["error"], (
+        f"Expected error message to contain 'Failed to get status', got: {data.get('error')}"
+    )
+    
+    # Verify the mock was called correctly
+    mock_celery_async_result.assert_called_once_with(task_id)
+    
+    print("\n[DEBUG] All assertions passed!")
 
 @pytest.mark.asyncio
-async def test_get_task_status_with_serialization_error(client):
+@patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
+async def test_get_task_status_with_serialization_error(mock_celery_async_result, client):
     """Test handling of non-serializable task results."""
-    # Import necessary modules
-    from fastapi import FastAPI, HTTPException
-    from fastapi.responses import JSONResponse
-    from crypto_news_aggregator.api.v1.tasks import router, get_async_result_class
-    from crypto_news_aggregator.main import app
-    
     # Arrange
-    task_id = 'serialization-error-task-id'
+    task_id = 'non-serializable-task-id'
     
     print("\n[DEBUG] Starting test_get_task_status_with_serialization_error")
     
-    # Create a non-serializable object (function)
-    def non_serializable():
-        pass
+    # Create a mock AsyncResult that returns a non-serializable object
+    mock_result = MagicMock()
+    mock_result.id = task_id
+    mock_result.task_id = task_id
+    mock_result.status = 'SUCCESS'
     
-    # Create a mock AsyncResult that returns a non-serializable result
-    class NonSerializableMockAsyncResult:
-        def __init__(self, task_id):
-            print(f"[DEBUG] Creating NonSerializableMockAsyncResult for task_id: {task_id}")
-            self._id = task_id
-            self._status = "SUCCESS"
-            self._result = {"func": non_serializable}
-            
-        @property
-        def id(self):
-            return self._id
-            
-        @property
-        def status(self):
-            return self._status
-            
-        @property
-        def result(self):
-            # Return a non-serializable object (function)
-            return self._result
-            
-        def ready(self):
-            return True
-            
-        def get(self, *args, **kwargs):
-            return self._result
+    # Configure the result property to return a non-serializable function
+    type(mock_result).result = PropertyMock(return_value=lambda x: x)
+    mock_result.ready.return_value = True
     
-    # Create a function that will return our mock AsyncResult
-    def get_mock_async_result_class():
-        print("[DEBUG] In get_mock_async_result_class, returning NonSerializableMockAsyncResult")
-        def _mock_async_result(task_id):
-            print(f"[DEBUG] Creating NonSerializableMockAsyncResult for task_id: {task_id}")
-            return NonSerializableMockAsyncResult(task_id)
-        return _mock_async_result
+    # Configure the CeleryAsyncResult mock to return our mock result
+    mock_celery_async_result.return_value = mock_result
     
-    # Add a custom exception handler for serialization errors
-    @app.exception_handler(Exception)
-    async def handle_serialization_error(request, exc):
-        if isinstance(exc, (TypeError, ValueError)) and "not JSON serializable" in str(exc):
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "detail": "Failed to serialize task result",
-                    "error": str(exc)
-                }
-            )
-        raise exc
+    # Act
+    print(f"\n[DEBUG] Making request to /api/v1/tasks/{task_id}")
+    response = client.get(f"/api/v1/tasks/{task_id}")
+    print(f"[DEBUG] Response status: {response.status_code}")
+    print(f"[DEBUG] Response content: {response.text}")
     
-    # Apply the dependency override
-    print("[DEBUG] Setting up dependency override...")
-    app.dependency_overrides[get_async_result_class] = get_mock_async_result_class
-    print(f"[DEBUG] Updated dependency overrides: {app.dependency_overrides}")
+    # Assert - The endpoint should return a 200 status with an error in the response
+    assert response.status_code == 200, (
+        f"Expected status code 200, got {response.status_code}"
+    )
     
-    try:
-        # Use the authenticated client fixture
-        test_client = client
-        
-        # Act
-        print(f"\n[DEBUG] Sending request to API for task with non-serializable result...")
-        print(f"[DEBUG] Request URL: /api/v1/tasks/{task_id}")
-        
-        # Call the endpoint using the authenticated client
-        response = test_client.get(f"/api/v1/tasks/{task_id}")
-        print(f"[DEBUG] Response status: {response.status_code}")
-        print(f"[DEBUG] Response content: {response.text}")
-        
-        # Assert - The endpoint should return a 200 status with an error in the response
-        assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
-        
-        data = response.json()
-        print(f"[DEBUG] Response data: {data}")
-        
-        # The endpoint should include the task_id and status in the response
-        assert "task_id" in data, "Expected 'task_id' in response"
-        assert data["task_id"] == task_id, f"Expected task_id '{task_id}', got '{data.get('task_id')}'"
-        
-        # The endpoint should include an error message in the response
-        assert "error" in data, "Expected 'error' in response"
-        assert "not JSON serializable" in data["error"], \
-            f"Expected serialization error message, got: {data['error']}"
-        
-        print("[DEBUG] All assertions passed!")
-        
-    except Exception as e:
-        print(f"[DEBUG] Test failed with exception: {str(e)}")
-        print("[DEBUG] Current app.dependency_overrides:", app.dependency_overrides)
-        raise
-    finally:
-        # Clean up the overrides
-        print("\n[DEBUG] Cleaning up dependency overrides and exception handlers")
-        app.dependency_overrides.clear()
-        # Remove the exception handler we added
-        if hasattr(app, 'exception_handlers'):
-            app.exception_handlers = {}
-        print(f"[DEBUG] Final dependency overrides: {app.dependency_overrides}")
+    data = response.json()
+    print(f"[DEBUG] Response data: {data}")
+    
+    # The endpoint should include the task_id in the response
+    assert "task_id" in data, "Expected 'task_id' in response"
+    assert data["task_id"] == task_id, (
+        f"Expected task_id '{task_id}', got '{data.get('task_id')}'"
+    )
+    
+    # The endpoint should include an error message in the response
+    assert "error" in data, "Expected 'error' in response"
+    assert "not JSON serializable" in data["error"], (
+        f"Expected serialization error message, got: {data.get('error')}"
+    )
+    
+    # Verify the mock was called correctly
+    mock_celery_async_result.assert_called_once_with(task_id)
+    
+    print("\n[DEBUG] All assertions passed!")
 
 @pytest.mark.asyncio
-async def test_get_task_status_with_custom_status(client):
+@patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
+async def test_get_task_status_with_custom_status(mock_celery_async_result, client):
     """Test handling of custom task status values."""
-    # Import necessary modules
-    from fastapi import FastAPI
-    from crypto_news_aggregator.api.v1.tasks import router, get_async_result_class
-    from crypto_news_aggregator.main import app
-    from tests.test_utils import MockAsyncResult
-    
     # Arrange
     task_id = 'custom-status-task-id'
     custom_status = 'CUSTOM_STATUS'
     
     print("\n[DEBUG] Starting test_get_task_status_with_custom_status")
     
-    # Create a function that will return our mock AsyncResult
-    def get_mock_async_result_class():
-        print("[DEBUG] In get_mock_async_result_class, returning MockAsyncResult with custom status")
-        def _mock_async_result(task_id):
-            print(f"[DEBUG] Creating MockAsyncResult for task_id: {task_id} with status: {custom_status}")
-            return MockAsyncResult(
-                task_id=task_id,
-                status=custom_status,
-                result={"custom": "result"},
-                ready=True
-            )
-        return _mock_async_result
+    # Create a mock AsyncResult instance
+    mock_result = MagicMock()
+    mock_result.id = task_id
+    mock_result.task_id = task_id
+    mock_result.status = custom_status
+    mock_result.result = {"custom": "result"}
+    mock_result.ready.return_value = True
     
-    # Apply the dependency override
-    print("[DEBUG] Setting up dependency override...")
-    app.dependency_overrides[get_async_result_class] = get_mock_async_result_class
-    print(f"[DEBUG] Updated dependency overrides: {app.dependency_overrides}")
+    # Configure the CeleryAsyncResult mock to return our mock result
+    mock_celery_async_result.return_value = mock_result
     
-    try:
-        # Use the authenticated client fixture
-        test_client = client
-        
-        # Act
-        print(f"\n[DEBUG] Sending request to API for task with custom status...")
-        print(f"[DEBUG] Request URL: /api/v1/tasks/{task_id}")
-        
-        # Call the endpoint using the authenticated client
-        response = test_client.get(f"/api/v1/tasks/{task_id}")
-        print(f"[DEBUG] Response status: {response.status_code}")
-        print(f"[DEBUG] Response content: {response.text}")
-        
-        # Assert
-        assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
-        
-        data = response.json()
-        print(f"[DEBUG] Response data: {data}")
-        
-        # Verify the response contains the expected fields and values
-        assert data["task_id"] == task_id, f"Expected task_id {task_id}, got {data.get('task_id')}"
-        assert data["status"] == custom_status, f"Expected status '{custom_status}', got {data.get('status')}"
-        assert "result" in data, "Expected 'result' in response"
-        assert data["result"]["custom"] == "result", "Expected custom result in response"
-        
-        print("[DEBUG] All assertions passed!")
-        
-    except Exception as e:
-        print(f"[DEBUG] Test failed with exception: {str(e)}")
-        print("[DEBUG] Current app.dependency_overrides:", app.dependency_overrides)
-        raise
-    finally:
-        # Clean up the overrides
-        print("\n[DEBUG] Cleaning up dependency overrides")
-        app.dependency_overrides.clear()
-        print(f"[DEBUG] Final dependency overrides: {app.dependency_overrides}")
+    # Act - Make the request to the endpoint
+    url = f"/api/v1/tasks/{task_id}"
+    print(f"\n[DEBUG] Making request to {url}")
+    
+    response = client.get(url)
+    print(f"[DEBUG] Response status: {response.status_code}")
+    print(f"[DEBUG] Response content: {response.text}")
+    
+    # Assert - The endpoint should return a 200 status code with the custom status
+    assert response.status_code == 200, (
+        f"Expected status code 200, got {response.status_code}"
+    )
+    
+    data = response.json()
+    print(f"[DEBUG] Response data: {data}")
+    
+    # Verify the mock was called correctly
+    mock_celery_async_result.assert_called_once_with(task_id)
+    
+    # Verify the response contains the expected fields and values
+    assert data["task_id"] == task_id, (
+        f"Expected task_id '{task_id}', got '{data.get('task_id')}'"
+    )
+    
+    # The status should be the custom status we set
+    assert data["status"] == custom_status, (
+        f"Expected status '{custom_status}', got '{data.get('status')}'"
+    )
+    
+    # The result should be included in the response
+    assert "result" in data, "Expected 'result' in response"
+    assert data["result"]["custom"] == "result", "Expected custom result in response"
+    
+    print("\n[DEBUG] All assertions passed!")
 
 from unittest.mock import patch, MagicMock
 from tests.test_utils import create_mock_async_result
 
 @pytest.mark.asyncio
-async def test_trigger_news_fetch(client, test_user):
+@patch('src.crypto_news_aggregator.api.v1.tasks.fetch_news')
+async def test_trigger_news_fetch(mock_fetch_news, client, test_user):
     """Test triggering a news fetch task."""
-    # Import necessary modules
-    import uuid
-    from unittest.mock import patch, MagicMock
-    
-    print("\n[DEBUG] Starting test_trigger_news_fetch")
-    
     # Arrange
     source_param = "test-source"
+    task_id = "test-task-id-123"
     
-    # Create a mock task and result
-    mock_task = MagicMock()
+    # Create a mock task result
     mock_result = MagicMock()
-    
-    # Generate a UUID for the task ID that matches the format returned by the API
-    task_id = str(uuid.uuid4())
     mock_result.id = task_id
-    mock_task.delay.return_value = mock_result
     
-    print("\n[DEBUG] Test setup:")
-    print(f"- Test source: {source_param}")
+    # Configure the mock task
+    mock_fetch_news.delay.return_value = mock_result
+    
+    print("\n[DEBUG] Starting test_trigger_news_fetch")
+    print(f"- Source parameter: {source_param}")
     print(f"- Mock task ID: {task_id}")
-    print(f"- Mock task: {mock_task}")
-    print(f"- Mock result: {mock_result}")
     
-    # Patch the fetch_news task at the module where it's imported in the API
-    with patch('src.crypto_news_aggregator.api.v1.tasks.fetch_news', mock_task) as mock_patch:
-        print("\n[DEBUG] After patching fetch_news:")
-        print(f"- mock_patch: {mock_patch}")
-        print(f"- mock_task.delay.call_args_list (before call): {mock_task.delay.call_args_list}")
-        
-        # Act - Make request to the endpoint with source as a query parameter
-        url = f"/api/v1/news/fetch?source={source_param}"
-        print(f"\n[DEBUG] Making authenticated POST request to: {url}")
-        
-        response = client.post(
-            url,
-            json={}  # Empty JSON body since we're using query parameters
-        )
-        
-        print("\n[DEBUG] API Response:")
-        print(f"- Status code: {response.status_code}")
-        print(f"- Headers: {dict(response.headers)}")
-        print(f"- Body: {response.text}")
-        
-        # Verify the task was called with the correct arguments
-        print("\n[DEBUG] Verifying task was called correctly:")
-        print(f"- mock_task.delay.called: {mock_task.delay.called}")
-        print(f"- mock_task.delay.call_args_list: {mock_task.delay.call_args_list}")
-        
-        # Assert
-        try:
-            # Check response status code
-            assert response.status_code == 202, (
-                f"Expected status code 202 (Accepted), got {response.status_code}. "
-                f"Response: {response.text}"
-            )
-            
-            # Parse response JSON
-            data = response.json()
-            print(f"\n[DEBUG] Response JSON: {data}")
-            
-            # Verify the response has the expected structure
-            assert "task_id" in data, f"Response missing 'task_id' field: {data}"
-            assert "status" in data, f"Response missing 'status' field: {data}"
-            
-            # Verify the task ID is a valid UUID
-            try:
-                returned_task_id = data["task_id"]
-                uuid.UUID(returned_task_id)
-                print(f"[DEBUG] Valid task_id format: {returned_task_id}")
-            except ValueError:
-                assert False, f"task_id '{returned_task_id}' is not a valid UUID"
-                
-            # Verify status is PENDING
-            assert data["status"] == "PENDING", (
-                f"Expected status 'PENDING', got '{data.get('status')}'"
-            )
-            
-            # Verify the task was called with the correct arguments
-            assert mock_task.delay.called, "Task was not called"
-            
-            # Get the arguments passed to the task
-            call_args, call_kwargs = mock_task.delay.call_args
-            print(f"[DEBUG] Task call args: {call_args}")
-            print(f"[DEBUG] Task call kwargs: {call_kwargs}")
-            
-            # The task should be called with the source parameter
-            assert len(call_args) > 0, "Task was not called with any arguments"
-            assert call_args[0] == source_param, (
-                f"Expected source parameter '{source_param}', got '{call_args[0] if call_args else 'None'}'"
-            )
-            
-            # Verify the task was called exactly once with the expected arguments
-            mock_task.delay.assert_called_once_with(source_param)
-            
-            print("[DEBUG] All assertions passed!")
-            
-        except Exception as e:
-            print(f"\n[DEBUG] Test failed with error: {str(e)}")
-            import traceback
-            print(f"[DEBUG] Traceback: {traceback.format_exc()}")
-            raise
-        assert len(args) == 1, f"Expected 1 positional argument, got {len(args)}"
-        assert args[0] == "test-source", f"Expected source='test-source', got {args[0]}"
-        assert not kwargs, f"Expected no keyword arguments, got {kwargs}"
+    # Act - Make request to the endpoint with source as a query parameter
+    url = f"/api/v1/news/fetch?source={source_param}"
+    print(f"\n[DEBUG] Making POST request to: {url}")
+    
+    response = client.post(url, json={})
+    
+    # Print debug information
+    print(f"[DEBUG] Response status: {response.status_code}")
+    print(f"[DEBUG] Response content: {response.text}")
+    
+    # Assert
+    # Check response status code
+    assert response.status_code == 202, (
+        f"Expected status code 202, got {response.status_code}. Response: {response.text}"
+    )
+    
+    # Parse response JSON
+    data = response.json()
+    print(f"[DEBUG] Response data: {data}")
+    
+    # Verify the response has the expected structure
+    assert "task_id" in data, f"Response missing 'task_id' field: {data}"
+    assert "status" in data, f"Response missing 'status' field: {data}"
+    
+    # Verify the task ID matches our mock
+    assert data["task_id"] == task_id, (
+        f"Expected task_id '{task_id}', got '{data.get('task_id')}'"
+    )
+    
+    # Verify status is PENDING
+    assert data["status"] == "PENDING", (
+        f"Expected status 'PENDING', got '{data.get('status')}'"
+    )
+    
+    # Verify the task was called with the correct arguments
+    assert mock_fetch_news.delay.called, "Task was not called"
+    
+    # Get the arguments passed to the task
+    call_args, call_kwargs = mock_fetch_news.delay.call_args
+    print(f"[DEBUG] Task call args: {call_args}")
+    print(f"[DEBUG] Task call kwargs: {call_kwargs}")
+    
+    # The task should be called with the source parameter
+    assert len(call_args) == 1, "Task was not called with exactly one argument"
+    assert call_args[0] == source_param, (
+        f"Expected source parameter '{source_param}', got '{call_args[0]}'"
+    )
+    
+    # Verify the task was called exactly once with the expected arguments
+    mock_fetch_news.delay.assert_called_once_with(source_param)
+    
+    print("\n[DEBUG] All assertions passed!")
     
 @pytest.mark.asyncio
 async def test_trigger_sentiment_analysis(client, test_user):
@@ -1024,7 +874,7 @@ async def test_get_task_status_with_timeout(client):
     """Test getting task status with a timeout error."""
     # Import necessary modules
     from fastapi import FastAPI
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import patch, MagicMock, PropertyMock
     from tests.test_utils import MockAsyncResult
     from crypto_news_aggregator.api.v1.tasks import get_async_result_class
     from crypto_news_aggregator.main import app
@@ -1035,12 +885,21 @@ async def test_get_task_status_with_timeout(client):
     
     print("\n[DEBUG] Starting test_get_task_status_with_timeout")
     
-    # Create a custom mock that will raise TimeoutError when ready() is called
+    # Create a mock AsyncResult class that will raise TimeoutError when ready() is called
     class MockAsyncResultWithTimeout:
         def __init__(self, task_id):
             print(f"[DEBUG] Creating MockAsyncResultWithTimeout with task_id={task_id}")
             self.id = task_id
-            self.status = 'PENDING'
+            self.task_id = task_id
+            self._status = 'PENDING'
+        
+        @property
+        def status(self):
+            return self._status
+            
+        @status.setter
+        def status(self, value):
+            self._status = value
         
         def ready(self):
             print("[DEBUG] MockAsyncResultWithTimeout.ready() called - raising TimeoutError")
@@ -1061,14 +920,13 @@ async def test_get_task_status_with_timeout(client):
     app.dependency_overrides[get_async_result_class] = get_mock_async_result_class
     print(f"[DEBUG] Updated dependency overrides: {app.dependency_overrides}")
     
-    # Patch the CeleryAsyncResult in the tasks module
-    patch_target = 'src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult'
-    print(f"[DEBUG] Patching {patch_target}")
-    
     try:
-        # Use a context manager to ensure the patch is properly cleaned up
-        with patch(patch_target, MockAsyncResultWithTimeout) as mock_patch:
-            # Act - Use the authenticated client fixture
+        # Create a mock AsyncResult instance
+        mock_result = MockAsyncResultWithTimeout(task_id)
+        
+        # Patch the CeleryAsyncResult in the tasks module to return our mock
+        with patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult', return_value=mock_result) as mock_patch:
+            # Act - Use the client to make the request
             url = f"/api/v1/tasks/{task_id}"
             print(f"\n[DEBUG] Making request to {url}")
             
@@ -1121,103 +979,65 @@ async def test_get_task_status_with_timeout(client):
         print(f"[DEBUG] Final dependency overrides: {app.dependency_overrides}")
 
 @pytest.mark.asyncio
-async def test_get_task_status_with_connection_error(client):
+@patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
+async def test_get_task_status_with_connection_error(mock_celery_async_result, client):
     """Test handling of connection errors when checking task status."""
-    # Import necessary modules
-    from fastapi import FastAPI, status
-    from unittest.mock import PropertyMock, Mock
-    from tests.test_utils import MockAsyncResult
-    from crypto_news_aggregator.api.v1.tasks import get_async_result_class
-    from crypto_news_aggregator.main import app
-    
     # Arrange
     task_id = 'connection-error-task-id'
     error_message = "Failed to connect to message broker"
     
     print("\n[DEBUG] Starting test_get_task_status_with_connection_error")
     
-    # Create a function that will return our mock AsyncResult
-    def get_mock_async_result_class():
-        print("[DEBUG] In get_mock_async_result_class, returning MockAsyncResult with connection error")
-        
-        def _mock_async_result(task_id):
-            print(f"[DEBUG] Creating MockAsyncResult for task_id: {task_id} with connection error")
-            
-            # Create a mock result that raises ConnectionError when status is accessed
-            mock_result = MockAsyncResult(
-                task_id=task_id,
-                status='FAILURE',  # Set a default status
-                error=ConnectionError(error_message),  # Store the error
-                ready=False  # Set ready to False to simulate a pending task
-            )
-            
-            # Override the status property to raise ConnectionError
-            type(mock_result).status = PropertyMock(
-                side_effect=ConnectionError(error_message)
-            )
-            
-            # Mock the ready() method to return False
-            mock_result.ready = Mock(return_value=False)
-            
-            return mock_result
-            
-        return _mock_async_result
+    # Create a mock AsyncResult that raises ConnectionError when status is accessed
+    mock_result = MagicMock()
+    mock_result.id = task_id
+    mock_result.task_id = task_id
     
-    # Apply the dependency override
-    print("[DEBUG] Setting up dependency override...")
-    app.dependency_overrides[get_async_result_class] = get_mock_async_result_class
-    print(f"[DEBUG] Updated dependency overrides: {app.dependency_overrides}")
+    # Configure the status property to raise ConnectionError
+    type(mock_result).status = PropertyMock(
+        side_effect=ConnectionError(error_message)
+    )
     
-    try:
-        # Use the authenticated client fixture
-        test_client = client
-        
-        # Act
-        print(f"\n[DEBUG] Sending request to API for task with connection error...")
-        print(f"[DEBUG] Request URL: /api/v1/tasks/{task_id}")
-        
-        # Call the endpoint using the authenticated client
-        response = test_client.get(f"/api/v1/tasks/{task_id}")
-        print(f"[DEBUG] Response status: {response.status_code}")
-        print(f"[DEBUG] Response content: {response.text}")
-        
-        # Assert
-        # The API should return a 200 status code with error details in the response
-        assert response.status_code == status.HTTP_200_OK, (
-            f"Expected status code 200, got {response.status_code}"
-        )
-        
-        data = response.json()
-        print(f"[DEBUG] Response data: {data}")
-        
-        # Verify the response contains the expected fields and values
-        assert data["task_id"] == task_id, (
-            f"Expected task_id {task_id}, got {data.get('task_id')}"
-        )
-        
-        # The status should be FAILURE when a connection error occurs
-        assert data["status"] == "FAILURE", (
-            f"Expected status 'FAILURE', got {data.get('status')}"
-        )
-        
-        # The response should include an error message
-        assert "error" in data, "Expected 'error' in response"
-        assert error_message in data["error"], (
-            f"Expected error message to contain '{error_message}', got: {data.get('error')}"
-        )
-        
-        print("[DEBUG] All assertions passed!")
-        
-    except Exception as e:
-        print(f"\n[DEBUG] Test failed with error: {str(e)}")
-        import traceback
-        print(f"[DEBUG] Traceback: {traceback.format_exc()}")
-        raise
-    finally:
-        # Clean up the overrides
-        print("\n[DEBUG] Cleaning up dependency overrides")
-        app.dependency_overrides.clear()
-        print(f"[DEBUG] Final dependency overrides: {app.dependency_overrides}")
+    # Configure the ready() method to return False
+    mock_result.ready.return_value = False
+    
+    # Configure the CeleryAsyncResult mock to return our mock result
+    mock_celery_async_result.return_value = mock_result
+    
+    # Act
+    print(f"\n[DEBUG] Making request to /api/v1/tasks/{task_id}")
+    response = client.get(f"/api/v1/tasks/{task_id}")
+    print(f"[DEBUG] Response status: {response.status_code}")
+    print(f"[DEBUG] Response content: {response.text}")
+    
+    # Assert - The API should return a 200 status code with error details
+    assert response.status_code == 200, (
+        f"Expected status code 200, got {response.status_code}"
+    )
+    
+    data = response.json()
+    print(f"[DEBUG] Response data: {data}")
+    
+    # Verify the response contains the expected fields and values
+    assert data["task_id"] == task_id, (
+        f"Expected task_id {task_id}, got {data.get('task_id')}"
+    )
+    
+    # The status should be FAILURE when a connection error occurs
+    assert data["status"] == "FAILURE", (
+        f"Expected status 'FAILURE', got {data.get('status')}"
+    )
+    
+    # The response should include an error message
+    assert "error" in data, "Expected 'error' in response"
+    assert error_message in data["error"], (
+        f"Expected error message to contain '{error_message}', got: {data.get('error')}"
+    )
+    
+    # Verify the mock was called correctly
+    mock_celery_async_result.assert_called_once_with(task_id)
+    
+    print("\n[DEBUG] All assertions passed!")
 
 @pytest.mark.skip(reason="Endpoint not implemented in the API")
 def test_get_article_sentiment(client, mock_db_session, test_user):

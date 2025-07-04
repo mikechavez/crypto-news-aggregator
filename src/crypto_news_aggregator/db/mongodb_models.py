@@ -10,18 +10,22 @@ from enum import Enum
 class PyObjectId(ObjectId):
     """Custom type for MongoDB ObjectId that works with Pydantic v2."""
     @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
+    def __get_pydantic_core_schema__(cls, _source_type, _handler):
+        from pydantic_core import core_schema
+        
+        def validate_object_id(value: str) -> ObjectId:
+            if not ObjectId.is_valid(value):
+                raise ValueError("Invalid ObjectId")
+            return ObjectId(value)
+            
+        return core_schema.no_info_plain_validator_function(
+            function=validate_object_id,
+            serialization=core_schema.to_string_ser_schema(),
+        )
+        
     @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
-        return ObjectId(v)
-
-    @classmethod
-    def __get_pydantic_json_schema__(cls, field_schema):
-        field_schema.update(type="string", format="objectid")
+    def __get_pydantic_json_schema__(cls, _core_schema, handler):
+        return handler(core_schema.str_schema())
 
 
 class SentimentLabel(str, Enum):

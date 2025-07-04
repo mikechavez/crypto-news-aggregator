@@ -1,16 +1,25 @@
 """Task-related API endpoints."""
 import logging
-from fastapi import APIRouter, Depends, status, Response, HTTPException
+from fastapi import APIRouter, Depends, status, Response, HTTPException, Security
 from fastapi.responses import JSONResponse
 from typing import Any, Optional, Type, Callable, Dict, List, Union, TypeVar
 from pydantic import BaseModel, ConfigDict, field_serializer
 import json
 from celery.result import AsyncResult as CeleryAsyncResult
 from src.crypto_news_aggregator.tasks import fetch_news, analyze_sentiment, update_trends
+from src.crypto_news_aggregator.core.auth import get_api_key
 
 # Set up logging
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["tasks"])
+# Add authentication dependency to all routes in this router
+router = APIRouter(
+    tags=["tasks"],
+    dependencies=[Security(get_api_key)],
+    responses={
+        401: {"description": "Missing or invalid API key"},
+        403: {"description": "Not authorized"}
+    }
+)
 
 def check_serializable(obj: Any) -> bool:
     """Check if an object is JSON serializable."""

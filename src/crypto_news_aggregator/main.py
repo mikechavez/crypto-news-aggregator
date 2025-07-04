@@ -1,13 +1,14 @@
 """Main FastAPI application module."""
 import logging
 from contextlib import asynccontextmanager
-
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .api.v1 import router as api_router
 from .tasks.sync_tasks import sync_scheduler
 from .core.config import get_settings
+from .core.auth import get_api_key, API_KEY_NAME
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -35,23 +36,47 @@ async def lifespan(app: FastAPI):
     
     logger.info("Application shutdown complete")
 
+# Create FastAPI application
 app = FastAPI(
     title="Crypto News Aggregator API",
     description="API for aggregating and analyzing cryptocurrency news",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
-    lifespan=lifespan
+    openapi_url="/openapi.json",
+    lifespan=lifespan,
+    dependencies=None  # We'll add dependencies to specific routers instead
 )
 
 # CORS middleware configuration
+origins = ["*"]  # In production, replace with specific origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[API_KEY_NAME],
 )
+
+# Add exception handler for 401 Unauthorized
+@app.exception_handler(status.HTTP_401_UNAUTHORIZED)
+async def unauthorized_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={"detail": "Missing or invalid API key"},
+        headers={"WWW-Authenticate": "API-Key"},
+    )
+
+# Add exception handler for 403 Forbidden
+@app.exception_handler(status.HTTP_403_FORBIDDEN)
+async def forbidden_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={"detail": "Invalid API key"},
+        headers={"WWW-Authenticate": "API-Key"},
+    )
 
 # Include API routers
 app.include_router(api_router)

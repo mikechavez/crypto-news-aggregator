@@ -89,12 +89,23 @@ class TestNewsCollector:
         """Test collecting articles from a single source."""
         collector, mock_client, mock_service = mock_newsapi
         
-        # Configure the mock to return our test data
-        mock_client.get_everything.return_value = {
-            "status": "ok",
-            "totalResults": 1,
-            "articles": [mock_article_data]
-        }
+        # Configure the mock to return our test data for the first page
+        # and an empty list for subsequent pages to simulate no more results
+        def get_mock_response(*args, **kwargs):
+            page = kwargs.get('page', 1)
+            if page == 1:
+                return {
+                    "status": "ok",
+                    "totalResults": 1,
+                    "articles": [mock_article_data]
+                }
+            return {
+                "status": "ok",
+                "totalResults": 1,
+                "articles": []
+            }
+            
+        mock_client.get_everything.side_effect = get_mock_response
         
         # Configure the article service mock
         mock_service.create_article.return_value = True
@@ -103,7 +114,7 @@ class TestNewsCollector:
         count = await collector.collect_from_source("test-source", days=1)
         
         # Verify the article was processed
-        assert count == 1
+        assert count == 1, f"Expected 1 article, got {count}"
         assert collector.get_metrics()['articles_processed'] == 1
         
         # Verify the article service was called with the expected data
@@ -111,6 +122,12 @@ class TestNewsCollector:
         called_with = mock_service.create_article.await_args[0][0]
         assert called_with['title'] == mock_article_data['title']
         assert called_with['url'] == mock_article_data['url']
+        
+        # Verify the API was called with the correct pagination parameters
+        assert mock_client.get_everything.call_count >= 1
+        first_call = mock_client.get_everything.call_args_list[0]
+        assert first_call[1]['page'] == 1
+        assert first_call[1]['page_size'] <= 100  # Should respect max page size
     
     async def test_duplicate_article_handling(self, mock_newsapi, mock_article_data):
         """Test that duplicate articles are handled correctly."""
@@ -137,25 +154,44 @@ class TestNewsCollector:
         assert collector.get_metrics()['articles_skipped'] == 1
     
     async def test_error_handling(self, mock_newsapi, caplog):
-        """Test error handling during news collection."""
-        collector, mock_client, _ = mock_newsapi
+        """Test that errors during collection are properly handled."""
+        collector, mock_client, mock_service = mock_newsapi
         
         # Configure the mock to raise an exception
         mock_client.get_everything.side_effect = Exception("API Error")
         
-        # Test error handling
+        # Run the collection - should not raise an exception
         count = await collector.collect_from_source("test-source", days=1)
         
-        # Should return 0 articles on error
+        # Verify no articles were processed
         assert count == 0
-        assert collector.get_metrics()['api_errors'] > 0
         
         # Verify error was logged
-        assert "Error collecting from source test-source" in caplog.text
+        assert "Error on page 1 for test-source: API Error" in caplog.text
+        assert "Too many errors, aborting collection" in caplog.text
+        assert "Finished collection from test-source. Total articles processed: 0, errors: 3" in caplog.text
     
-    async def test_collect_all_sources(self, mock_newsapi):
+    async def test_collect_all_sources(self, mock_newsapi, mock_article_data):
         """Test collecting articles from all sources."""
         collector, mock_client, mock_service = mock_newsapi
+        
+        # Configure the mock to return our test data for the first page
+        # and an empty list for subsequent pages to simulate no more results
+        def get_mock_response(*args, **kwargs):
+            page = kwargs.get('page', 1)
+            if page == 1:
+                return {
+                    "status": "ok",
+                    "totalResults": 1,
+                    "articles": [mock_article_data]
+                }
+            return {
+                "status": "ok",
+                "totalResults": 1,
+                "articles": []
+            }
+            
+        mock_client.get_everything.side_effect = get_mock_response
         
         # Configure the article service mock
         mock_service.create_article.return_value = True
@@ -164,21 +200,41 @@ class TestNewsCollector:
         count = await collector.collect_all_sources(max_sources=1)
         
         # Should process one article from one source
-        assert count == 1
+        assert count == 1, f"Expected 1 article, got {count}"
+        
+        # Verify the article service was called with the expected data
+        mock_service.create_article.assert_called_once()
+        called_with = mock_service.create_article.await_args[0][0]
+        assert called_with['title'] == mock_article_data['title']
+        assert called_with['url'] == mock_article_data['url']
         assert collector.get_metrics()['articles_processed'] == 1
     
-async def test_rate_limiting(self, mock_newsapi):
+    async def test_rate_limiting(self, mock_newsapi):
         """Test that rate limiting is respected."""
         collector, _, _ = mock_newsapi
         
-        with patch('time.time', return_value=0), \
+        # Mock time to control the flow
+        with patch('time.time') as mock_time, \
              patch('asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
             
-            # First call - no delay needed
+            # First call - since _last_request_time is 0, it will sleep for RATE_LIMIT_DELAY
+            mock_time.return_value = 0
             await collector._respect_rate_limit()
-            mock_sleep.assert_not_called()
+            mock_sleep.assert_called_once_with(0.1)  # Should sleep for RATE_LIMIT_DELAY
             
-            # Second call immediately after - should trigger rate limiting
+            # Reset mock for next test
+            mock_sleep.reset_mock()
+            
+            # Second call - less than RATE_LIMIT_DELAY has passed since last call
+            mock_time.return_value = 0.05  # Less than RATE_LIMIT_DELAY (0.1)
             await collector._respect_rate_limit()
             mock_sleep.assert_called_once()
-            assert mock_sleep.call_args[0][0] > 0  # Should sleep for some duration
+            assert 0.05 <= mock_sleep.call_args[0][0] <= 0.1  # Should sleep for remaining time
+            
+            # Reset mock for next test
+            mock_sleep.reset_mock()
+            
+            # Third call - more than RATE_LIMIT_DELAY has passed since last call
+            mock_time.return_value = 0.2  # More than RATE_LIMIT_DELAY since last call
+            await collector._respect_rate_limit()
+            mock_sleep.assert_not_called()  # No sleep needed

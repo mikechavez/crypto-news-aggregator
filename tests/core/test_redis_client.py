@@ -34,8 +34,7 @@ def test_redis_client_ping(mock_request):
         headers={
             'Authorization': 'Bearer test-token',
             'Content-Type': 'application/json'
-        },
-        json=None
+        }
     )
 
 @patch('requests.request')
@@ -89,8 +88,7 @@ def test_redis_client_delete(mock_request):
         headers={
             'Authorization': 'Bearer test-token',
             'Content-Type': 'application/json'
-        },
-        json=None
+        }
     )
 
 def test_redis_client_singleton():

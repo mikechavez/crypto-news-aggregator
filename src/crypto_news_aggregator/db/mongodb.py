@@ -371,11 +371,13 @@ async def _on_shutdown():
     try:
         if mongo_manager._async_client is not None:
             await mongo_manager.aclose()
-            logger.info("MongoDB connections closed successfully")
+            # Use print instead of logger during shutdown to avoid logging after logger shutdown
+            print("MongoDB connections closed successfully")
         else:
-            logger.debug("No async MongoDB client to close")
+            print("No async MongoDB client to close")
     except Exception as e:
-        logger.error(f"Error during MongoDB shutdown: {e}", exc_info=True)
+        # Use print instead of logger during shutdown
+        print(f"Error during MongoDB shutdown: {e}")
         raise
 
 def get_lifespan():
@@ -423,14 +425,14 @@ if __name__ != "__main__" and not _in_fastapi_lifespan:
             try:
                 # Check if there's anything to clean up
                 if not hasattr(mongo_manager, '_async_client') or mongo_manager._async_client is None:
-                    logger.debug("No MongoDB client to clean up")
+                    print("No MongoDB client to clean up")
                     return
                     
                 # Try to get the event loop
                 try:
                     loop = asyncio.get_event_loop()
                 except RuntimeError as e:
-                    logger.warning(f"No event loop available for cleanup: {e}")
+                    print(f"No event loop available for cleanup: {e}")
                     return
                 
                 # Create a shutdown task
@@ -440,23 +442,24 @@ if __name__ != "__main__" and not _in_fastapi_lifespan:
                     # If loop is running, schedule the shutdown
                     task = loop.create_task(shutdown_task)
                     
-                    # Add a callback to log when the task is done
-                    def log_done(fut):
+                    # Add a callback to handle task completion
+                    def handle_done(fut):
                         try:
                             fut.result()
+                            print("Shutdown completed successfully")
                         except Exception as e:
-                            logger.error(f"Error in shutdown task: {e}", exc_info=True)
+                            print(f"Error in shutdown task: {e}")
                     
-                    task.add_done_callback(log_done)
+                    task.add_done_callback(handle_done)
                 else:
                     # If no running loop, create a new one and run until complete
                     try:
                         loop.run_until_complete(shutdown_task)
                     except RuntimeError as e:
-                        logger.warning(f"Error running shutdown: {e}")
+                        print(f"Error running shutdown: {e}")
                         
             except Exception as e:
-                logger.error(f"Unexpected error during cleanup: {e}", exc_info=True)
+                print(f"Unexpected error during cleanup: {e}")
             finally:
                 # Ensure we don't leave dangling references
                 if hasattr(mongo_manager, '_async_client'):

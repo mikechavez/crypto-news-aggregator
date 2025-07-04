@@ -45,11 +45,40 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
     # Email settings
-    SMTP_HOST: str = ""
-    SMTP_PORT: int = 587
-    SMTP_USER: str = ""
+    SMTP_SERVER: str = "smtp.gmail.com"  # Default to Gmail's SMTP server
+    SMTP_PORT: int = 465  # SSL port for Gmail
+    SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
-    EMAIL_SENDER: str = ""
+    EMAIL_FROM: str = ""  # Should match SMTP username for most providers
+    ALERT_EMAIL: str = ""  # Email address to send alerts to
+    
+    # Price monitoring settings
+    PRICE_CHECK_INTERVAL: int = 300  # 5 minutes in seconds
+    PRICE_CHANGE_THRESHOLD: float = 3.0  # 3% change to trigger alert
+    MIN_ALERT_INTERVAL: int = 1800  # 30 minutes in seconds
+    
+    # CoinGecko API settings
+    COINGECKO_API_URL: str = "https://api.coingecko.com/api/v3"
+    COINGECKO_API_KEY: str = ""  # Optional API key for higher rate limits
+    
+    # News source settings
+    ENABLED_NEWS_SOURCES: list[str] = ["coindesk", "bloomberg"]
+    NEWS_FETCH_INTERVAL: int = 300  # 5 minutes in seconds
+    MAX_ARTICLES_PER_SOURCE: int = 20
+    
+    # Source-specific settings
+    COINDESK_API_KEY: str = ""  # Optional API key for CoinDesk
+    BLOOMBERG_RATE_LIMIT: int = 10  # Max requests per minute
+    
+    # Article processing
+    MIN_ARTICLE_LENGTH: int = 100  # Minimum characters for an article to be processed
+    MAX_ARTICLE_AGE_DAYS: int = 7  # Ignore articles older than this
+    
+    # Security settings
+    SECRET_KEY: str = "your-secret-key-here"  # Change this to a secure secret key
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    API_KEY: str = "test-api-key"  # For testing purposes
 
     # Cache settings
     CACHE_EXPIRE: int = 3600  # 1 hour

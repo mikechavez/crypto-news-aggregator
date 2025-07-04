@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import sessionmaker
+from src.crypto_news_aggregator.core.config import get_settings
 
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -283,11 +284,48 @@ def override_get_db(db_session: AsyncSession):
     
     return _get_db
 
+# Set test API key at module level to ensure it's available when the app starts
+# Using a key that matches the format expected by the auth middleware
+TEST_API_KEY = "testapikey123"
+
+# Set the API key in the environment before any app initialization
+os.environ["API_KEYS"] = TEST_API_KEY
+
+# Create a test settings class that includes the API key
+class TestSettingsWithAPIKey(Settings):
+    API_KEYS: str = TEST_API_KEY
+    
+    class Config:
+        env_file = None  # Prevent loading .env file in tests
+
+# Override the settings with our test settings
+app.dependency_overrides[get_settings] = lambda: TestSettingsWithAPIKey()
+
 @pytest.fixture
-def client() -> Generator[TestClient, None, None]:
-    """Create a test client that includes the database session."""
-    # Create a new test client for each test
+def client(monkeypatch) -> Generator[TestClient, None, None]:
+    """
+    Create a test client that includes the database session and authentication.
+    
+    This fixture ensures that:
+    1. The test API key is properly set in the environment
+    2. The test client includes the API key in all requests
+    3. The database session is properly configured for testing
+    """
+    # Ensure the API key is set in the environment
+    monkeypatch.setenv("API_KEYS", TEST_API_KEY)
+    
+    # Create a new test client for each test with the API key in the headers
     with TestClient(app) as test_client:
+        # Add API key to all requests from this client
+        test_client.headers.update({
+            "X-API-Key": TEST_API_KEY,
+            "Content-Type": "application/json"
+        })
+        
+        # Debug logging
+        logger.debug(f"Test client created with API key: {TEST_API_KEY[:3]}...{TEST_API_KEY[-3:] if len(TEST_API_KEY) > 6 else '***'}")
+        logger.debug(f"Test client headers: {dict(test_client.headers)}")
+        
         # Setup test database session
         async def override_get_session() -> AsyncGenerator[AsyncSession, None]:
             async with async_sessionmaker(
@@ -297,7 +335,8 @@ def client() -> Generator[TestClient, None, None]:
             )() as session:
                 try:
                     yield session
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Database session error: {str(e)}")
                     await session.rollback()
                     raise
                 finally:
@@ -311,6 +350,7 @@ def client() -> Generator[TestClient, None, None]:
         finally:
             # Clean up
             app.dependency_overrides = {}
+            logger.debug("Test client cleanup complete")
 
 @pytest.fixture
 def mock_newsapi() -> Dict[str, Any]:
@@ -389,6 +429,16 @@ def configure_celery_for_tests():
     current_app.conf.update(**original_config)
 
 @pytest.fixture(autouse=True)
+def mock_env_vars(monkeypatch):
+    """Mock environment variables for testing."""
+    monkeypatch.setenv("MONGODB_URI", "mongodb://localhost:27017/test_db")
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.setenv("NEWS_API_KEY", "test-api-key")
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key")
+    # Use the same test API key that's used in the test client
+    monkeypatch.setenv("API_KEYS", TEST_API_KEY)
+
+@pytest.fixture
 def mock_celery_app(monkeypatch):
     """Mock the Celery app to avoid using a real backend in tests."""
     from unittest.mock import MagicMock, patch

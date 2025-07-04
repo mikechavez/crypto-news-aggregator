@@ -199,3 +199,52 @@ def create_mock_task() -> MockTask:
         A new MockTask instance.
     """
     return MockTask()
+
+
+def make_authenticated_request(
+    client: 'TestClient',
+    method: str,
+    url: str,
+    api_key: str = None,
+    **kwargs
+) -> 'Response':
+    """Make an authenticated HTTP request with the given client.
+    
+    This helper function ensures that all test requests include the proper
+    authentication headers and content type.
+    
+    Args:
+        client: The TestClient instance to use for the request.
+        method: The HTTP method (e.g., 'get', 'post', 'put', 'delete').
+        url: The URL to send the request to.
+        api_key: The API key to use for authentication. If None, uses the default test key.
+        **kwargs: Additional arguments to pass to the client's request method.
+        
+    Returns:
+        The response from the request.
+        
+    Example:
+        # Make an authenticated GET request
+        response = make_authenticated_request(
+            client, 
+            'get', 
+            '/api/v1/articles',
+            params={'limit': 10}
+        )
+    """
+    # Use the default test API key if none provided
+    if api_key is None:
+        from tests.conftest import TEST_API_KEY
+        api_key = TEST_API_KEY
+    
+    # Set default headers if not provided
+    headers = kwargs.pop('headers', {})
+    if 'X-API-Key' not in headers:
+        headers['X-API-Key'] = api_key
+    if 'Content-Type' not in headers:
+        headers['Content-Type'] = 'application/json'
+    
+    # Make the request with the specified method
+    request_method = getattr(client, method.lower())
+    return request_method(url, headers=headers, **kwargs)
+    return MockTask()
