@@ -67,7 +67,8 @@ def mock_async_result():
     """Fixture to provide a mock AsyncResult for testing."""
     # Create a mock async result that won't try to connect to a broker
     mock_result = create_mock_async_result('test-task-id')
-    with patch('crypto_news_aggregator.api.v1.tasks.AsyncResult', return_value=mock_result):
+    # Patch the AsyncResult class in the celery.result module
+    with patch('celery.result.AsyncResult', return_value=mock_result):
         yield mock_result
 
 @pytest.fixture
@@ -475,6 +476,14 @@ def test_get_task_status_retry(client, monkeypatch):
 
 def test_get_task_status_with_large_result(client, monkeypatch):
     """Test getting the status of a task with a large result."""
+    print("\n[DEBUG] Starting test_get_task_status_with_large_result")
+    
+    # Debug: Print the API keys from environment
+    import os
+    api_keys = os.getenv("API_KEYS", "").split(",")
+    print(f"[DEBUG] API_KEYS from environment: {api_keys}")
+    print(f"[DEBUG] TEST_API_KEY from conftest: {TEST_API_KEY}")
+    
     # Import the tasks module to access its attributes
     from crypto_news_aggregator.api.v1 import tasks
     from fastapi.testclient import TestClient
@@ -510,79 +519,83 @@ def test_get_task_status_with_large_result(client, monkeypatch):
         print("[DEBUG] In get_mock_async_result_class, returning MockAsyncResult")
         return MockAsyncResult
     
-    # Create a new test client with our overrides
-    with TestClient(app) as test_client:
-        # Override the dependency in the existing app
-        print("[DEBUG] Setting up dependency override...")
-        app.dependency_overrides[tasks.get_async_result_class] = get_mock_async_result_class
-        print(f"[DEBUG] Updated dependency overrides: {app.dependency_overrides}")
+    # Override the dependency in the existing app
+    print("[DEBUG] Setting up dependency override...")
+    app.dependency_overrides[tasks.get_async_result_class] = get_mock_async_result_class
+    print(f"[DEBUG] Updated dependency overrides: {app.dependency_overrides}")
+    
+    try:
+        # Act
+        print("\n[DEBUG] Sending request to API for task with large result...")
+        print(f"[DEBUG] Request URL: /api/v1/tasks/{task_id}")
         
-        try:
-            # Act
-            print("\n[DEBUG] Sending request to API for task with large result...")
-            print(f"[DEBUG] Request URL: /api/v1/tasks/{task_id}")
-            
-            # Call the endpoint
-            response = test_client.get(f"/api/v1/tasks/{task_id}")
-            print(f"[DEBUG] Response status: {response.status_code}")
-            
-            # Print response headers and body for debugging (truncate the actual data for readability)
-            print(f"[DEBUG] Response headers: {dict(response.headers)}")
-            response_data = response.json()
-            
-            # Print the raw response data for debugging
-            print(f"[DEBUG] Raw response data: {response_data}")
-            
-            # Print the type and structure of the response data
-            print(f"[DEBUG] Response data type: {type(response_data)}")
-            if isinstance(response_data, dict):
-                print("[DEBUG] Response data keys:", response_data.keys())
-                if "result" in response_data:
-                    print("[DEBUG] Result type:", type(response_data["result"]))
-                    print("[DEBUG] Full result content:", response_data["result"])
-                    if isinstance(response_data["result"], dict):
-                        print("[DEBUG] Result keys:", response_data["result"].keys())
-                        if "data" in response_data["result"]:
-                            data = response_data["result"]["data"]
-                            print("[DEBUG] Data type:", type(data))
-                            if isinstance(data, list):
-                                print("[DEBUG] Data length:", len(data))
-                                if len(data) > 0:
-                                    print("[DEBUG] First item type:", type(data[0]))
-                                    print("[DEBUG] First item content (first 100 chars):", str(data[0])[:100])
-                            elif isinstance(data, str):
-                                print("[DEBUG] Data content (first 100 chars):", data[:100])
-                            else:
-                                print("[DEBUG] Data content:", data)
-                    else:
-                        print("[DEBUG] Result content (first 100 chars):", str(response_data["result"])[:100])
-            
-            # Print the full response content for debugging
-            print("[DEBUG] Full response content:", response.content.decode()[:500] + "..." if len(response.content) > 500 else response.content.decode())
-            
-            # Assert
-            assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
-            data = response_data
-            
-            print(f"[DEBUG] Verifying response data...")
-            assert data["task_id"] == task_id, f"Expected task_id '{task_id}', got '{data['task_id']}'"
-            assert data["status"] == "SUCCESS", f"Expected status 'SUCCESS', got '{data['status']}'"
-            assert "result" in data, "Expected 'result' in response"
-            # The API returns the result directly in the response
-            assert isinstance(data["result"], dict), f"Expected result to be a dict, got {type(data['result'])}"
-            assert "data" in data["result"], "Expected 'data' key in result"
-            assert len(data["result"]["data"]) == 1000, f"Expected 1000 items in result data, got {len(data['result']['data'])}"
-            
-            print("[DEBUG] All assertions passed!")
-        except Exception as e:
-            print(f"[DEBUG] Test failed with exception: {str(e)}")
-            print("[DEBUG] Current app.dependency_overrides:", app.dependency_overrides)
-            raise
-        finally:
-            # Clean up the overrides
-            print("\n[DEBUG] Cleaning up dependency overrides")
-            app.dependency_overrides = {}
-            print(f"[DEBUG] Final dependency overrides: {app.dependency_overrides}")
+        # Call the endpoint using the client fixture which has the API key
+        response = client.get(f"/api/v1/tasks/{task_id}")
+        print(f"[DEBUG] Response status: {response.status_code}")
+        
+        # Print response headers and body for debugging (truncate the actual data for readability)
+        print(f"[DEBUG] Response headers: {dict(response.headers)}")
+        response_data = response.json()
+        
+        # Print the raw response data for debugging
+        print(f"[DEBUG] Raw response data: {response_data}")
+        
+        # Print the type and structure of the response data
+        print(f"[DEBUG] Response data type: {type(response_data)}")
+        if isinstance(response_data, dict):
+            print("[DEBUG] Response data keys:", response_data.keys())
+            if "result" in response_data:
+                print("[DEBUG] Result type:", type(response_data["result"]))
+                print("[DEBUG] Full result content:", response_data["result"])
+                if isinstance(response_data["result"], dict):
+                    print("[DEBUG] Result keys:", response_data["result"].keys())
+                    if "data" in response_data["result"]:
+                        data = response_data["result"]["data"]
+                        print("[DEBUG] Data type:", type(data))
+                        if isinstance(data, list):
+                            print("[DEBUG] Data length:", len(data))
+                            if len(data) > 0:
+                                print("[DEBUG] First item type:", type(data[0]))
+                                print("[DEBUG] First item content (first 100 chars):", str(data[0])[:100])
+                        elif isinstance(data, str):
+                            print("[DEBUG] Data content (first 100 chars):", data[:100])
+                        else:
+                            print("[DEBUG] Data content:", data)
+                else:
+                    print("[DEBUG] Result content (first 100 chars):", str(response_data["result"])[:100])
+        
+        # Print the full response content for debugging
+        print("[DEBUG] Full response content:", response.content.decode()[:500] + "..." if len(response.content) > 500 else response.content.decode())
+        
+        # Assert
+        assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
+        data = response_data
+        
+        print(f"[DEBUG] Verifying response data...")
+        assert data["task_id"] == task_id, f"Expected task_id '{task_id}', got '{data['task_id']}'"
+        assert data["status"] == "SUCCESS", f"Expected status 'SUCCESS', got '{data['status']}'"
+        assert "result" in data, "Expected 'result' in response"
+        
+        # Verify the result structure
+        result = data["result"]
+        assert isinstance(result, dict), f"Expected result to be a dict, got {type(result)}"
+        assert "data" in result, "Expected 'data' in result"
+        assert isinstance(result["data"], list), f"Expected 'data' to be a list, got {type(result['data'])}"
+        assert len(result["data"]) == 1000, f"Expected 1000 items in data, got {len(result['data'])}"
+        
+        # Verify the first item in the data list
+        first_item = result["data"][0]
+        assert first_item == "x" * 1000, f"Expected first item to be 'x' * 1000, got {first_item}"
+        
+    except Exception as e:
+        print(f"[DEBUG] Test failed with exception: {str(e)}")
+        raise
+    finally:
+        # Clean up
+        print(f"[DEBUG] Current app.dependency_overrides: {app.dependency_overrides}")
+        print("\n[DEBUG] Cleaning up dependency overrides")
+        app.dependency_overrides = {}
+        print(f"[DEBUG] Final dependency overrides: {app.dependency_overrides}")
 
 @pytest.mark.asyncio
 async def test_get_task_status_not_found():
@@ -892,10 +905,10 @@ from unittest.mock import patch, MagicMock
 from tests.test_utils import create_mock_async_result
 
 @pytest.mark.asyncio
-async def test_trigger_news_fetch(client, test_user, user_access_token):
+async def test_trigger_news_fetch(client, test_user):
     """Test triggering a news fetch task."""
     # Arrange
-    headers = {"Authorization": f"Bearer {user_access_token}"}
+    headers = {}
     
     # Create a mock task and result
     mock_task = MagicMock()
@@ -961,10 +974,10 @@ async def test_trigger_news_fetch(client, test_user, user_access_token):
         assert not kwargs, f"Expected no keyword arguments, got {kwargs}"
     
 @pytest.mark.asyncio
-async def test_trigger_sentiment_analysis(client, test_user, user_access_token):
+async def test_trigger_sentiment_analysis(client, test_user):
     """Test triggering sentiment analysis for an article."""
     # Arrange
-    headers = {"Authorization": f"Bearer {user_access_token}"}
+    headers = {}
     article_id = 123
     task_id = 'test-sentiment-task-id'
     
@@ -1002,10 +1015,10 @@ async def test_trigger_sentiment_analysis(client, test_user, user_access_token):
         assert not kwargs, f"Expected no keyword arguments, got {kwargs}"
 
 @pytest.mark.asyncio
-async def test_trigger_trends_update(client, test_user, user_access_token):
+async def test_trigger_trends_update(client, test_user):
     """Test triggering a trends update task."""
     # Arrange
-    headers = {"Authorization": f"Bearer {user_access_token}"}
+    headers = {}
     task_id = 'test-trends-update-task-id'
     
     # Create a mock task that returns a mock result with an id when delay() is called
@@ -1044,63 +1057,83 @@ async def test_trigger_trends_update(client, test_user, user_access_token):
 
 
 @pytest.mark.asyncio
-async def test_get_task_status_with_timeout():
-    """Test handling of task status check timeout."""
+async def test_get_task_status_with_timeout(client: TestClient, mock_async_result):
+    """Test getting task status with a timeout error."""
     # Arrange
-    task_id = 'timeout-task-id'
+    task_id = "timeout-task-id"
     
-    # Create a mock AsyncResult that raises TimeoutError when ready() is called
+    # Configure the mock to raise a TimeoutError when ready() is called
     from tests.test_utils import MockAsyncResult
+    from crypto_news_aggregator.api.v1.tasks import get_async_result_class
+    
+    # Create a custom mock that will raise TimeoutError when ready() is called
+    class MockAsyncResultWithTimeout:
+        def __init__(self, task_id):
+            print(f"[TEST] Creating MockAsyncResultWithTimeout with task_id={task_id}")
+            self.id = task_id
+            self.status = 'PENDING'
+        
+        def ready(self):
+            print("[TEST] MockAsyncResultWithTimeout.ready() called - raising TimeoutError")
+            raise TimeoutError("Task timed out")
+        
+        def __call__(self, task_id):
+            print(f"[TEST] MockAsyncResultWithTimeout.__call__ with task_id={task_id}")
+            return self
     
     # Create a function that will return our mock AsyncResult
     def get_mock_async_result():
-        def _mock_async_result(task_id):
-            # Create a mock result that will raise TimeoutError when ready() is called
-            mock_ready = MagicMock()
-            mock_ready.side_effect = TimeoutError("Task timed out")
-            
-            mock_result = MockAsyncResult(
-                task_id=task_id,
-                status='PENDING',
-                ready=mock_ready
-            )
-            # Add debug logging
-            print(f"[DEBUG] Created mock AsyncResult with id={mock_result.id}, status={mock_result.status}")
-            print(f"[DEBUG] Mock ready() will raise: {mock_ready.side_effect}")
-            return mock_result
-        return _mock_async_result
+        print("[TEST] get_mock_async_result() called")
+        return MockAsyncResultWithTimeout
     
-    # Override the dependency
-    from fastapi import FastAPI, status
-    from fastapi.testclient import TestClient
-    from crypto_news_aggregator.api.v1.tasks import router, get_async_result_class
-    
-    app = FastAPI()
-    app.include_router(router, prefix="/api/v1")
+    # Get the FastAPI app from the test client
+    app = client.app
+    print(f"[TEST] Got FastAPI app: {app}")
     
     # Apply the dependency override
-    app.dependency_overrides[get_async_result_class] = get_mock_async_result
+    print("[TEST] Applying dependency override")
     
-    # Create a new test client with our app
-    test_client = TestClient(app)
+    # Create a mock that will be used to replace the AsyncResult class
+    mock_async_result_instance = MockAsyncResultWithTimeout(task_id)
+    
+    # Patch the get_async_result_class function to return our mock class
+    def get_mock_async_result_class():
+        print("[TEST] get_mock_async_result_class() called")
+        return MockAsyncResultWithTimeout
+    
+    # Apply the dependency override
+    original_dependency = app.dependency_overrides.get(get_async_result_class)
+    app.dependency_overrides[get_async_result_class] = get_mock_async_result_class
+    print(f"[TEST] Dependency overrides: {app.dependency_overrides}")
+    
+    # Patch the AsyncResult class in the tasks module where it's actually used
+    # We need to patch the actual reference in the tasks module, not the alias
+    patch_target = 'src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult'
+    print(f"[TEST] Patching {patch_target}")
+    patcher = patch(patch_target, MockAsyncResultWithTimeout)
+    patcher.start()
     
     try:
-        # Act
-        response = test_client.get(f"/api/v1/tasks/{task_id}")
-        print(f"[DEBUG] Response status: {response.status_code}")
-        print(f"[DEBUG] Response content: {response.text}")
+        # Act - Use the test client from the fixture which includes the API key
+        print(f"[TEST] Making request to /api/v1/tasks/{task_id}")
+        response = client.get(f"/api/v1/tasks/{task_id}")
+        print(f"[TEST] Response status: {response.status_code}")
+        print(f"[TEST] Response content: {response.text}")
         
-        # Assert - The endpoint should return a 200 status with an error in the response
+        # Assert - The endpoint should return a 200 status code with error details in the response
         assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
-        
         data = response.json()
-        print(f"[DEBUG] Response data: {data}")
         
         # The endpoint should include the task_id and status in the response
-        assert "task_id" in data, "Expected 'task_id' in response"
+        assert "task_id" in data, f"Expected 'task_id' in response, got: {data}"
         assert data["task_id"] == task_id, f"Expected task_id '{task_id}', got '{data.get('task_id')}'"
         
-        # The endpoint should include an error message in the response
+        # The endpoint should include a status of TIMEOUT when a timeout occurs
+        assert "status" in data, f"Expected 'status' in response, got: {data}"
+        assert data["status"] == "TIMEOUT", \
+            f"Expected status 'TIMEOUT' when task times out, got: {data.get('status')}"
+            
+        # The response should include an error message
         assert "error" in data, "Expected 'error' in response"
         assert "Task timed out" in data["error"], \
             f"Expected error message to contain 'Task timed out', got: {data.get('error')}"
@@ -1180,10 +1213,10 @@ async def test_get_task_status_with_connection_error():
         app.dependency_overrides = {}
 
 @pytest.mark.skip(reason="Endpoint not implemented in the API")
-def test_get_article_sentiment(client, mock_db_session, test_user, user_access_token):
+def test_get_article_sentiment(client, mock_db_session, test_user):
     """Test getting sentiment for an article."""
     # Arrange
-    headers = {"Authorization": f"Bearer {user_access_token}"}
+    headers = {}
     article_id = 1
     
     # Create a mock article with sentiment data
@@ -1211,10 +1244,10 @@ def test_get_article_sentiment(client, mock_db_session, test_user, user_access_t
     assert data["sentiment"]["label"] == "Positive"
     assert data["sentiment"]["score"] == 0.8
 
-def test_trigger_sentiment_analysis_invalid_article(client, test_user, user_access_token):
+def test_trigger_sentiment_analysis_invalid_article(client, test_user):
     """Test triggering sentiment analysis with a non-existent article ID."""
     # Arrange
-    headers = {"Authorization": f"Bearer {user_access_token}"}
+    headers = {}
     non_existent_article_id = 9999
     task_id = 'test-sentiment-task-id'
     

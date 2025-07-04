@@ -196,10 +196,14 @@ async def get_task_status(
         task_id: The ID of the task to check
         async_result_class: The AsyncResult class to use (injected for testing)
     """
-    logger.info(f"[DEBUG] Getting status for task {task_id}")
+    logger.info(f"[ENDPOINT] Getting status for task {task_id}")
+    logger.info(f"[ENDPOINT] Using async_result_class: {async_result_class}")
     
     # Create the AsyncResult instance using the injected class
+    logger.info("[ENDPOINT] Creating AsyncResult instance...")
     task_result = async_result_class(task_id)
+    logger.info(f"[ENDPOINT] Created AsyncResult instance: {task_result}")
+    logger.info(f"[ENDPOINT] AsyncResult type: {type(task_result)}")
     
     # Prepare the base response
     response = {
@@ -208,48 +212,51 @@ async def get_task_status(
     
     try:
         # Try to get the task status
+        logger.info("[ENDPOINT] Getting task status...")
         task_status = task_result.status
         response["status"] = task_status
-        logger.info(f"[DEBUG] Created AsyncResult: id={task_result.id}, status={task_status}, ready={task_result.ready()}")
+        logger.info(f"[ENDPOINT] Task status: {task_status}")
+        logger.info(f"[ENDPOINT] AsyncResult details: id={getattr(task_result, 'id', 'N/A')}, status={getattr(task_result, 'status', 'N/A')}")
+        
+        # Check if task is ready, handling potential timeouts
+        try:
+            logger.info("[ENDPOINT] Checking if task is ready...")
+            is_ready = task_result.ready()
+            logger.info(f"[ENDPOINT] Task ready state: {is_ready}")
+            
+        except TimeoutError as e:
+            logger.warning(f"[ENDPOINT] Task status check timed out: {str(e)}")
+            response["status"] = "TIMEOUT"
+            response["error"] = str(e) or "Task timed out"
+            logger.info(f"[ENDPOINT] Returning timeout response: {response}")
+            return make_serializable(response)
+            
+        except Exception as e:
+            logger.error(f"[ENDPOINT] Error checking if task is ready: {str(e)}", exc_info=True)
+            response["status"] = "FAILURE"
+            response["error"] = f"Error checking task status: {str(e)}"
+            return make_serializable(response)
+            
+        # If we get here, no timeout occurred
+        logger.info(f"[ENDPOINT] Task ready state: {is_ready}")
+        
     except ConnectionError as e:
         # Handle connection errors
         error_msg = str(e) or "Failed to connect to message broker"
-        logger.error(f"[ERROR] Connection error getting task status: {error_msg}")
+        logger.error(f"[ENDPOINT] Connection error getting task status: {error_msg}", exc_info=True)
         response["status"] = "FAILURE"
         response["error"] = error_msg
-        return response
+        return make_serializable(response)
+        
     except Exception as e:
         # Handle other unexpected errors
         error_msg = f"Error getting task status: {str(e)}"
-        logger.error(f"[ERROR] {error_msg}")
+        logger.error(f"[ENDPOINT] Unexpected error: {error_msg}", exc_info=True)
         response["status"] = "FAILURE"
         response["error"] = error_msg
-        return response
-    logger.info(f"[DEBUG] Initial response: {response}")
-    
-    # Check if task is ready, handling potential timeouts
-    try:
-        # Try to get the ready state, which might raise a TimeoutError
-        try:
-            is_ready = task_result.ready()
-            logger.info(f"[DEBUG] Task ready state: {is_ready}")
-        except TimeoutError as e:
-            logger.warning(f"[DEBUG] Task status check timed out: {str(e)}")
-            response["status"] = "TIMEOUT"
-            response["error"] = str(e) or "Task timed out"
-            # Return the response with the error
-            return response
-            
-        # If we get here, no timeout occurred
-        logger.info(f"[DEBUG] Task ready state: {is_ready}")
+        return make_serializable(response)
         
-    except Exception as e:
-        # Handle any other unexpected errors
-        error_msg = f"Error checking if task is ready: {str(e)}"
-        logger.error(f"[ERROR] {error_msg}")
-        response["status"] = "FAILURE"
-        response["error"] = error_msg
-        return response
+    logger.info(f"[DEBUG] Initial response: {response}")
     
     if is_ready:
         try:
