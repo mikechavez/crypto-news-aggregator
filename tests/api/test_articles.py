@@ -143,7 +143,8 @@ def test_get_task_status_success(client, monkeypatch, capsys):
     mock_async_instance.id = task_id
     mock_async_instance.task_id = task_id
     mock_async_instance.status = 'SUCCESS'
-    mock_async_instance.ready.return_value = True
+    # Make ready() an async method that returns True
+    mock_async_instance.ready = AsyncMock(return_value=True)
     mock_async_instance.result = expected_result
     
     # Create a mock for the AsyncResult class

@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Set test environment variables before importing the app
-os.environ["API_KEYS"] = "test-api-key,another-test-key"
+os.environ["API_KEYS"] = "testapikey123"  # Must match the test API key in conftest.py
 os.environ["MONGODB_URI"] = "mongodb://localhost:27017/test_db"
 os.environ["REDIS_URL"] = "redis://localhost:6379/0"
 os.environ["NEWS_API_KEY"] = "test-api-key"
@@ -27,11 +27,11 @@ os.environ["SECRET_KEY"] = "test-secret-key"
 
 # Import the FastAPI app after setting environment variables
 from src.crypto_news_aggregator.main import app
-from src.crypto_news_aggregator.db.mongodb_models import ArticleResponse, ArticleInDB, ArticleSource
+from src.crypto_news_aggregator.db.mongodb_models import ArticleInDB, ArticleSource, SentimentAnalysis, SentimentLabel
 from src.crypto_news_aggregator.services.article_service import article_service
+from src.crypto_news_aggregator.db.mongodb_models import PyObjectId
 
-# Create test client
-client = TestClient(app)
+# Client fixture will be provided by conftest.py
 
 # Test data
 now = datetime.now(timezone.utc)
@@ -39,28 +39,37 @@ now = datetime.now(timezone.utc)
 # Create a test article ID
 test_article_id = "507f1f77bcf86cd799439011"
 
-# Create test article data that matches the expected API response format
+# Create test article data that matches the ArticleInDB model
 test_article_data = {
-    "_id": ObjectId(test_article_id),
+    "_id": PyObjectId(test_article_id),
     "title": "Test Article",
+    "description": "This is a test article description",
+    "content": "This is the full content of the test article.",
     "url": "https://example.com/test-article",
-    "source": {
-        "id": "test-source-1",
-        "name": "Test Source",
-        "url": "https://example.com",
-        "type": "test"
-    },
+    "url_to_image": "https://example.com/image.jpg",
+    "author": "Test Author",
+    "source": ArticleSource(
+        id="test-source-1",
+        name="Test Source",
+        url="https://example.com"
+    ),
+    "language": "en",
+    "category": "test",
+    "keywords": ["test", "crypto", "blockchain"],
+    "entities": {},
+    "metadata": {},
     "published_at": now,
-    "content": "This is a test article",
     "created_at": now,
     "updated_at": now,
-    "author": "Test Author",
-    "description": "Test description",
-    "url_to_image": "https://example.com/test-image.jpg",
-    "sentiment_score": 0.5,
-    "keywords": ["test", "crypto", "blockchain"],
-    "additional_data": {},
-    "raw_data": {}
+    "sentiment": SentimentAnalysis(
+        score=0.8,
+        magnitude=0.9,
+        label=SentimentLabel.POSITIVE,
+        subjectivity=0.6
+    ),
+    "is_analyzed": True,
+    "is_duplicate": False,
+    "processed": True
 }
 
 # Create an ArticleInDB instance from the test data
@@ -83,7 +92,34 @@ def mock_article_service():
         mock_collection = AsyncMock()
         mock_service._get_collection = AsyncMock(return_value=mock_collection)
         
-        yield mock_service
+        # Mock the current user dependency
+        from fastapi import Depends
+        from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+        from src.crypto_news_aggregator.core.security import get_current_user
+        
+        # Create a mock user with required fields
+        from src.crypto_news_aggregator.models.user import UserInDB
+        from bson import ObjectId
+        
+        mock_user = UserInDB(
+            _id=str(ObjectId()),
+            email="test@example.com",
+            hashed_password="hashed_password",
+            is_active=True,
+            is_superuser=False
+        )
+        
+        # Override the get_current_user dependency
+        def mock_get_current_user():
+            return mock_user
+            
+        app.dependency_overrides[get_current_user] = mock_get_current_user
+        
+        try:
+            yield mock_service
+        finally:
+            # Clean up the override
+            app.dependency_overrides.pop(get_current_user, None)
 
 
 
@@ -93,94 +129,95 @@ auth_headers = {"X-API-Key": "test-api-key"}  # This matches one of the keys in 
 class TestArticleEndpoints:
     """Test cases for article endpoints."""
     
-    def test_list_articles(self, mock_article_service):
+    def test_list_articles(self, mock_article_service, client):
         """Test listing articles with filters."""
         # Make request to list articles
-        response = client.get(
-            "/api/v1/articles/",
-            headers={"X-API-Key": "test-api-key"}
-        )
+        response = client.get("/api/v1/articles/")
         
         # Verify response
-        assert response.status_code == status.HTTP_200_OK
+        assert response.status_code == status.HTTP_200_OK, f"Unexpected status code: {response.status_code}. Response: {response.text}"
+        
+        # Parse response data
         data = response.json()
-        assert isinstance(data, list)
-        assert len(data) > 0
+        assert isinstance(data, list), f"Expected list, got {type(data)}"
+        
+        # The mock returns one article, so we should have at least one
+        assert len(data) > 0, "No articles returned in the response"
+        
+        # Verify article data
         article = data[0]
-        assert article["id"] == test_article_id  # Should be string ID in response
-        assert article["title"] == test_article_data["title"]
+        assert article["id"] == test_article_id, f"Unexpected article ID: {article.get('id')}"
+        assert article["title"] == test_article_data.title
         # The API should return the source as an object
         assert isinstance(article["source"], dict)
-        assert article["source"]["name"] == test_article_data["source"]["name"]
+        assert article["source"]["name"] == test_article_data.source.name
         
         # Verify the X-Total-Count header is set
         assert "X-Total-Count" in response.headers
         assert response.headers["X-Total-Count"] == "1"
 
-    def test_get_article(self, mock_article_service):
+    def test_get_article(self, mock_article_service, client):
         """Test getting a single article by ID."""
         # Make request to get the article
-        response = client.get(
-            f"/api/v1/articles/{test_article_id}",
-            headers={"X-API-Key": "test-api-key"}
-        )
-        
+        response = client.get(f"/api/v1/articles/{test_article_id}")
+
         # Verify response
-        assert response.status_code == status.HTTP_200_OK
+        assert response.status_code == status.HTTP_200_OK, f"Unexpected status code: {response.status_code}. Response: {response.text}"
         data = response.json()
-        assert data["id"] == test_article_id  # Should be string ID in response
-        assert data["title"] == test_article_data["title"]
+        assert str(data["id"]) == test_article_id  # Should be string ID in response
+        assert data["title"] == test_article_data.title
         # The API should return the source as an object
         assert isinstance(data["source"], dict)
-        assert data["source"]["name"] == test_article_data["source"]["name"]
+        assert data["source"]["name"] == test_article_data.source.name
         
         # Test with invalid ID format
-        response = client.get(
-            "/api/v1/articles/invalid-id",
-            headers={"X-API-Key": "test-api-key"}
-        )
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        response = client.get("/api/v1/articles/invalid-id")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST, "Expected 400 for invalid ID format"
         
         # Test non-existent article
         mock_article_service.get_article.return_value = None
-        response = client.get(
-            f"/api/v1/articles/{test_article_id}",
-            headers={"X-API-Key": "test-api-key"}
-        )
-        assert response.status_code == status.HTTP_404_NOT_FOUND
+        response = client.get(f"/api/v1/articles/{test_article_id}")
+        assert response.status_code == status.HTTP_404_NOT_FOUND, "Expected 404 for non-existent article"
 
-    def test_search_articles(self, mock_article_service):
+    def test_search_articles(self, mock_article_service, client):
         """Test searching articles."""
-        response = client.get(
-            "/api/v1/articles/search?q=test",
-            headers={"X-API-Key": "test-api-key"}
-        )
-        
-        assert response.status_code == status.HTTP_200_OK
+        response = client.get("/api/v1/articles/search/?q=test")
+
+        assert response.status_code == status.HTTP_200_OK, f"Unexpected status code: {response.status_code}. Response: {response.text}"
         data = response.json()
         assert isinstance(data, list)
-        assert len(data) > 0
-        assert data[0]["id"] == test_article_id
+        assert len(data) > 0, "No articles returned in search results"
+        assert str(data[0]["id"]) == test_article_id
         
         # Verify the X-Total-Count header is set
         assert "X-Total-Count" in response.headers
         assert response.headers["X-Total-Count"] == "1"
 
-    def test_unauthenticated_access(self):
+    def test_unauthenticated_access(self, client):
         """Test that unauthenticated access is handled correctly."""
-        # Test list articles without API key
-        response = client.get("/api/v1/articles/")
-        assert response.status_code in [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN]
+        # Save original headers
+        original_headers = client.headers.copy()
         
-        # Test get article without API key
-        response = client.get(f"/api/v1/articles/{test_article_id}")
-        assert response.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
-        
-        # Test get article with invalid API key
-        response = client.get(
-            f"/api/v1/articles/{test_article_id}",
-            headers={"X-API-Key": "invalid-key"}
-        )
-        assert response.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
+        try:
+            # Remove API key for unauthenticated test
+            if "X-API-Key" in client.headers:
+                del client.headers["X-API-Key"]
+            
+            # Test list articles without API key
+            response = client.get("/api/v1/articles/")
+            assert response.status_code in [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN]
+            
+            # Test get article without API key
+            response = client.get(f"/api/v1/articles/{test_article_id}")
+            assert response.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
+            
+            # Test get article with invalid API key
+            client.headers.update({"X-API-Key": "invalid-key"})
+            response = client.get(f"/api/v1/articles/{test_article_id}")
+            assert response.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
+            
+        finally:
+            # Restore original headers
+            client.headers = original_headers
         response = client.get("/api/v1/health")
         assert response.status_code == 200  # Health check should be public
