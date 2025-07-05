@@ -2,12 +2,14 @@
 Email service for sending alerts and notifications.
 """
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Union
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from datetime import datetime
 
 from ..core.config import settings
+from ..utils.template_renderer import template_renderer
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +75,68 @@ class EmailService:
             logger.error(f"Failed to send email to {to}: {e}", exc_info=True)
             return False
 
+    async def send_price_alert(
+        self,
+        to: str,
+        user_name: str,
+        crypto_name: str,
+        crypto_symbol: str,
+        condition: str,
+        threshold: float,
+        current_price: float,
+        price_change_24h: float,
+        dashboard_url: Optional[str] = None,
+        settings_url: Optional[str] = None,
+    ) -> bool:
+        """
+        Send a price alert email.
+        
+        Args:
+            to: Recipient email address
+            user_name: Name of the user
+            crypto_name: Name of the cryptocurrency
+            crypto_symbol: Symbol of the cryptocurrency (e.g., BTC)
+            condition: Alert condition that was triggered
+            threshold: Price or percentage threshold
+            current_price: Current price of the cryptocurrency
+            price_change_24h: 24-hour price change percentage
+            dashboard_url: URL to the user's dashboard (optional)
+            settings_url: URL to the user's settings (optional)
+            
+        Returns:
+            bool: True if email was sent successfully, False otherwise
+        """
+        if not hasattr(settings, 'BASE_URL'):
+            settings.BASE_URL = 'http://localhost:8000'
+            
+        if dashboard_url is None:
+            dashboard_url = f"{settings.BASE_URL}/dashboard"
+        if settings_url is None:
+            settings_url = f"{settings.BASE_URL}/settings"
+        
+        # Render the email template
+        html_content = await template_renderer.render_template(
+            'emails/price_alert.html',
+            {
+                'user_name': user_name,
+                'crypto_name': crypto_name,
+                'crypto_symbol': crypto_symbol,
+                'condition': condition,
+                'threshold': threshold,
+                'current_price': current_price,
+                'price_change_24h': price_change_24h,
+                'dashboard_url': dashboard_url,
+                'settings_url': settings_url,
+                'trigger_time': datetime.utcnow().isoformat(),
+            }
+        )
+        
+        # Create a subject line
+        direction = "above" if condition in ["above", "percent_up"] else "below"
+        subject = f"🔔 {crypto_symbol.upper()} Price Alert: {direction.upper()} {threshold}%"
+        
+        return await self.send_email(to, subject, html_content)
+
 # Global instance
 email_service = EmailService()
 
@@ -98,5 +162,49 @@ async def send_email_alert(
         to=to,
         subject=subject,
         html_content=html_content,
-        text_content=text_content
+        text_content=text_content,
+    )
+
+
+async def send_price_alert(
+    to: str,
+    user_name: str,
+    crypto_name: str,
+    crypto_symbol: str,
+    condition: str,
+    threshold: float,
+    current_price: float,
+    price_change_24h: float,
+    dashboard_url: Optional[str] = None,
+    settings_url: Optional[str] = None,
+) -> bool:
+    """
+    Send a price alert email using the global email service.
+    
+    Args:
+        to: Recipient email address
+        user_name: Name of the user
+        crypto_name: Name of the cryptocurrency
+        crypto_symbol: Symbol of the cryptocurrency (e.g., BTC)
+        condition: Alert condition that was triggered
+        threshold: Price or percentage threshold
+        current_price: Current price of the cryptocurrency
+        price_change_24h: 24-hour price change percentage
+        dashboard_url: URL to the user's dashboard (optional)
+        settings_url: URL to the user's settings (optional)
+        
+    Returns:
+        bool: True if email was sent successfully, False otherwise
+    """
+    return await email_service.send_price_alert(
+        to=to,
+        user_name=user_name,
+        crypto_name=crypto_name,
+        crypto_symbol=crypto_symbol,
+        condition=condition,
+        threshold=threshold,
+        current_price=current_price,
+        price_change_24h=price_change_24h,
+        dashboard_url=dashboard_url,
+        settings_url=settings_url,
     )
