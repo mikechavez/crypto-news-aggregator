@@ -122,7 +122,34 @@ class ArticleResponse(ArticleInDB):
     }
 
 
+class AlertStatus(str, Enum):
+    ACTIVE = "active"
+    TRIGGERED = "triggered"
+    DISABLED = "disabled"
+
+
 # Indexes to be created on MongoDB collections
+ALERT_INDEXES = [
+    # Index for fast lookups by user_id and active status
+    {
+        "keys": [("user_id", 1), ("is_active", 1)],
+        "name": "user_active_alerts",
+        "background": True
+    },
+    # Index for finding active alerts for a specific cryptocurrency
+    {
+        "keys": [("crypto_id", 1), ("is_active", 1), ("last_triggered", -1)],
+        "name": "crypto_active_alerts",
+        "background": True
+    },
+    # TTL index for automatically expiring old alerts after 90 days
+    {
+        "keys": [("created_at", 1)],
+        "name": "alert_expiration",
+        "expireAfterSeconds": 90 * 24 * 60 * 60  # 90 days in seconds
+    }
+]
+
 ARTICLE_INDEXES = [
     {
         "keys": [("url", 1)],

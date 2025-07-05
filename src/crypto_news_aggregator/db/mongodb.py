@@ -25,6 +25,7 @@ R = TypeVar('R')
 COLLECTION_ARTICLES = "articles"
 COLLECTION_SOURCES = "sources"
 COLLECTION_TRENDS = "trends"
+COLLECTION_ALERTS = "alerts"
 
 # Database name
 DB_NAME = "crypto_news"
@@ -165,11 +166,15 @@ class MongoManager:
         # Create article indexes
         articles_col = await self.get_async_collection(COLLECTION_ARTICLES)
         
+        # Create alerts collection indexes
+        alerts_col = await self.get_async_collection(COLLECTION_ALERTS)
+        
         # Drop existing indexes if force_recreate is True
         if force_recreate:
             await articles_col.drop_indexes()
+            await alerts_col.drop_indexes()
         
-        # Create new indexes
+        # Create article indexes
         for index in ARTICLE_INDEXES:
             keys = index["keys"]
             index_name = index.get("name")
@@ -191,6 +196,28 @@ class MongoManager:
                         keys,
                         name=index_name,
                         unique=unique,
+                        background=True
+                    )
+        
+        # Create alert indexes
+        for index in ALERT_INDEXES:
+            keys = index["keys"]
+            index_name = index["name"]
+            
+            # Handle TTL index
+            if "expireAfterSeconds" in index:
+                if not await self._has_index(alerts_col, index_name):
+                    await alerts_col.create_index(
+                        keys,
+                        name=index_name,
+                        expireAfterSeconds=index["expireAfterSeconds"]
+                    )
+            # Handle regular indexes
+            else:
+                if not await self._has_index(alerts_col, index_name):
+                    await alerts_col.create_index(
+                        keys,
+                        name=index_name,
                         background=True
                     )
         
