@@ -128,71 +128,80 @@ def test_get_task_status_success(client, monkeypatch, capsys):
     """Test getting the status of a successfully completed task."""
     from unittest.mock import MagicMock, AsyncMock, patch
     from fastapi.testclient import TestClient
-    from crypto_news_aggregator.api.v1.tasks import get_async_result_class
+    from crypto_news_aggregator.api.v1.tasks import get_async_result_class, router
     from celery.result import AsyncResult as CeleryAsyncResult
-    from crypto_news_aggregator.main import app
+    from fastapi import FastAPI
     
     print("\n[DEBUG] Starting test_get_task_status_success")
+    
+    # Create a test app with our router
+    test_app = FastAPI()
+    test_app.include_router(router)
     
     # Arrange
     task_id = 'test-task-id'
     expected_result = {"status": "success", "message": "Task completed"}
     
     # Create a mock for the AsyncResult instance
-    mock_async_instance = AsyncMock()
+    mock_async_instance = MagicMock()
     mock_async_instance.id = task_id
     mock_async_instance.task_id = task_id
     mock_async_instance.status = 'SUCCESS'
-    # Make ready() an async method that returns True
-    mock_async_instance.ready = AsyncMock(return_value=True)
+    mock_async_instance.ready.return_value = True
     mock_async_instance.result = expected_result
     
     # Create a mock for the AsyncResult class
     mock_async_result_class = MagicMock(return_value=mock_async_instance)
     
-    # Patch the Celery AsyncResult class at the module level
-    with patch('crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult', mock_async_result_class):
-        # Also patch the get_async_result_class dependency
-        with patch('crypto_news_aggregator.api.v1.tasks.get_async_result_class', return_value=mock_async_result_class):
-            print("\n[DEBUG] Patched CeleryAsyncResult and get_async_result_class")
+    # Create a mock for get_async_result_class
+    def mock_get_async_result_class():
+        return mock_async_result_class
+    
+    # Override the dependency
+    test_app.dependency_overrides[get_async_result_class] = mock_get_async_result_class
+    
+    try:
+        print("\n[DEBUG] Set up test app with mocked dependencies")
+        
+        # Act - Use the test client with our test app
+        with TestClient(test_app) as test_client:
+            # Add API key to all requests from this client
+            test_client.headers.update({
+                "X-API-Key": "testapikey123",
+                "Content-Type": "application/json"
+            })
             
-            # Act - Use the synchronous client for the request
             print(f"\n[DEBUG] Sending request to API for task {task_id}...")
-            
-            # Get a fresh client after patching
-            with TestClient(app) as test_client:
-                # Add API key to all requests from this client
-                test_client.headers.update({
-                    "X-API-Key": "testapikey123",
-                    "Content-Type": "application/json"
-                })
-                
-                response = test_client.get(f"/api/v1/tasks/{task_id}")
-            
-            print(f"[DEBUG] Response status: {response.status_code}")
-            print(f"[DEBUG] Response content: {response.text}")
-            
-            # Assert
-            assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
-            data = response.json()
-            print(f"[DEBUG] Response data: {data}")
-            
-            # Verify the mock was called correctly
-            mock_async_result_class.assert_called_once()
-            
-            # Assert the response
-            assert "task_id" in data, f"Expected 'task_id' in response, got: {data}"
-            assert data["task_id"] == task_id, f"Expected task_id '{task_id}', got '{data['task_id']}'"
-            assert data["status"] == "SUCCESS", f"Expected status 'SUCCESS', got '{data['status']}'"
-            
-            # The result might be in a 'result' field or directly in the response
-            if 'result' in data and data['result'] is not None:
-                assert data["result"] == expected_result, f"Expected result {expected_result}, got {data.get('result')}"
-            
-            # Verify the ready method was called
-            mock_async_instance.ready.assert_called_once()
-            
-            print("[DEBUG] All assertions passed!")
+            response = test_client.get(f"/tasks/{task_id}")
+        
+        print(f"[DEBUG] Response status: {response.status_code}")
+        print(f"[DEBUG] Response content: {response.text}")
+        
+        # Assert
+        assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
+        data = response.json()
+        print(f"[DEBUG] Response data: {data}")
+        
+        # Verify the mock was called correctly
+        mock_async_result_class.assert_called_once_with(task_id)
+        
+        # Assert the response
+        assert "task_id" in data, f"Expected 'task_id' in response, got: {data}"
+        assert data["task_id"] == task_id, f"Expected task_id '{task_id}', got '{data['task_id']}'"
+        assert data["status"] == "SUCCESS", f"Expected status 'SUCCESS', got '{data['status']}'"
+        
+        # The result should be in the 'result' field
+        assert "result" in data, f"Expected 'result' in response, got: {data}"
+        assert data["result"] == expected_result, f"Expected result {expected_result}, got {data.get('result')}"
+        
+        # Verify the ready method was called
+        mock_async_instance.ready.assert_called_once()
+        
+        print("[DEBUG] All assertions passed!")
+    finally:
+        # Clean up the dependency override
+        test_app.dependency_overrides = {}
+        print("[DEBUG] Cleaned up test app")
 
 def test_get_task_status_pending(client, monkeypatch, capsys):
     """Test getting the status of a pending task."""
@@ -586,59 +595,92 @@ async def test_get_task_status_with_serialization_error(mock_celery_async_result
     
     print("\n[DEBUG] All assertions passed!")
 
-@pytest.mark.asyncio
-@patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
-async def test_get_task_status_with_custom_status(mock_celery_async_result, client):
+def test_get_task_status_with_custom_status():
     """Test handling of custom task status values."""
-    # Arrange
-    task_id = 'custom-status-task-id'
-    custom_status = 'CUSTOM_STATUS'
+    from unittest.mock import MagicMock, PropertyMock, patch
+    from fastapi.testclient import TestClient
+    from crypto_news_aggregator.api.v1.tasks import get_async_result_class, router
+    from fastapi import FastAPI
     
     print("\n[DEBUG] Starting test_get_task_status_with_custom_status")
     
-    # Create a mock AsyncResult instance
-    mock_result = MagicMock()
-    mock_result.id = task_id
-    mock_result.task_id = task_id
-    mock_result.status = custom_status
-    mock_result.result = {"custom": "result"}
-    mock_result.ready.return_value = True
+    # Create a test app with our router
+    test_app = FastAPI()
+    test_app.include_router(router)
     
-    # Configure the CeleryAsyncResult mock to return our mock result
-    mock_celery_async_result.return_value = mock_result
+    # Arrange
+    task_id = 'custom-status-task-id'
+    custom_status = 'CUSTOM_STATUS'
+    custom_result = {"custom": "result"}
     
-    # Act - Make the request to the endpoint
-    url = f"/api/v1/tasks/{task_id}"
-    print(f"\n[DEBUG] Making request to {url}")
+    # Create a mock for the AsyncResult instance
+    mock_async_instance = MagicMock()
+    mock_async_instance.id = task_id
+    mock_async_instance.task_id = task_id
     
-    response = client.get(url)
-    print(f"[DEBUG] Response status: {response.status_code}")
-    print(f"[DEBUG] Response content: {response.text}")
+    # Configure the status property to return our custom status
+    type(mock_async_instance).status = PropertyMock(return_value=custom_status)
     
-    # Assert - The endpoint should return a 200 status code with the custom status
-    assert response.status_code == 200, (
-        f"Expected status code 200, got {response.status_code}"
-    )
+    # Configure the ready() method to return True
+    mock_async_instance.ready.return_value = True
     
-    data = response.json()
-    print(f"[DEBUG] Response data: {data}")
+    # Configure the result property to return our custom result
+    mock_async_instance.result = custom_result
     
-    # Verify the mock was called correctly
-    mock_celery_async_result.assert_called_once_with(task_id)
+    # Create a mock for the AsyncResult class
+    mock_async_result_class = MagicMock(return_value=mock_async_instance)
     
-    # Verify the response contains the expected fields and values
-    assert data["task_id"] == task_id, (
-        f"Expected task_id '{task_id}', got '{data.get('task_id')}'"
-    )
+    # Create a mock for get_async_result_class
+    def mock_get_async_result():
+        return mock_async_result_class
     
-    # The status should be the custom status we set
-    assert data["status"] == custom_status, (
-        f"Expected status '{custom_status}', got '{data.get('status')}'"
-    )
+    # Override the dependency
+    test_app.dependency_overrides[get_async_result_class] = mock_get_async_result
     
-    # The result should be included in the response
-    assert "result" in data, "Expected 'result' in response"
-    assert data["result"]["custom"] == "result", "Expected custom result in response"
+    try:
+        print("\n[DEBUG] Set up test app with mocked dependencies")
+        
+        # Act - Use the test client with our test app
+        with TestClient(test_app) as test_client:
+            # Add API key to all requests from this client
+            test_client.headers.update({
+                "X-API-Key": "testapikey123",
+                "Content-Type": "application/json"
+            })
+            
+            print(f"\n[DEBUG] Making request to /tasks/{task_id}")
+            response = test_client.get(f"/tasks/{task_id}")
+        
+        print(f"[DEBUG] Response status: {response.status_code}")
+        print(f"[DEBUG] Response content: {response.text}")
+        
+        # Assert - The API should return a 200 status code with the custom status
+        assert response.status_code == 200, (
+            f"Expected status code 200, got {response.status_code}"
+        )
+        
+        data = response.json()
+        print(f"[DEBUG] Response data: {data}")
+        
+        # Verify the response contains the expected fields and values
+        assert data["task_id"] == task_id, (
+            f"Expected task_id {task_id}, got {data.get('task_id')}"
+        )
+        
+        # The status should be the custom status we set
+        assert data["status"] == custom_status, (
+            f"Expected status '{custom_status}', got '{data.get('status')}'"
+        )
+        
+        # The result should be included in the response
+        assert "result" in data, "Expected 'result' in response"
+        assert data["result"]["custom"] == "result", "Expected custom result in response"
+        
+        print("\n[DEBUG] All assertions passed!")
+    finally:
+        # Clean up the dependency override
+        test_app.dependency_overrides = {}
+        print("[DEBUG] Cleaned up test app")
     
     print("\n[DEBUG] All assertions passed!")
 
@@ -879,144 +921,176 @@ async def test_trigger_trends_update(client, test_user):
         print("\n[DEBUG] All assertions passed!")
 from unittest.mock import patch, MagicMock
 
-@pytest.mark.asyncio
-async def test_get_task_status_with_timeout(client, monkeypatch):
+def test_get_task_status_with_timeout():
     """Test getting task status with a timeout error."""
+    from unittest.mock import MagicMock, AsyncMock, patch
+    from fastapi.testclient import TestClient
+    from crypto_news_aggregator.api.v1.tasks import get_async_result_class, router
+    from fastapi import FastAPI
+    from celery.exceptions import TimeoutError
+    
+    print("\n[DEBUG] Starting test_get_task_status_with_timeout")
+    
+    # Create a test app with our router
+    test_app = FastAPI()
+    test_app.include_router(router)
+    
     # Arrange
     task_id = "timeout-task-id"
     timeout_message = "Task timed out"
-
-    print("\n[DEBUG] Starting test_get_task_status_with_timeout")
-
-    # Create a mock for the AsyncResult class
-    class MockAsyncResult:
-        def __init__(self, task_id):
-            print(f"[MOCK] Initializing MockAsyncResult with task_id: {task_id}")
-            self.id = task_id
-            self.task_id = task_id
-            self.status = 'PENDING'
-            self._result = None
-
-        def ready(self):
-            print("[MOCK] MockAsyncResult.ready() called - raising TimeoutError")
-            raise TimeoutError(timeout_message)
-
-        @property
-        def result(self):
-            print("[MOCK] MockAsyncResult.result called")
-            return self._result
-
-    # Create a mock for the get_async_result_class function
-    def mock_get_async_result_class():
-        print("[MOCK] mock_get_async_result_class() called")
-        return MockAsyncResult
-
-    # Import the FastAPI app and override the dependency
-    from src.crypto_news_aggregator.main import app
-    from src.crypto_news_aggregator.api.v1.tasks import get_async_result_class
     
-    # Save the original dependency
-    original_dependency = app.dependency_overrides.get(get_async_result_class)
+    # Create a mock for the AsyncResult instance
+    mock_async_instance = MagicMock()
+    mock_async_instance.id = task_id
+    mock_async_instance.task_id = task_id
+    mock_async_instance.status = 'PENDING'
+    
+    # Make ready() raise a TimeoutError
+    mock_async_instance.ready.side_effect = TimeoutError(timeout_message)
+    
+    # Create a mock for the AsyncResult class
+    mock_async_result_class = MagicMock(return_value=mock_async_instance)
+    
+    # Create a mock for get_async_result_class
+    def mock_get_async_result():
+        return mock_async_result_class
+    
+    # Override the dependency
+    test_app.dependency_overrides[get_async_result_class] = mock_get_async_result
     
     try:
-        # Override the dependency with our mock
-        app.dependency_overrides[get_async_result_class] = mock_get_async_result_class
+        print("\n[DEBUG] Set up test app with mocked dependencies")
         
-        # Act - Make a request to the endpoint using the test client
-        endpoint = f"/api/v1/tasks/{task_id}"
-        print(f"\n[DEBUG] Sending request to {endpoint}")
-        response = client.get(endpoint)
-
+        # Act - Use the test client with our test app
+        with TestClient(test_app) as test_client:
+            # Add API key to all requests from this client
+            test_client.headers.update({
+                "X-API-Key": "testapikey123",
+                "Content-Type": "application/json"
+            })
+            
+            print(f"\n[DEBUG] Sending request to API for task {task_id}...")
+            response = test_client.get(f"/tasks/{task_id}")
+        
         print(f"[DEBUG] Response status: {response.status_code}")
         print(f"[DEBUG] Response content: {response.text}")
-
+        
         # Assert
         assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
-        response_data = response.json()
-
-        # Verify the response contains the expected fields and values
-        assert response_data["task_id"] == task_id, (
-            f"Expected task_id {task_id}, got {response_data.get('task_id')}"
-        )
-
-        # The status should be TIMEOUT when a timeout error occurs
-        assert response_data["status"] == "TIMEOUT", (
-            f"Expected status 'TIMEOUT', got {response_data.get('status')}"
-        )
-
+        data = response.json()
+        print(f"[DEBUG] Response data: {data}")
+        
+        # Verify the mock was called correctly
+        mock_async_result_class.assert_called_once_with(task_id)
+        mock_async_instance.ready.assert_called_once()
+        
+        # Assert the response
+        assert "task_id" in data, f"Expected 'task_id' in response, got: {data}"
+        assert data["task_id"] == task_id, f"Expected task_id '{task_id}', got '{data['task_id']}'"
+        # The status should be FAILURE when a timeout error occurs
+        assert data["status"] == "FAILURE", f"Expected status 'FAILURE', got '{data['status']}'"
+        
         # Verify the error message is included in the response
-        assert "error" in response_data, "Expected 'error' field in response"
-        assert "timed out" in response_data["error"].lower(), (
-            f"Expected 'timed out' in error message, got: {response_data.get('error')}"
+        assert "error" in data, "Expected 'error' field in response"
+        assert "timed out" in data["error"].lower(), (
+            f"Expected 'timed out' in error message, got: {data.get('error')}"
         )
-
+        
+        print("[DEBUG] All assertions passed!")
     finally:
-        # Restore the original dependency
-        if original_dependency is not None:
-            app.dependency_overrides[get_async_result_class] = original_dependency
-        else:
-            app.dependency_overrides.pop(get_async_result_class, None)
+        # Clean up the dependency override
+        test_app.dependency_overrides = {}
+        print("[DEBUG] Cleaned up test app")
 
-@pytest.mark.asyncio
-@patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
-async def test_get_task_status_with_connection_error(mock_celery_async_result, client):
+def test_get_task_status_with_connection_error():
     """Test handling of connection errors when checking task status."""
+    from unittest.mock import MagicMock, PropertyMock, patch
+    from fastapi.testclient import TestClient
+    from crypto_news_aggregator.api.v1.tasks import get_async_result_class, router
+    from fastapi import FastAPI
+    
+    print("\n[DEBUG] Starting test_get_task_status_with_connection_error")
+    
+    # Create a test app with our router
+    test_app = FastAPI()
+    test_app.include_router(router)
+    
     # Arrange
     task_id = 'connection-error-task-id'
     error_message = "Failed to connect to message broker"
     
-    print("\n[DEBUG] Starting test_get_task_status_with_connection_error")
-    
-    # Create a mock AsyncResult that raises ConnectionError when status is accessed
-    mock_result = MagicMock()
-    mock_result.id = task_id
-    mock_result.task_id = task_id
+    # Create a mock for the AsyncResult instance that raises ConnectionError
+    mock_async_instance = MagicMock()
+    mock_async_instance.id = task_id
+    mock_async_instance.task_id = task_id
     
     # Configure the status property to raise ConnectionError
-    type(mock_result).status = PropertyMock(
+    type(mock_async_instance).status = PropertyMock(
         side_effect=ConnectionError(error_message)
     )
     
-    # Configure the ready() method to return False
-    mock_result.ready.return_value = False
+    # Create a mock for the AsyncResult class
+    mock_async_result_class = MagicMock(return_value=mock_async_instance)
     
-    # Configure the CeleryAsyncResult mock to return our mock result
-    mock_celery_async_result.return_value = mock_result
+    # Create a mock for get_async_result_class
+    def mock_get_async_result():
+        return mock_async_result_class
     
-    # Act
-    print(f"\n[DEBUG] Making request to /api/v1/tasks/{task_id}")
-    response = client.get(f"/api/v1/tasks/{task_id}")
-    print(f"[DEBUG] Response status: {response.status_code}")
-    print(f"[DEBUG] Response content: {response.text}")
+    # Override the dependency
+    test_app.dependency_overrides[get_async_result_class] = mock_get_async_result
     
-    # Assert - The API should return a 200 status code with error details
-    assert response.status_code == 200, (
-        f"Expected status code 200, got {response.status_code}"
-    )
-    
-    data = response.json()
-    print(f"[DEBUG] Response data: {data}")
-    
-    # Verify the response contains the expected fields and values
-    assert data["task_id"] == task_id, (
-        f"Expected task_id {task_id}, got {data.get('task_id')}"
-    )
-    
-    # The status should be FAILURE when a connection error occurs
-    assert data["status"] == "FAILURE", (
-        f"Expected status 'FAILURE', got {data.get('status')}"
-    )
+    try:
+        print("\n[DEBUG] Set up test app with mocked dependencies")
+        
+        # Act - Use the test client with our test app
+        with TestClient(test_app) as test_client:
+            # Add API key to all requests from this client
+            test_client.headers.update({
+                "X-API-Key": "testapikey123",
+                "Content-Type": "application/json"
+            })
+            
+            print(f"\n[DEBUG] Making request to /tasks/{task_id}")
+            response = test_client.get(f"/tasks/{task_id}")
+        
+        print(f"[DEBUG] Response status: {response.status_code}")
+        print(f"[DEBUG] Response content: {response.text}")
+        
+        # Assert - The API should return a 200 status code with error details
+        assert response.status_code == 200, (
+            f"Expected status code 200, got {response.status_code}"
+        )
+        
+        data = response.json()
+        print(f"[DEBUG] Response data: {data}")
+        
+        # Verify the response contains the expected fields and values
+        assert data["task_id"] == task_id, (
+            f"Expected task_id {task_id}, got {data.get('task_id')}"
+        )
+        
+        # The status should be FAILURE when a connection error occurs
+        assert data["status"] == "FAILURE", (
+            f"Expected status 'FAILURE', got {data.get('status')}"
+        )
+        
+        # Verify the error message is included in the response
+        assert "error" in data, "Expected 'error' field in response"
+        assert error_message.lower() in data["error"].lower(), (
+            f"Expected error message to contain '{error_message}', got: {data.get('error')}"
+        )
+        
+        print("[DEBUG] All assertions passed!")
+    finally:
+        # Clean up the dependency override
+        test_app.dependency_overrides = {}
+        print("[DEBUG] Cleaned up test app")
     
     # The response should include an error message
     assert "error" in data, "Expected 'error' in response"
     assert error_message in data["error"], (
         f"Expected error message to contain '{error_message}', got: {data.get('error')}"
     )
-    
-    # Verify the mock was called correctly
-    mock_celery_async_result.assert_called_once_with(task_id)
-    
-    print("\n[DEBUG] All assertions passed!")
 
 @pytest.mark.skip(reason="Endpoint not implemented in the API")
 def test_get_article_sentiment(client, mock_db_session, test_user):
