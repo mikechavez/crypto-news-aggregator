@@ -29,9 +29,12 @@ class ArticleService:
     def __init__(self):
         self.collection_name = COLLECTION_ARTICLES
     
-    async def _get_collection(self):
-        """Get the articles collection."""
-        return await mongo_manager.get_async_collection(self.collection_name)
+    async def _get_collection(self) -> Any:
+        """Get the MongoDB collection for articles."""
+        if not hasattr(self, '_collection'):
+            # Get the collection and store it
+            self._collection = await mongo_manager.get_async_collection("articles")
+        return self._collection
     
     async def _generate_fingerprint(self, title: str, content: str) -> str:
         """
@@ -63,52 +66,32 @@ class ArticleService:
     async def _is_duplicate(self, title: str, content: str, source_id: str, 
                           published_at: datetime) -> Tuple[bool, Optional[ObjectId]]:
         """
-        Check if an article is a duplicate of an existing one.
+        Check if an article is an exact duplicate of an existing one.
+        
+        Only considers articles with identical fingerprints as duplicates.
+        Different articles about the same topic will not be considered duplicates.
         
         Args:
             title: Article title
             content: Article content
-            source_id: Source ID
-            published_at: Publication timestamp
+            source_id: Source ID (not used in comparison, kept for interface compatibility)
+            published_at: Publication timestamp (not used in comparison, kept for interface compatibility)
             
         Returns:
             Tuple of (is_duplicate, original_article_id)
         """
-        # Check for exact URL match first (handled by unique index)
-        
-        # Check for similar articles from the same source within a time window
-        time_window = published_at - timedelta(hours=24)
-        
         # Generate fingerprint for the article
         fingerprint = await self._generate_fingerprint(title, content)
         
-        # Look for similar articles from the same source within the time window
+        # Look for exact matches by fingerprint only
         collection = await self._get_collection()
-        
-        # Check by fingerprint first (exact match)
         existing = await collection.find_one({
-            "fingerprint": fingerprint,
-            "source.id": source_id,
-            "published_at": {"$gte": time_window}
+            "fingerprint": fingerprint
         })
         
         if existing:
+            logger.debug(f"Found duplicate article with fingerprint {fingerprint}")
             return True, existing["_id"]
-            
-        # If no exact fingerprint match, check for similar titles from the same source
-        # This is more expensive, so we do it as a fallback
-        normalized_title = ' '.join(title.lower().split()[:10])  # First 10 words
-        
-        # Use text search to find similar titles
-        similar_articles = await collection.find({
-            "$text": {"$search": f'"{normalized_title}"', "$caseSensitive": False},
-            "source.id": source_id,
-            "published_at": {"$gte": time_window}
-        }).sort("published_at", -1).limit(1).to_list(None)
-        
-        if similar_articles:
-            # If we found a similar article, consider it a duplicate
-            return True, similar_articles[0]["_id"]
             
         return False, None
     
@@ -247,14 +230,21 @@ class ArticleService:
             if max_sentiment is not None:
                 query["sentiment.score"]["$lte"] = max_sentiment
         
+        # Get the MongoDB collection
         collection = await self._get_collection()
         
         # Get total count
         total = await collection.count_documents(query)
         
-        # Get paginated results
-        cursor = collection.find(query).sort("published_at", -1).skip(skip).limit(limit)
-        articles = [ArticleInDB(**doc) async for doc in cursor]
+        # Get paginated results with proper async/await and method chaining
+        # First get the cursor by awaiting the find() call
+        cursor = await collection.find(query)
+        # Then chain the cursor methods (these are synchronous operations)
+        cursor = cursor.sort("published_at", -1).skip(skip).limit(limit)
+        
+        # Execute the query and get results
+        articles_data = await cursor.to_list(length=limit)
+        articles = [ArticleInDB(**doc) for doc in articles_data]
         
         return articles, total
     
@@ -317,8 +307,10 @@ class ArticleService:
             {"$limit": limit}
         ]
         
-        cursor = collection.aggregate(pipeline)
-        articles = [ArticleInDB(**doc) async for doc in cursor]
+        # Execute aggregation and convert to list
+        cursor = await collection.aggregate(pipeline)
+        articles_data = await cursor.to_list(length=limit)
+        articles = [ArticleInDB(**doc) for doc in articles_data]
         
         return articles, total
     
@@ -343,7 +335,7 @@ class ArticleService:
                 {"_id": ObjectId(article_id)},
                 {
                     "$set": {
-                        "sentiment": sentiment.dict(),
+                        "sentiment": sentiment.model_dump(),
                         "updated_at": datetime.now(timezone.utc)
                     }
                 }
