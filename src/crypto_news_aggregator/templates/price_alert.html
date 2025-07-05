@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #f8f9fa; padding: 20px; text-align: center; border-radius: 5px; margin-bottom: 20px; }
+        .price-change { font-size: 24px; font-weight: bold; margin: 15px 0; }
+        .up { color: #28a745; }
+        .down { color: #dc3545; }
+        .price-info { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .price-history { margin: 20px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+        .footer { margin-top: 30px; font-size: 12px; color: #6c757d; text-align: center; }
+        .unsubscribe { color: #6c757d; font-size: 12px; margin-top: 30px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚨 Bitcoin Price Alert</h1>
+    </div>
+    
+    <div class="price-change {{ 'up' if direction == 'up' else 'down' }}">
+        {{ '📈' if direction == 'up' else '📉' }}
+        Bitcoin is {{ direction }} {{ change_pct|abs }}%
+    </div>
+    
+    <div class="price-info">
+        <p><strong>Current Price:</strong> ${{ "%.2f"|format(current_price) }}</p>
+        <p><strong>Change (24h):</strong> <span class="{{ 'up' if change_24h >= 0 else 'down' }}">{{ "%.2f"|format(change_24h) }}%</span></p>
+        <p><strong>Market Cap:</strong> ${{ "{:,.0f}".format(market_cap) }}</p>
+        <p><strong>24h Volume:</strong> ${{ "{:,.0f}".format(volume_24h) }}</p>
+    </div>
+    
+    {% if price_history %}
+    <div class="price-history">
+        <h3>Recent Price History</h3>
+        <table>
+            <tr>
+                <th>Time</th>
+                <th>Price (USD)</th>
+                <th>Change (24h)</th>
+            </tr>
+            {% for entry in price_history %}
+            <tr>
+                <td>{{ entry.timestamp.strftime('%H:%M') }}</td>
+                <td>${{ "%.2f"|format(entry.price) }}</td>
+                <td class="{{ 'up' if entry.change_24h >= 0 else 'down' }}">
+                    {{ "%.2f"|format(entry.change_24h) }}%
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endif %}
+    
+    {% if articles %}
+    <div class="relevant-articles">
+        <h3>Recent News</h3>
+        {% for article in articles[:3] %}
+        <div style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #eee;">
+            <h4 style="margin: 0 0 5px 0;">
+                <a href="{{ article.url }}" style="color: #007bff; text-decoration: none;">
+                    {{ article.title }}
+                </a>
+            </h4>
+            <p style="margin: 0; color: #6c757d; font-size: 14px;">
+                {{ article.source }} · {{ article.published_at | datetimeformat('%b %d, %Y %H:%M') }}
+            </p>
+            <p style="margin: 5px 0 0 0;">
+                {{ article.summary | truncate(200) }}
+            </p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <div class="unsubscribe">
+        <p>To manage your email preferences or unsubscribe, <a href="{{ unsubscribe_url }}">click here</a>.</p>
+    </div>
+    
+    <div class="footer">
+        <p>© {{ current_year }} Crypto News Aggregator. All rights reserved.</p>
+        <p>This is an automated message, please do not reply to this email.</p>
+    </div>
+</body>
+</html>
