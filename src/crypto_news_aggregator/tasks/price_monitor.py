@@ -1,14 +1,14 @@
 """
-Background task for monitoring cryptocurrency prices.
+Background task for monitoring cryptocurrency prices and triggering alerts.
 """
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from ..services.price_service import price_service
+from ..services.notification_service import notification_service
 from ..core.config import settings
-from ..services.email_service import send_email_alert  # We'll create this next
 
 logger = logging.getLogger(__name__)
 
@@ -65,101 +65,46 @@ class PriceMonitor:
     
     async def _handle_price_movement(self, movement: Dict[str, Any]):
         """
-        Handle a significant price movement by sending an email alert.
+        Handle a significant price movement by processing alerts.
         
         Args:
             movement: Dictionary containing price movement details
         """
+        symbol = movement['symbol']
+        current_price = movement['current_price']
+        change_pct = movement['change_pct']
+        
         logger.info(
-            f"Significant price movement detected: {movement['symbol']} "
-            f"{movement['change_pct']}% to ${movement['current_price']}"
+            f"Significant price movement detected: {symbol} "
+            f"{change_pct}% to ${current_price}"
         )
         
         try:
             # Get market data for context
             market_data = await price_service.get_market_data()
             
-            # Get recent price history for the chart
-            price_history = price_service.get_recent_price_history(hours=24)  # Last 24 hours
+            # Get cryptocurrency details
+            crypto_id = symbol.lower()  # This should be the CoinGecko ID (e.g., 'bitcoin')
+            crypto_name = symbol.capitalize()  # This should be replaced with actual name from CoinGecko
             
-            # Get relevant news articles (last 6 hours)
-            from datetime import datetime, timedelta
-            from ..services.article_service import article_service
-            
-            articles = await article_service.search_articles(
-                query="Bitcoin price",
-                start_date=datetime.utcnow() - timedelta(hours=6),
-                limit=3
+            # Process alerts for this cryptocurrency
+            stats = await notification_service.process_price_alert(
+                crypto_id=crypto_id,
+                crypto_name=crypto_name,
+                crypto_symbol=symbol.upper(),
+                current_price=current_price,
+                price_change_24h=change_pct
             )
             
-            # Prepare template context
-            context = {
-                'current_price': movement['current_price'],
-                'change_pct': movement['change_pct'],
-                'direction': movement['direction'],
-                'change_24h': market_data.get('price_change_percentage_24h', 0),
-                'market_cap': market_data.get('market_cap', 0),
-                'volume_24h': market_data.get('total_volume', 0),
-                'price_history': [{
-                    'timestamp': entry['timestamp'],
-                    'price': entry['price'],
-                    'change_24h': entry.get('price_change_percentage_24h', 0)
-                } for entry in price_history[-10:]],  # Last 10 price points
-                'articles': [{
-                    'title': article.title,
-                    'url': article.url,
-                    'source': article.source.get('name', 'Unknown'),
-                    'published_at': article.published_at,
-                    'summary': article.description or ''
-                } for article in articles[0]] if articles and articles[0] else [],
-                'unsubscribe_url': f"{settings.BASE_URL}/unsubscribe?email={settings.ALERT_EMAIL}",
-                'current_year': datetime.utcnow().year
-            }
-            
-            # Render email template
-            from jinja2 import Environment, FileSystemLoader, select_autoescape
-            import os
-            
-            env = Environment(
-                loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), '..', 'templates')),
-                autoescape=select_autoescape(['html', 'xml'])
+            logger.info(
+                f"Processed {stats['alerts_processed']} alerts for {symbol}. "
+                f"Triggered: {stats['alerts_triggered']}, "
+                f"Notifications sent: {stats['notifications_sent']}, "
+                f"Errors: {stats['errors']}"
             )
-            env.filters['datetimeformat'] = lambda value, format: value.strftime(format)
-            
-            template = env.get_template('price_alert.html')
-            html_content = template.render(**context)
-            
-            # Prepare subject line
-            direction_emoji = '📈' if movement['direction'] == 'up' else '📉'
-            subject = (
-                f"{direction_emoji} Bitcoin Price Alert: "
-                f"{movement['symbol']} {movement['direction'].title()} "
-                f"{abs(movement['change_pct']):.1f}% to ${movement['current_price']:,.2f}"
-            )
-            
-            # Send email alert
-            await send_email_alert(
-                to=settings.ALERT_EMAIL,
-                subject=subject,
-                html_content=html_content
-            )
-            logger.info(f"Sent price alert email for {movement['symbol']}")
             
         except Exception as e:
-            logger.error(f"Failed to send price alert email: {e}", exc_info=True)
-            # Fallback to simple email if template rendering fails
-            try:
-                await send_email_alert(
-                    to=settings.ALERT_EMAIL,
-                    subject=f"Bitcoin Price Alert: {movement['symbol']} {movement['direction'].title()}",
-                    html_content=(
-                        f"<h2>{movement['symbol']} Price Alert</h2>"
-                        f"<p>Price changed by {movement['change_pct']:.2f}% "
-                        f"to ${movement['current_price']:,.2f}</p>"
-                    )
-                )
-            except Exception as fallback_error:
-                logger.error(f"Fallback email also failed: {fallback_error}", exc_info=True)
+            logger.error(f"Error processing price movement for {symbol}: {e}", exc_info=True)
 
 # Global instance
 price_monitor = PriceMonitor()
