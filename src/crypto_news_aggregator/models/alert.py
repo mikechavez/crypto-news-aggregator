@@ -1,8 +1,8 @@
 """Alert-related Pydantic models."""
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
-from typing import List, Optional
-from pydantic import BaseModel, Field, validator
+from typing import List, Optional, ClassVar
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 class AlertCondition(str, Enum):
@@ -35,14 +35,16 @@ class AlertUpdate(BaseModel):
     is_active: Optional[bool] = None
     cooldown_minutes: Optional[int] = None
 
-    @validator('threshold')
-    def validate_threshold(cls, v):
+    @field_validator('threshold')
+    @classmethod
+    def validate_threshold(cls, v: Optional[float]) -> Optional[float]:
         if v is not None and v <= 0:
             raise ValueError("Threshold must be a positive number")
         return v
 
-    @validator('cooldown_minutes')
-    def validate_cooldown(cls, v):
+    @field_validator('cooldown_minutes')
+    @classmethod
+    def validate_cooldown(cls, v: Optional[int]) -> Optional[int]:
         if v is not None and v < 0:
             raise ValueError("Cooldown minutes cannot be negative")
         return v
@@ -51,13 +53,16 @@ class AlertUpdate(BaseModel):
 class AlertInDB(AlertBase):
     """Alert model for database operations."""
     id: str = Field(..., alias="_id")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_triggered: Optional[datetime] = None
-
-    class Config:
-        """Pydantic config."""
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
+    
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={
+            datetime: lambda v: v.isoformat()
+        }
+    )
 
 
 class Alert(AlertBase):
@@ -65,10 +70,11 @@ class Alert(AlertBase):
     id: str = Field(..., alias="_id")
     created_at: datetime
     last_triggered: Optional[datetime] = None
-
-    class Config:
-        """Pydantic config."""
-        allow_population_by_field_name = True
-        json_encoders = {
+    
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={
             datetime: lambda v: v.isoformat()
-        }
+        },
+        from_attributes=True
+    )
