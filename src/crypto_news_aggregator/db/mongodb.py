@@ -1,6 +1,9 @@
 """
 MongoDB database connection and utilities.
 """
+import asyncio
+import logging
+import threading
 from typing import Optional, Dict, Any, List, TypeVar, Type, Union, TypeVar, Generic, Callable, Awaitable, Any, Coroutine
 from pymongo import MongoClient, IndexModel, TEXT, ASCENDING, DESCENDING
 from pymongo.database import Database
@@ -12,7 +15,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from ..core.config import get_settings
-from .mongodb_models import ARTICLE_INDEXES
+from .mongodb_models import ARTICLE_INDEXES, ALERT_INDEXES
 
 logger = logging.getLogger(__name__)
 
@@ -56,28 +59,104 @@ class MongoManager:
     """
     MongoDB connection manager that provides both synchronous and asynchronous clients
     with connection pooling, retry logic, and index management.
+    
+    This class uses lazy initialization and is thread-safe.
     """
     _instance = None
-    _sync_client: Optional[MongoClient] = None
-    _async_client: Optional[AsyncIOMotorClient] = None
+    _instance_lock = threading.Lock()  # For thread-safe singleton creation
+    _async_lock = asyncio.Lock()      # For async operations
     _initialized = False
     _indexes_created = False
     
     def __new__(cls: Type['MongoManager']) -> 'MongoManager':
-        """Singleton pattern to ensure only one instance exists."""
+        """Thread-safe singleton pattern."""
         if cls._instance is None:
-            cls._instance = super(MongoManager, cls).__new__(cls)
+            with cls._instance_lock:  # Use threading.Lock for singleton creation
+                if cls._instance is None:
+                    cls._instance = super(MongoManager, cls).__new__(cls)
+                    # Initialize instance variables
+                    cls._instance.settings = get_settings()
+                    cls._instance._async_client = None
+                    cls._instance._initialized = False
+                    logger.info("MongoDB Manager instance created")
         return cls._instance
     
     def __init__(self):
         """Initialize the MongoDB connection manager."""
-        if not self._initialized:
-            self.settings = get_settings()
+        # All initialization is handled in __new__
+        pass
+        
+    async def initialize(self, force_reconnect: bool = False) -> bool:
+        """Initialize the MongoDB connection asynchronously.
+        
+        This method must be called before any database operations are performed.
+        It's recommended to call this during application startup.
+        
+        Args:
+            force_reconnect: If True, force reconnection even if already initialized.
+            
+        Returns:
+            bool: True if initialization was successful, False otherwise.
+        """
+        async with self._async_lock:
+            if self._initialized and not force_reconnect:
+                logger.debug("MongoDB already initialized")
+                return True
+                
+            logger.info("Initializing MongoDB connection...")
+            
+            # Close existing connection if reinitializing
+            if self._async_client is not None:
+                await self.close()
+            
             # Ensure we have a valid MongoDB URI
             if not self.settings.MONGODB_URI:
                 self.settings.MONGODB_URI = "mongodb://localhost:27017"
                 logger.warning("MongoDB URI not set, using default: mongodb://localhost:27017")
-            self._initialized = True
+            
+            try:
+                # Create a new async client with connection pooling
+                self._async_client = AsyncIOMotorClient(
+                    self.settings.MONGODB_URI,
+                    maxPoolSize=10,  # Adjust based on your needs
+                    minPoolSize=1,
+                    connectTimeoutMS=5000,  # 5 seconds
+                    serverSelectionTimeoutMS=5000,
+                    socketTimeoutMS=30000,  # 30 seconds
+                )
+                
+                # Test the connection
+                await self._async_client.admin.command('ping')
+                self._initialized = True
+                logger.info("✅ MongoDB connection established successfully")
+                return True
+                
+            except Exception as e:
+                self._async_client = None
+                self._initialized = False
+                logger.error(f"❌ Failed to initialize MongoDB: {str(e)}")
+                logger.debug("Stack trace: %s", str(e))
+                return False
+
+    async def get_async_client(self) -> AsyncIOMotorClient:
+        """Get the async MongoDB client.
+        
+        Returns:
+            AsyncIOMotorClient: The MongoDB async client instance.
+            
+        Raises:
+            RuntimeError: If the client cannot be initialized.
+        """
+        if not self._initialized:
+            async with self._async_lock:
+                if not self._initialized:  # Double-check after acquiring lock
+                    logger.warning("MongoDB not initialized. Initializing now...")
+                    if not await self.initialize():
+                        raise RuntimeError("Failed to initialize MongoDB client")
+        if self._async_client is None:
+            raise RuntimeError("MongoDB client is not available")
+            
+        return self._async_client
     
     @property
     def sync_client(self) -> MongoClient:
@@ -112,38 +191,22 @@ class MongoManager:
             return f"{parts[0]}//****:****@{'@'.join(parts[1:])}"
         return self.settings.MONGODB_URI
 
-    @property
-    def async_client(self) -> AsyncIOMotorClient:
-        """Get an asynchronous MongoDB client with connection pooling."""
-        if self._async_client is None:
-            if not self.settings.MONGODB_URI:
-                raise ValueError("MongoDB URI is not configured")
-            logger.info(f"Creating new async MongoDB client with URI: {self._get_masked_uri()}")
-            self._async_client = AsyncIOMotorClient(
-                self.settings.MONGODB_URI,
-                serverSelectionTimeoutMS=5000,
-                connectTimeoutMS=30000,
-                socketTimeoutMS=30000,
-                maxPoolSize=100,
-                minPoolSize=10,
-                retryWrites=True,
-                retryReads=True,
-                maxIdleTimeMS=60000,
-                waitQueueTimeoutMS=10000,
-                waitQueueMultiple=10,
-                appname="crypto-news-aggregator-async"
-            )
-        return self._async_client
-    
     def get_database(self, db_name: Optional[str] = None) -> Database:
         """Get a synchronous database instance."""
         db_name = db_name or DB_NAME
         return self.sync_client[db_name]
     
     async def get_async_database(self, db_name: Optional[str] = None) -> AsyncIOMotorDatabase:
-        """Get an asynchronous database instance."""
+        """Get an asynchronous database instance with logging."""
         db_name = db_name or DB_NAME
-        return self.async_client[db_name]
+        logger.debug("[MongoManager] Getting async database: %s", db_name)
+        try:
+            db = self._async_client[db_name]
+            logger.debug("[MongoManager] Successfully got database: %s", db_name)
+            return db
+        except Exception as e:
+            logger.error("[MongoManager] Error getting database %s: %s", db_name, e, exc_info=True)
+            raise
     
     def get_collection(self, collection_name: str, db_name: Optional[str] = None) -> Collection:
         """Get a synchronous collection instance."""
@@ -152,9 +215,16 @@ class MongoManager:
     async def get_async_collection(
         self, collection_name: str, db_name: Optional[str] = None
     ) -> AsyncIOMotorCollection:
-        """Get an asynchronous collection instance."""
-        db = await self.get_async_database(db_name)
-        return db[collection_name]
+        """Get an asynchronous collection instance with logging."""
+        logger.debug("[MongoManager] Getting async collection: %s", collection_name)
+        try:
+            db = await self.get_async_database(db_name)
+            collection = db[collection_name]
+            logger.debug("[MongoManager] Successfully got collection: %s", collection_name)
+            return collection
+        except Exception as e:
+            logger.error("[MongoManager] Error getting collection %s: %s", collection_name, e, exc_info=True)
+            raise
     
     async def initialize_indexes(self, force_recreate: bool = False):
         """Create indexes for all collections if they don't exist."""
@@ -238,7 +308,7 @@ class MongoManager:
     @asynccontextmanager
     async def get_session(self):
         """Async context manager for MongoDB transactions."""
-        async with await self.async_client.start_session() as session:
+        async with await self._async_client.start_session() as session:
             async with await session.start_transaction():
                 try:
                     yield session
@@ -272,94 +342,101 @@ class MongoManager:
         return result.inserted_id
     
     async def ping(self) -> bool:
-        """Ping the MongoDB server to check connectivity."""
+        """Ping the MongoDB server to check connection.
+        
+        Returns:
+            bool: True if the ping was successful, False otherwise.
+        """
+        if not self._initialized:
+            logger.warning("MongoDB client not initialized, attempting to initialize...")
+            return await self.initialize()
+            
         try:
-            await self.async_client.admin.command('ping')
-            logger.info("Successfully connected to MongoDB")
+            client = await self.get_async_client()
+            if client is None:
+                logger.error("MongoDB client is None")
+                return False
+                
+            await client.admin.command('ping')
             return True
+            
         except Exception as e:
-            logger.error(f"Failed to connect to MongoDB: {e}")
+            logger.error(f"MongoDB ping failed: {str(e)}")
+            logger.debug("Ping failure details:", exc_info=True)
+            # Attempt to reinitialize the connection
+            if self._initialized:  # Only try to reconnect if we were previously connected
+                logger.info("Attempting to reconnect to MongoDB...")
+                return await self.initialize(force_reconnect=True)
             return False
     
     async def aclose(self):
         """Asynchronously close all MongoDB connections."""
-        # Store references to clients to avoid race conditions
-        sync_client = self._sync_client
-        async_client = self._async_client
-        
-        # Clear instance variables early to prevent double-close
-        self._sync_client = None
-        self._async_client = None
-        self._initialized = False
-        self._indexes_created = False
-        
-        # Close sync client if it exists
-        if sync_client is not None:
-            try:
-                sync_client.close()
-                logger.debug("Successfully closed sync MongoDB client")
-            except Exception as e:
-                logger.warning(f"Error closing sync MongoDB client: {e}", exc_info=True)
-        
-        # Close async client if it exists and is not already closed
-        if async_client is not None:
-            try:
-                # Check if the client is already closed or closing
-                if hasattr(async_client, '_closed') and async_client._closed:
-                    logger.debug("Async MongoDB client already closed")
-                    return
-                    
-                # Attempt to close the client
-                await async_client.close()
-                logger.debug("Successfully closed async MongoDB client")
-            except (TypeError, RuntimeError) as e:
-                # Handle cases where the client is already closed or event loop is closed
-                if "can't be used in 'await' expression" in str(e) or "Event loop is closed" in str(e):
-                    logger.debug("Async client already closed or event loop is closed")
-                else:
-                    logger.warning(f"Error closing async MongoDB client: {e}", exc_info=True)
-            except Exception as e:
-                logger.warning(f"Unexpected error closing async MongoDB client: {e}", exc_info=True)
-        
-        logger.debug("MongoDB manager shutdown complete")
-        
-    def close(self):
-        """Synchronously close all MongoDB connections."""
-        if self._sync_client:
-            self._sync_client.close()
-            self._sync_client = None
-            
         if self._async_client:
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # If we're in an event loop, schedule the close
-                    asyncio.create_task(self.aclose())
-                else:
-                    # Otherwise, run it synchronously
-                    loop.run_until_complete(self.aclose())
+                logger.debug("Closing MongoDB async client...")
+                self._async_client.close()
+                # Give the client a moment to close connections
+                await asyncio.sleep(0.1)
+                logger.info("Closed MongoDB async client")
             except Exception as e:
-                logger.warning(f"Error in close(): {e}")
-                # Fallback to synchronous close if event loop is not available
-                if self._async_client:
+                logger.error(f"Error closing MongoDB async client: {e}")
+            finally:
+                self._async_client = None
+                
+    async def close(self):
+        """Close the MongoDB connection.
+        
+        This method should be called when the application is shutting down
+        or when you want to explicitly close the connection.
+        """
+        async with self._async_lock:
+            if self._async_client is not None:
+                try:
+                    self._async_client.close()
+                    logger.info("MongoDB connection closed")
+                except Exception as e:
+                    logger.error(f"Error closing MongoDB connection: {str(e)}")
+                finally:
                     self._async_client = None
+                    self._initialized = False
     
     def __del__(self):
         """Ensure connections are closed when the manager is destroyed."""
-        self.close()
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(self.close())
+            else:
+                loop.run_until_complete(self.close())
+        except Exception as e:
+            logger.warning(f"Error in __del__: {e}")
 
-# Singleton instance - initialized on first use
-_mongo_manager = None
+# Initialize the global MongoDB manager instance
+mongo_manager = MongoManager()
 
-def get_mongo_manager():
-    """Get the MongoDB manager instance with lazy initialization."""
-    global _mongo_manager
-    if _mongo_manager is None:
-        _mongo_manager = MongoManager()
-    return _mongo_manager
-
-# For backward compatibility
-mongo_manager = get_mongo_manager()
+async def initialize_mongodb() -> bool:
+    """Initialize the MongoDB connection and indexes.
+    
+    This function must be called explicitly during application startup.
+    
+    Returns:
+        bool: True if initialization was successful, False otherwise.
+    """
+    try:
+        # Initialize the MongoDB connection
+        success = await mongo_manager.initialize()
+        if not success:
+            logger.error("Failed to initialize MongoDB connection")
+            return False
+            
+        # Initialize indexes
+        await ensure_indexes()
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error initializing MongoDB: {e}")
+        return False
 
 # Helper functions for dependency injection
 async def get_mongodb() -> AsyncIOMotorDatabase:
@@ -433,63 +510,39 @@ def get_lifespan():
     
     return lifespan
 
-# For non-FastAPI applications, use the following:
-if __name__ != "__main__" and not _in_fastapi_lifespan:
+def cleanup():
+    """Safely clean up resources on application exit."""
     try:
-        # Try to get the running event loop
-        loop = asyncio.get_running_loop()
-        # If we're here, there's a running event loop
-        loop.create_task(_on_startup())
-    except RuntimeError:
-        # No running event loop, create a new one
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(_on_startup())
+        # Get or create an event loop
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Schedule the cleanup to run when the loop is idle
+                asyncio.ensure_future(_cleanup_async(), loop=loop)
+                return
+        except RuntimeError:
+            # No running event loop, create a new one
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
         
-        # Register cleanup for non-FastAPI applications
-        def cleanup():
-            """Safely clean up resources on application exit."""
-            try:
-                # Check if there's anything to clean up
-                if not hasattr(mongo_manager, '_async_client') or mongo_manager._async_client is None:
-                    print("No MongoDB client to clean up")
-                    return
-                    
-                # Try to get the event loop
-                try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError as e:
-                    print(f"No event loop available for cleanup: {e}")
-                    return
-                
-                # Create a shutdown task
-                shutdown_task = _on_shutdown()
-                
-                if loop.is_running():
-                    # If loop is running, schedule the shutdown
-                    task = loop.create_task(shutdown_task)
-                    
-                    # Add a callback to handle task completion
-                    def handle_done(fut):
-                        try:
-                            fut.result()
-                            print("Shutdown completed successfully")
-                        except Exception as e:
-                            print(f"Error in shutdown task: {e}")
-                    
-                    task.add_done_callback(handle_done)
-                else:
-                    # If no running loop, create a new one and run until complete
-                    try:
-                        loop.run_until_complete(shutdown_task)
-                    except RuntimeError as e:
-                        print(f"Error running shutdown: {e}")
-                        
-            except Exception as e:
-                print(f"Unexpected error during cleanup: {e}")
-            finally:
-                # Ensure we don't leave dangling references
-                if hasattr(mongo_manager, '_async_client'):
-                    mongo_manager._async_client = None
+        # Run the cleanup in the current loop
+        loop.run_until_complete(_cleanup_async())
         
-        atexit.register(cleanup)
+        # Close the loop if we created it
+        if loop.is_running():
+            loop.close()
+            
+    except Exception as e:
+        logger.error(f"Error during cleanup: {e}")
+
+# Register the cleanup function
+atexit.register(cleanup)
+
+async def _cleanup_async():
+    """Asynchronously clean up resources on application exit."""
+    try:
+        # Clean up MongoDB connections
+        await _on_shutdown()
+        logger.info("MongoDB cleanup completed successfully")
+    except Exception as e:
+        logger.error(f"Error during async cleanup: {e}")
