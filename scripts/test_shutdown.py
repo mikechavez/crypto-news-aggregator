@@ -3,8 +3,7 @@ Test script to verify MongoDB connection and clean shutdown behavior.
 """
 import asyncio
 import sys
-import os
-from src.crypto_news_aggregator.db.mongodb import get_mongo_manager
+from src.crypto_news_aggregator.db.mongodb import mongo_manager
 
 def print_banner():
     print("\n" + "="*50)
@@ -14,56 +13,69 @@ def print_banner():
 async def test_connection():
     """Test MongoDB connection and print connection info."""
     print("\nTesting MongoDB connection...")
-    manager = get_mongo_manager()
     try:
-        # Initialize async client if not already done
-        if not hasattr(manager, '_async_client') or manager._async_client is None:
-            manager._async_client = manager._get_async_client()
-            
-        # Get database name from settings or use default
-        db_name = getattr(manager.settings, 'MONGODB_DB', 'crypto_news')
+        # Initialize the MongoDB connection
+        await mongo_manager.initialize()
+        
+        # Get the async client
+        client = await mongo_manager.get_async_client()
         
         # Get database instance
-        db = manager._async_client[db_name]
+        db = client[mongo_manager.settings.MONGODB_NAME]
         
         # Test connection with a simple command
         server_info = await db.command('ping')
-        print(f"✓ Connected to MongoDB server: {manager.settings.MONGODB_URI}")
-        print(f"✓ Database name: {db_name}")
+        print(f"✅ Successfully connected to MongoDB server: {server_info.get('ok') == 1.0}")
+        
+        # Print database stats
+        stats = await db.command('dbstats')
+        print(f"\nDatabase Stats:")
+        print(f"- Name: {stats['db']}")
+        print(f"- Collections: {stats['collections']}")
+        print(f"- Documents: {stats['objects']}")
+        print(f"- Data Size: {stats['dataSize'] / (1024*1024):.2f} MB")
+        
         return True
     except Exception as e:
-        print(f"✗ Connection failed: {e}")
+        print(f"❌ Failed to connect to MongoDB: {e}")
         return False
     finally:
-        print("Test completed. Cleaning up...")
+        # Clean up the connection
+        if mongo_manager.is_initialized():
+            await mongo_manager.close()
 
 async def main():
+    """Main test function."""
     print_banner()
-    
-    # Set default MongoDB URI if not set
-    os.environ.setdefault('MONGODB_URI', 'mongodb://localhost:27017')
-    os.environ.setdefault('MONGODB_DB', 'crypto_news')
     
     # Test connection
     success = await test_connection()
     
     if success:
-        print("\n✓ Connection test passed!")
-        print("The application should now shut down cleanly without logging errors.")
-        print("Check the output for any error messages during shutdown.\n")
+        print("\n✅ MongoDB connection test completed successfully!")
     else:
-        print("\n✗ Connection test failed!")
-        print("Please check your MongoDB connection settings and try again.\n")
+        print("\n❌ MongoDB connection test failed!")
+        
+    print("\nPress Ctrl+C to test shutdown behavior...")
     
-    # Small delay to ensure all output is captured
-    await asyncio.sleep(0.1)
+    # Keep the connection open to test shutdown
+    try:
+        while True:
+            await asyncio.sleep(1)
+    except asyncio.CancelledError:
+        print("\nShutting down gracefully...")
+    finally:
+        # Ensure cleanup on exit
+        if mongo_manager.is_initialized():
+            await mongo_manager.close()
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nTest interrupted by user.")
-        sys.exit(1)
+        print("\nCaught KeyboardInterrupt, shutting down...")
     except Exception as e:
         print(f"\nAn error occurred: {e}")
-        sys.exit(1)
+    finally:
+        print("Test completed. Exiting...")
+        sys.exit(0)

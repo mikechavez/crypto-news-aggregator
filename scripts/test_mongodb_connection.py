@@ -15,13 +15,12 @@ logging.basicConfig(
 logger = logging.getLogger('mongodb_test')
 
 # Add the project root to the Python path
-project_root = Path(__file__).parent
+project_root = Path(__file__).parent.parent  # Go up one more level to get to the project root
 sys.path.insert(0, str(project_root))
-sys.path.insert(0, os.path.join(project_root, 'src'))
 
 # Import after path setup
-from src.crypto_news_aggregator.db.mongodb import mongo_manager
-from src.crypto_news_aggregator.core.config import get_settings
+from crypto_news_aggregator.db.mongodb import mongo_manager
+from crypto_news_aggregator.core.config import get_settings
 
 async def test_mongodb_connection():
     """Test MongoDB connection and basic operations."""
