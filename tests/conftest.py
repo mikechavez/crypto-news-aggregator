@@ -142,62 +142,139 @@ from src.crypto_news_aggregator.db import models
 from src.crypto_news_aggregator.main import app
 
 # MongoDB client for testing
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def mongo_client() -> AsyncGenerator[AsyncIOMotorClient, None]:
-    """Create a MongoDB client for testing."""
-    # Ensure the MongoDB URI is set
-    mongo_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
-    logger.info(f"Connecting to MongoDB at {mongo_uri}")
+    """Create a MongoDB client for testing with automatic cleanup.
     
-    # Create the client
-    client = AsyncIOMotorClient(mongo_uri)
+    This fixture:
+    1. Creates a new MongoDB client
+    2. Tests the connection
+    3. Drops the test database if it exists
+    4. Yields the client for testing
+    5. Cleans up after the test
+    """
+    from src.crypto_news_aggregator.db.mongodb import mongo_manager
+    
+    # Get test settings
+    settings = get_test_settings()
+    client = None
     
     try:
+        # Initialize the client
+        client = AsyncIOMotorClient(
+            settings.MONGODB_URI,
+            serverSelectionTimeoutMS=2000,  # 2 second timeout
+            connectTimeoutMS=2000,
+            socketTimeoutMS=10000
+        )
+        
         # Test the connection
         await client.admin.command('ping')
         logger.info("✅ Successfully connected to MongoDB")
         
-        # Get the database
-        db = client[TEST_MONGODB_DB]
+        # Drop the test database if it exists
+        await client.drop_database(settings.MONGODB_NAME)
+        logger.info(f"Dropped test database: {settings.MONGODB_NAME}")
         
-        # Clean up any existing data
-        await db.drop_collection("test_collection")
+        # Initialize the mongo_manager
+        await mongo_manager.initialize()
         
         yield client
+        
     except Exception as e:
         logger.error(f"❌ Failed to connect to MongoDB: {e}")
         raise
+        
+    finally:
+        # Clean up
+        cleanup_errors = []
+        
+        try:
+            if client:
+                await client.close()
+                logger.info("Closed MongoDB connection")
+        except Exception as e:
+            cleanup_errors.append(f"Error closing MongoDB client: {e}")
+                
+        try:
+            if hasattr(mongo_manager, 'close'):
+                await mongo_manager.close()
+                logger.info("Closed MongoDB manager")
+        except Exception as e:
+            cleanup_errors.append(f"Error closing MongoDB manager: {e}")
+            
+        if cleanup_errors:
+            logger.error("❌ Errors during cleanup: " + "; ".join(cleanup_errors))
+
+@pytest_asyncio.fixture(scope="function")
+async def mongo_db(mongo_client: AsyncIOMotorClient) -> AsyncGenerator[AsyncIOMotorDatabase, None]:
+    """Get the test database with automatic cleanup.
+    
+    This fixture provides a clean database for each test function.
+    The database is automatically dropped and recreated for each test.
+    """
+    from src.crypto_news_aggregator.db.mongodb import mongo_manager
+    settings = get_test_settings()
+    
+    try:
+        # Ensure the database is empty
+        await mongo_client.drop_database(settings.MONGODB_NAME)
+        logger.info(f"Cleaned test database: {settings.MONGODB_NAME}")
+        
+        # Get a fresh database reference
+        db = mongo_client[settings.MONGODB_NAME]
+        
+        # Initialize the database with required collections and indexes
+        await mongo_manager.initialize_indexes()
+        
+        yield db
+        
+    except Exception as e:
+        logger.error(f"❌ Error setting up test database: {e}")
+        raise
+        
     finally:
         # Clean up
         try:
-            await client.drop_database(TEST_MONGODB_DB)
-            client.close()
-            logger.info("✅ Closed MongoDB connection")
+            # Drop the database to ensure a clean state for the next test
+            await mongo_client.drop_database(settings.MONGODB_NAME)
+            logger.info(f"✅ Cleaned up test database: {settings.MONGODB_NAME}")
         except Exception as e:
-            logger.error(f"❌ Error during MongoDB cleanup: {e}")
+            logger.warning(f"Warning: Failed to clean up test database: {e}")
+            
+        # Ensure all connections are closed
+        mongo_client.close()
 
-@pytest_asyncio.fixture(scope="session")
-async def mongo_db(mongo_client: AsyncIOMotorClient) -> AsyncGenerator[AsyncIOMotorDatabase, None]:
-    """Get the test database."""
-    db = mongo_client[TEST_MONGODB_DB]
-    yield db
-    # Cleanup is handled by mongo_client fixture
-
-@pytest.fixture(autouse=True)
-def override_article_service(mongo_db: AsyncIOMotorDatabase):
-    """Override the article service to use the test database."""
-    from src.crypto_news_aggregator.services.article_service import article_service
+@pytest_asyncio.fixture(scope="function")
+async def article_service(mongo_db: AsyncIOMotorDatabase):
+    """Create an ArticleService instance with a test database connection.
     
-    # Store the original collection name
-    original_collection = article_service.collection_name
+    This fixture provides a clean ArticleService instance for each test,
+    ensuring proper cleanup after each test.
+    """
+    from src.crypto_news_aggregator.services.article_service import ArticleService
     
-    # Update the collection name to use the test database
-    article_service.collection_name = mongo_db.name + "." + article_service.collection_name
-    
-    yield
-    
-    # Restore the original collection name
-    article_service.collection_name = original_collection
+    try:
+        # Initialize the service with test database
+        service = ArticleService(mongo_db)
+        
+        # Verify the service can connect to the database
+        await service.ping()
+        logger.info("✅ ArticleService initialized with test database")
+        
+        yield service
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize ArticleService: {e}")
+        raise
+        
+    finally:
+        # Clean up any resources if needed
+        if hasattr(service, 'close'):
+            try:
+                await service.close()
+            except Exception as e:
+                logger.warning(f"Warning: Error closing ArticleService: {e}")
 
 @pytest.fixture(scope="session")
 def event_loop():
