@@ -85,11 +85,12 @@ class EmailService:
         threshold: float,
         current_price: float,
         price_change_24h: float,
+        news_articles: Optional[List[Dict[str, Any]]] = None,
         dashboard_url: Optional[str] = None,
         settings_url: Optional[str] = None,
     ) -> bool:
         """
-        Send a price alert email.
+        Send a price alert email with optional news context.
         
         Args:
             to: Recipient email address
@@ -100,6 +101,7 @@ class EmailService:
             threshold: Price or percentage threshold
             current_price: Current price of the cryptocurrency
             price_change_24h: 24-hour price change percentage
+            news_articles: List of relevant news articles (optional)
             dashboard_url: URL to the user's dashboard (optional)
             settings_url: URL to the user's settings (optional)
             
@@ -114,21 +116,37 @@ class EmailService:
         if settings_url is None:
             settings_url = f"{settings.BASE_URL}/settings"
         
+        # Prepare news context if available
+        news_context = []
+        if news_articles:
+            for article in news_articles[:3]:  # Limit to 3 most relevant articles
+                news_context.append({
+                    'title': article.get('title', 'No title'),
+                    'source': article.get('source', {}).get('name', 'Unknown source'),
+                    'url': article.get('url', '#'),
+                    'published_at': article.get('published_at', ''),
+                    'snippet': article.get('description', '')[:200] + '...' if article.get('description') else ''
+                })
+
         # Render the email template
+        context = {
+            'user_name': user_name,
+            'crypto_name': crypto_name,
+            'crypto_symbol': crypto_symbol.upper(),
+            'condition': condition,
+            'threshold': threshold,
+            'current_price': current_price,
+            'price_change_24h': price_change_24h,
+            'dashboard_url': dashboard_url or '#',
+            'settings_url': settings_url or '#',
+            'current_year': datetime.now().year,
+            'has_news': bool(news_articles),
+            'news_articles': news_context,
+        }
+        
         html_content = await template_renderer.render_template(
             'emails/price_alert.html',
-            {
-                'user_name': user_name,
-                'crypto_name': crypto_name,
-                'crypto_symbol': crypto_symbol,
-                'condition': condition,
-                'threshold': threshold,
-                'current_price': current_price,
-                'price_change_24h': price_change_24h,
-                'dashboard_url': dashboard_url,
-                'settings_url': settings_url,
-                'trigger_time': datetime.utcnow().isoformat(),
-            }
+            context
         )
         
         # Create a subject line
