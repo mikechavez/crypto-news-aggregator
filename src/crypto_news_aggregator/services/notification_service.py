@@ -2,7 +2,7 @@
 Notification service for handling different types of alerts and notifications.
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
 from bson import ObjectId
 
@@ -47,7 +47,7 @@ class NotificationService:
             'is_active': True,
             '$or': [
                 {'last_triggered': {'$exists': False}},
-                {'last_triggered': {'$lt': datetime.utcnow() - timedelta(minutes=5)}}  # Cooldown period
+                {'last_triggered': {'$lt': datetime.now(timezone.utc) - timedelta(minutes=5)}}  # Cooldown period
             ]
         }
         
@@ -97,10 +97,11 @@ class NotificationService:
                     if success:
                         stats['notifications_sent'] += 1
                         
-                        # Update last_triggered timestamp
+                        # Update last_triggered timestamp with timezone
+                        now = datetime.now(timezone.utc)
                         await collection.update_one(
                             {'_id': ObjectId(alert.id)},
-                            {'$set': {'last_triggered': datetime.utcnow()}}
+                            {'$set': {'last_triggered': now}}
                         )
                     else:
                         stats['errors'] += 1
@@ -136,9 +137,21 @@ class NotificationService:
         current_price: float,
         price_change_24h: float,
     ) -> bool:
-        """Send a notification for a triggered alert."""
+        """
+        Send a notification for a triggered alert with relevant news articles.
+        
+        Args:
+            alert: The alert that was triggered
+            crypto_name: Name of the cryptocurrency
+            crypto_symbol: Symbol of the cryptocurrency (e.g., BTC)
+            current_price: Current price of the cryptocurrency
+            price_change_24h: 24-hour price change percentage
+            
+        Returns:
+            bool: True if notification was sent successfully, False otherwise
+        """
         try:
-            # Get user details (in a real app, this would come from a user service)
+            # Get user details
             user = await self._get_user(alert.user_id)
             if not user or not user.get('email'):
                 logger.warning(f"User {alert.user_id} not found or has no email")
@@ -148,7 +161,10 @@ class NotificationService:
             dashboard_url = f"{settings.BASE_URL}/dashboard"
             settings_url = f"{settings.BASE_URL}/settings/alerts"
             
-            # Send email notification
+            # Get relevant news articles
+            news_articles = await self._get_recent_news(crypto_name, limit=3)
+            
+            # Send email notification with news context
             return await send_price_alert(
                 to=user['email'],
                 user_name=user.get('name', 'there'),
@@ -158,6 +174,7 @@ class NotificationService:
                 threshold=alert.threshold,
                 current_price=current_price,
                 price_change_24h=price_change_24h,
+                news_articles=news_articles,
                 dashboard_url=dashboard_url,
                 settings_url=settings_url
             )
@@ -167,7 +184,15 @@ class NotificationService:
             return False
     
     async def _get_user(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """Get user details from the database."""
+        """
+        Get user details from the database.
+        
+        Args:
+            user_id: ID of the user to fetch
+            
+        Returns:
+            User document or None if not found
+        """
         try:
             users = await mongo_manager.get_async_collection('users')
             user = await users.find_one({'_id': ObjectId(user_id)})
@@ -175,6 +200,53 @@ class NotificationService:
         except Exception as e:
             logger.error(f"Error fetching user {user_id}: {str(e)}")
             return None
+            
+    async def _get_recent_news(self, crypto_name: str, limit: int = 3) -> List[Dict[str, Any]]:
+        """
+        Fetch recent news articles related to a cryptocurrency.
+        
+        Args:
+            crypto_name: Name of the cryptocurrency (e.g., 'Bitcoin')
+            limit: Maximum number of articles to return
+            
+        Returns:
+            List of news article dictionaries
+        """
+        try:
+            # In a real implementation, this would query your news database
+            # or call a news API. For now, we'll return a placeholder.
+            
+            # Example implementation with a placeholder
+            articles_collection = await mongo_manager.get_async_collection('articles')
+            
+            # Query for recent articles mentioning the cryptocurrency
+            query = {
+                '$or': [
+                    {'title': {'$regex': crypto_name, '$options': 'i'}},
+                    {'content': {'$regex': crypto_name, '$options': 'i'}},
+                    {'tags': {'$in': [crypto_name]}}
+                ],
+                'published_at': {'$gt': datetime.utcnow() - timedelta(days=7)}
+            }
+            
+            # Sort by publish date (newest first)
+            sort = [('published_at', -1)]
+            
+            # Execute query
+            cursor = articles_collection.find(query).sort(sort).limit(limit)
+            
+            # Convert to list of dicts
+            articles = []
+            async for article in cursor:
+                # Convert ObjectId to string for JSON serialization
+                article['_id'] = str(article['_id'])
+                articles.append(article)
+                
+            return articles
+            
+        except Exception as e:
+            logger.error(f"Error fetching news for {crypto_name}: {str(e)}")
+            return []
 
 # Singleton instance
 notification_service = NotificationService()
