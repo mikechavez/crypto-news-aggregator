@@ -74,13 +74,39 @@
         </p>
         
         <p>
-            <a href="{{ dashboard_url }}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; margin-top: 15px;">
+            <a href="{{ dashboard_url }}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; margin-top: 15px; margin-right: 10px;">
                 View in Dashboard
             </a>
+            {% if has_news %}
+            <a href="{{ dashboard_url }}" style="display: inline-block; padding: 10px 20px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 4px; margin-top: 15px;">
+                View All News
+            </a>
+            {% endif %}
         </p>
     </div>
 
-    <div class="unsubscribe">
+    {% if has_news %}
+    <div class="news-section" style="margin: 30px 0; border-top: 1px solid #eee; padding-top: 20px;">
+        <h3 style="color: #333; margin-bottom: 15px;">📰 Latest News About {{ crypto_name }}</h3>
+        
+        {% for article in news_articles %}
+        <div class="news-article" style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #f0f0f0;">
+            <h4 style="margin: 0 0 5px 0;">
+                <a href="{{ article.url }}" style="color: #007bff; text-decoration: none;">{{ article.title }}</a>
+            </h4>
+            <p style="color: #6c757d; font-size: 0.9em; margin: 5px 0 10px 0;">
+                {{ article.source }} • {{ article.published_at }}
+            </p>
+            <p style="margin: 0; color: #333;">
+                {{ article.snippet }}
+                <a href="{{ article.url }}" style="color: #007bff; text-decoration: none;">Read more</a>
+            </p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="unsubscribe" style="margin-top: 30px;">
         <p>
             To manage your alerts or unsubscribe, please visit your 
             <a href="{{ settings_url }}">account settings</a>.
