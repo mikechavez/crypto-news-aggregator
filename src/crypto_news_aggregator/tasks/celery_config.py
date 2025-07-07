@@ -44,9 +44,14 @@ task_queues = {
         'exchange': 'price',
         'routing_key': 'price',
     },
+    'alerts': {
+        'exchange': 'alerts',
+        'routing_key': 'alerts',
+    },
 }
 
 task_routes = {
+    'crypto_news_aggregator.tasks.alert_tasks.*': {'queue': 'alerts'},
     'crypto_news_aggregator.tasks.fetch_news.*': {'queue': 'news'},
     'crypto_news_aggregator.tasks.price_monitor.*': {'queue': 'price'},
 }

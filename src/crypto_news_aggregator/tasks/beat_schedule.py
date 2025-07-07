@@ -28,6 +28,17 @@ beat_schedule = {
             'time_limit': 300,  # 5 minutes
         },
     },
+    
+    # Check and process price alerts every 5 minutes
+    'check-price-alerts': {
+        'task': 'crypto_news_aggregator.tasks.alert_tasks.check_price_alerts',
+        'schedule': timedelta(seconds=settings.PRICE_CHECK_INTERVAL),
+        'options': {
+            'expires': 240,  # 4 minutes
+            'time_limit': 240,  # 4 minutes
+            'queue': 'alerts',
+        },
+    },
 }
 
 def get_schedule():
