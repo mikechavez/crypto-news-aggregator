@@ -29,6 +29,7 @@ COLLECTION_ARTICLES = "articles"
 COLLECTION_SOURCES = "sources"
 COLLECTION_TRENDS = "trends"
 COLLECTION_ALERTS = "alerts"
+COLLECTION_PRICE_HISTORY = "price_history"
 
 # Database name
 DB_NAME = "crypto_news"
@@ -77,6 +78,7 @@ class MongoManager:
                     # Initialize instance variables
                     cls._instance.settings = get_settings()
                     cls._instance._async_client = None
+                    cls._instance._sync_client = None  # Initialize sync client
                     cls._instance._initialized = False
                     logger.info("MongoDB Manager instance created")
         return cls._instance
@@ -161,22 +163,24 @@ class MongoManager:
     @property
     def sync_client(self) -> MongoClient:
         """Get a synchronous MongoDB client with connection pooling."""
-        if self._sync_client is None:
+        if not hasattr(self, '_sync_client') or self._sync_client is None:
             if not self.settings.MONGODB_URI:
                 raise ValueError("MongoDB URI is not configured")
+                
             logger.info(f"Creating new sync MongoDB client with URI: {self._get_masked_uri()}")
             self._sync_client = MongoClient(
                 self.settings.MONGODB_URI,
                 serverSelectionTimeoutMS=5000,  # 5 second timeout
-                connectTimeoutMS=30000,        # 30 second connection timeout
+                connectTimeoutMS=30000,         # 30 second connection timeout
                 socketTimeoutMS=30000,          # 30 second socket timeout
                 maxPoolSize=100,                # Maximum number of connections
                 minPoolSize=10,                 # Minimum number of connections
-                retryWrites=True,              # Enable retryable writes
-                retryReads=True,               # Enable retryable reads
-                maxIdleTimeMS=60000,           # Close idle connections after 60s
-                waitQueueTimeoutMS=10000,       # Max wait time for a connection
-                waitQueueMultiple=10,           # Max number of queued connection requests
+                retryWrites=True,               # Enable retryable writes
+                retryReads=True,                # Enable retryable reads
+                maxIdleTimeMS=60000,            # Close idle connections after 60s
+                waitQueueTimeoutMS=10000,        # Max wait time for a connection
+                waitQueueMultiple=10,            # Max number of queued connection requests
+                connect=False,                   # Don't connect immediately - let it connect on first operation
                 appname="crypto-news-aggregator" # Identify the application
             )
             logger.info("Created new synchronous MongoDB client")
@@ -239,25 +243,27 @@ class MongoManager:
         # Create alerts collection indexes
         alerts_col = await self.get_async_collection(COLLECTION_ALERTS)
         
+        # Create price history collection indexes
+        price_history_col = await self.get_async_collection(COLLECTION_PRICE_HISTORY)
+        
         # Drop existing indexes if force_recreate is True
         if force_recreate:
             await articles_col.drop_indexes()
             await alerts_col.drop_indexes()
+            await price_history_col.drop_indexes()
         
-        # Create article indexes
+        # Create indexes for articles collection
         for index in ARTICLE_INDEXES:
             keys = index["keys"]
-            index_name = index.get("name")
-            unique = index.get("unique", False)
+            index_name = "_".join([f"{k[0]}_{k[1]}" for k in keys])
             
-            # Handle text indexes specially
-            if any(isinstance(k, tuple) and k[1] == "text" for k in keys):
-                if not await self._has_index(articles_col, index_name or "_text_"):
+            # Handle TTL indexes
+            if "expireAfterSeconds" in index:
+                if not await self._has_index(articles_col, index_name):
                     await articles_col.create_index(
-                        [k for k in keys if isinstance(k, tuple) and k[1] == "text"],
+                        keys,
                         name=index_name,
-                        default_language=index.get("default_language", "english"),
-                        weights=index.get("weights", {})
+                        expireAfterSeconds=index["expireAfterSeconds"]
                     )
             # Handle regular indexes
             else:
@@ -265,17 +271,30 @@ class MongoManager:
                     await articles_col.create_index(
                         keys,
                         name=index_name,
-                        unique=unique,
                         background=True
                     )
         
-        # Create alert indexes
+        # Create indexes for alerts collection
         for index in ALERT_INDEXES:
-            keys = index["keys"]
-            index_name = index["name"]
+            if isinstance(index, dict):
+                # Handle single field index
+                field = list(index.keys())[0]
+                direction = index[field]
+                index_name = f"{field}_{direction}"
+                keys = [(field, direction)]
+            else:
+                # Handle compound index or special index
+                if isinstance(index[0], str):
+                    # Special index like "text"
+                    index_name = f"{index[0]}_1"
+                    keys = [(index[0], 1)]
+                else:
+                    # Compound index
+                    keys = index
+                    index_name = "_".join([f"{k[0]}_{k[1]}" for k in keys])
             
-            # Handle TTL index
-            if "expireAfterSeconds" in index:
+            # Handle TTL indexes
+            if isinstance(index, dict) and "expireAfterSeconds" in index:
                 if not await self._has_index(alerts_col, index_name):
                     await alerts_col.create_index(
                         keys,
@@ -290,6 +309,33 @@ class MongoManager:
                         name=index_name,
                         background=True
                     )
+        
+        # Create indexes for price history collection
+        for index in PRICE_HISTORY_INDEXES:
+            if isinstance(index[0], tuple):
+                # Regular compound index
+                keys = index
+                index_name = "_".join([f"{k[0]}_{k[1]}" for k in keys])
+                
+                # Check if this is a TTL index
+                is_ttl = any(isinstance(k, dict) and "expireAfterSeconds" in k for k in keys)
+                
+                if not await self._has_index(price_history_col, index_name):
+                    if is_ttl:
+                        # Extract TTL config and filter out non-key parts
+                        ttl_config = next(k for k in keys if isinstance(k, dict))
+                        clean_keys = [k for k in keys if not isinstance(k, dict)]
+                        await price_history_col.create_index(
+                            clean_keys,
+                            name=index_name,
+                            expireAfterSeconds=ttl_config["expireAfterSeconds"]
+                        )
+                    else:
+                        await price_history_col.create_index(
+                            keys,
+                            name=index_name,
+                            background=True
+                        )
         
         logger.info("MongoDB indexes initialized successfully")
         self._indexes_created = True
@@ -389,27 +435,61 @@ class MongoManager:
         This method should be called when the application is shutting down
         or when you want to explicitly close the connection.
         """
-        async with self._async_lock:
-            if self._async_client is not None:
-                try:
-                    self._async_client.close()
-                    logger.info("MongoDB connection closed")
-                except Exception as e:
-                    logger.error(f"Error closing MongoDB connection: {str(e)}")
-                finally:
-                    self._async_client = None
-                    self._initialized = False
-    
+        logger.info("Closing MongoDB connections...")
+        
+        # Close async client if it exists
+        if hasattr(self, '_async_client') and self._async_client:
+            try:
+                self._async_client.close()
+                await self._async_client.wait_closed()
+                logger.info("Closed async MongoDB connection")
+            except Exception as e:
+                logger.error(f"Error closing async MongoDB connection: {e}")
+            finally:
+                self._async_client = None
+        
+        # Close sync client if it exists
+        if hasattr(self, '_sync_client') and self._sync_client:
+            try:
+                self._sync_client.close()
+                logger.info("Closed sync MongoDB connection")
+            except Exception as e:
+                logger.error(f"Error closing sync MongoDB connection: {e}")
+            finally:
+                self._sync_client = None
+                
+        self._initialized = False
+
     def __del__(self):
         """Ensure connections are closed when the manager is destroyed."""
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(self.close())
-            else:
-                loop.run_until_complete(self.close())
-        except Exception as e:
-            logger.warning(f"Error in __del__: {e}")
+        # Try to close sync client if it exists
+        if hasattr(self, '_sync_client') and self._sync_client:
+            try:
+                self._sync_client.close()
+            except Exception as e:
+                logger.warning(f"Error closing sync client in __del__: {e}")
+        
+        # Try to close async client if it exists
+        if hasattr(self, '_async_client') and self._async_client:
+            try:
+                # Create a new event loop if one doesn't exist
+                loop = None
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
+                # Run the close in the event loop
+                if loop.is_running():
+                    # If loop is running, schedule the close
+                    asyncio.create_task(self._async_client.close())
+                else:
+                    # Otherwise run it directly
+                    loop.run_until_complete(self._async_client.close())
+                    
+            except Exception as e:
+                logger.warning(f"Error in __del__: {e}")
 
 # Initialize the global MongoDB manager instance
 mongo_manager = MongoManager()
