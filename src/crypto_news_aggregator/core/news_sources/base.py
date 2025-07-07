@@ -21,6 +21,18 @@ class NewsSource(ABC):
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
         self.last_fetch_time = datetime.now(timezone.utc) - timedelta(hours=1)
+        self._client = None
+    
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit.
+        
+        Subclasses should override this to clean up resources.
+        """
+        pass
     
     @abstractmethod
     async def fetch_articles(self, 
