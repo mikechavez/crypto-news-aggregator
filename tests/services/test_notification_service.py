@@ -12,32 +12,64 @@ from src.crypto_news_aggregator.models.alert import AlertInDB, AlertCondition
 # Import test fixtures
 pytestmark = pytest.mark.asyncio
 
+class AsyncMockCursor:
+    """A mock MongoDB cursor that supports async iteration and method chaining."""
+    
+    def __init__(self, items):
+        self.items = items
+        self._sort_key = None
+        self._sort_direction = 1
+        self._limit_count = None
+    
+    def sort(self, key, direction=1):
+        self._sort_key = key
+        self._sort_direction = direction
+        return self
+    
+    def limit(self, count):
+        self._limit_count = count
+        return self
+    
+    def __aiter__(self):
+        # Apply sorting if specified
+        if self._sort_key is not None:
+            self.items = sorted(
+                self.items,
+                key=lambda x: x.get(self._sort_key, 0),
+                reverse=self._sort_direction == -1
+            )
+        
+        # Apply limit if specified
+        items = self.items[:self._limit_count] if self._limit_count is not None else self.items
+        
+        # Create an async iterator
+        async def async_gen():
+            for item in items:
+                yield item
+        
+        return async_gen()
+
+
 async def test_process_price_alert(notification_service, sample_alert, mock_mongo_manager):
     """Test processing price alerts."""
-    # Create a mock cursor that will be returned by find()
-    mock_cursor = AsyncMock()
+    # Create a list of alerts to return from the cursor
+    alerts = [sample_alert.model_dump()]
     
-    # Set up the cursor to be an async iterator that yields our sample alert
-    async def async_iter():
-        yield sample_alert.model_dump()
+    # Create a mock cursor with our test data
+    mock_cursor = AsyncMockCursor(alerts)
     
-    # Set up the cursor to be an async iterator
-    mock_cursor.__aiter__.return_value = async_iter()
-    
-    # Mock the alerts collection with proper async method chaining
+    # Create a mock collection that returns our cursor
     mock_alerts = MagicMock()
-    
-    # Create a mock cursor that supports method chaining
-    mock_cursor = MagicMock()
-    mock_cursor.__aiter__.return_value = async_iter()
-    mock_cursor.sort.return_value = mock_cursor
-    mock_cursor.limit.return_value = mock_cursor
-    
-    # Set up the find method to return our mock cursor directly (not a coroutine)
     mock_alerts.find.return_value = mock_cursor
+    mock_alerts.update_one = AsyncMock()
     
     # Mock the get_async_collection method to return our mock collection
-    mock_mongo_manager.get_async_collection = AsyncMock(return_value=mock_alerts)
+    async def mock_get_collection(collection_name):
+        if collection_name == 'alerts':
+            return mock_alerts
+        return MagicMock()
+    
+    mock_mongo_manager.get_async_collection = AsyncMock(side_effect=mock_get_collection)
     
     # Mock the _send_alert_notification method to avoid making actual notifications
     with patch.object(notification_service, '_send_alert_notification', new_callable=AsyncMock) as mock_send_alert:
@@ -60,24 +92,26 @@ async def test_process_price_alert(notification_service, sample_alert, mock_mong
     assert result["errors"] == 0
     
     # Verify the collection was accessed correctly
-    mock_mongo_manager.get_async_collection.assert_called_once_with('alerts')
+    mock_mongo_manager.get_async_collection.assert_awaited_once_with('alerts')
     mock_alerts.find.assert_called_once()
+    
+    # Verify the alert was processed and updated
+    mock_send_alert.assert_awaited_once()
+    mock_alerts.update_one.assert_awaited_once()
 
 async def test_send_alert_notification(notification_service, sample_alert, mock_user, sample_news_articles, mock_mongo_manager, mock_send_price_alert):
     """Test sending alert notification with news."""
     # Mock the users collection
-    mock_users = MagicMock()
-    mock_users.find_one.return_value = mock_user
+    mock_users = AsyncMock()
+    mock_users.find_one = AsyncMock(return_value=mock_user)  # Make find_one return an awaitable
     
     # Create a mock cursor for articles with method chaining support
     mock_articles_cursor = MagicMock()
     
-    # Set up the cursor to be an async iterator that yields our sample news articles
-    async def articles_async_iter():
-        for article in sample_news_articles:
-            yield article
+    # Set up the cursor to return sample news articles when to_list is awaited
+    mock_articles_cursor.to_list = AsyncMock(return_value=sample_news_articles)
     
-    mock_articles_cursor.__aiter__.return_value = articles_async_iter()
+    # Set up method chaining for sort and limit
     mock_articles_cursor.sort.return_value = mock_articles_cursor
     mock_articles_cursor.limit.return_value = mock_articles_cursor
     
