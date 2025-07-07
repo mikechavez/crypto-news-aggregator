@@ -1,74 +1,111 @@
 """
-Service for handling cryptocurrency price data and monitoring.
+Service for handling cryptocurrency price data and monitoring with alerting capabilities.
 """
 import logging
-from typing import Dict, Optional, List, Any
-from datetime import datetime, timedelta
-from pycoingecko import CoinGeckoAPI
+import aiohttp
+from typing import Dict, Optional, List, Any, Tuple
+from datetime import datetime, timezone, timedelta
 from ..core.config import settings
 
 logger = logging.getLogger(__name__)
 
-class PriceService:
-    """Service for handling cryptocurrency price data and monitoring."""
+class CoinGeckoPriceService:
+    """Service for handling cryptocurrency price data and monitoring using CoinGecko API."""
+    
+    BASE_URL = "https://api.coingecko.com/api/v3"
     
     def __init__(self):
-        self.cg = CoinGeckoAPI()
+        self.session = None
         self.price_history: Dict[str, List[Dict]] = {}
         self.market_data: Dict[str, Any] = {}
-        self.price_change_threshold = settings.PRICE_CHANGE_THRESHOLD  # Default 2% price change threshold
-        self.price_check_interval = settings.PRICE_CHECK_INTERVAL  # Default 5 minutes
         
-    async def get_bitcoin_price(self) -> Optional[float]:
-        """Get the current Bitcoin price in USD."""
-        try:
-            price_data = self.cg.get_price(ids='bitcoin', vs_currencies='usd')
-            return price_data.get('bitcoin', {}).get('usd')
-        except Exception as e:
-            logger.error(f"Error fetching Bitcoin price: {e}")
-            return None
+    async def get_session(self) -> aiohttp.ClientSession:
+        """Get or create an aiohttp client session."""
+        if self.session is None or self.session.closed:
+            self.session = aiohttp.ClientSession()
+        return self.session
+        
+    async def close(self):
+        """Close the aiohttp client session."""
+        if self.session and not self.session.closed:
+            await self.session.close()
     
-    async def check_price_movement(self) -> Optional[Dict]:
+    async def get_bitcoin_price(self) -> Dict[str, float]:
         """
-        Check for significant price movements.
+        Get current Bitcoin price and 24h change from CoinGecko.
         
         Returns:
-            Dict with movement details if significant, None otherwise
+            Dict containing 'price' (float), 'change_24h' (float), and 'timestamp' (datetime)
         """
-        # Get the latest market data which will also update our price history
-        market_data = await self.get_market_data()
+        session = await self.get_session()
+        url = f"{self.BASE_URL}/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true"
         
-        if not market_data or 'current_price' not in market_data:
-            return None
+        try:
+            async with session.get(url) as response:
+                response.raise_for_status()
+                data = await response.json()
+                
+                price_data = data.get('bitcoin', {})
+                price = price_data.get('usd')
+                change_24h = price_data.get('usd_24h_change', 0)
+                
+                return {
+                    'price': float(price) if price is not None else None,
+                    'change_24h': float(change_24h) if change_24h is not None else 0.0,
+                    'timestamp': datetime.now(timezone.utc)
+                }
+                
+        except aiohttp.ClientError as e:
+            logger.error(f"Error fetching Bitcoin price from CoinGecko: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in get_bitcoin_price: {e}")
+            raise
+    
+    async def calculate_price_change_percent(
+        self, 
+        current_price: float, 
+        previous_price: float
+    ) -> float:
+        """
+        Calculate percentage change between two prices.
+        
+        Args:
+            current_price: Current price
+            previous_price: Previous price to compare against
             
-        current_price = market_data['current_price']
-        timestamp = datetime.utcnow()
+        Returns:
+            float: Percentage change (can be positive or negative)
+        """
+        if previous_price == 0:
+            return 0.0
+        return ((current_price - previous_price) / previous_price) * 100
+    
+    async def should_trigger_alert(
+        self, 
+        current_price: float, 
+        last_alert_price: float, 
+        threshold: float
+    ) -> Tuple[bool, float]:
+        """
+        Check if price change exceeds the specified threshold.
         
-        # We need at least 2 data points to detect movement
-        if len(self.price_history.get('bitcoin', [])) < 2:
-            return None
+        Args:
+            current_price: Current price
+            last_alert_price: Price at last alert
+            threshold: Percentage threshold for alert
             
-        # Get the previous price point
-        previous_entry = self.price_history['bitcoin'][-2]
-        previous_price = previous_entry['price']
+        Returns:
+            Tuple of (should_alert, change_percent)
+        """
+        if last_alert_price is None:
+            return False, 0.0
+            
+        change_percent = await self.calculate_price_change_percent(
+            current_price, last_alert_price
+        )
         
-        # Calculate price change percentage
-        price_change_pct = ((current_price - previous_price) / previous_price) * 100
-        
-        # Check if the movement is significant
-        if abs(price_change_pct) >= self.price_change_threshold:
-            return {
-                'symbol': 'BTC',
-                'current_price': current_price,
-                'previous_price': previous_price,
-                'change_pct': round(price_change_pct, 2),
-                'timestamp': timestamp.isoformat(),
-                'direction': 'up' if price_change_pct > 0 else 'down',
-                'market_cap': market_data.get('market_cap', 0),
-                'volume_24h': market_data.get('total_volume', 0)
-            }
-        
-        return None
+        return abs(change_percent) >= threshold, change_percent
     
     async def get_market_data(self) -> Dict[str, Any]:
         """
@@ -158,4 +195,4 @@ class PriceService:
         ]
 
 # Singleton instance
-price_service = PriceService()
+price_service = CoinGeckoPriceService()
