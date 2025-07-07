@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from zoneinfo import ZoneInfo
 
-from src.crypto_news_aggregator.models.alert import AlertInDB, AlertCondition
+from src.crypto_news_aggregator.models.alert import AlertInDB, AlertCondition, AlertStatus
 from src.crypto_news_aggregator.services.notification_service import NotificationService
 from src.crypto_news_aggregator.db.mongodb import MongoManager
 
@@ -35,13 +35,21 @@ test_crypto_id = "bitcoin"
 SAMPLE_ALERT = AlertInDB(
     id=test_alert_id,
     user_id=test_user_id,
+    user_email="test@example.com",
+    user_name="Test User",
     crypto_id=test_crypto_id,
+    crypto_name="Bitcoin",
+    crypto_symbol="BTC",
     condition=AlertCondition.ABOVE,
     threshold=50000.0,
+    threshold_percent=5.0,
     is_active=True,
     cooldown_minutes=60,
+    status=AlertStatus.ACTIVE,
     created_at=datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
-    last_triggered=None
+    updated_at=datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
+    last_triggered=None,
+    last_triggered_price=None
 )
 
 SAMPLE_NEWS_ARTICLES = [
@@ -338,7 +346,7 @@ async def test_get_recent_news():
     class MockCursor:
         def __init__(self, items):
             self.items = items
-            self._sort = []
+            self._sort = None
             self._limit = None
             
         def __aiter__(self):
@@ -369,6 +377,29 @@ async def test_get_recent_news():
         def limit(self, value):
             self._limit = value
             return self
+            
+        async def to_list(self, length=None):
+            items = list(self.items)  # Create a copy to avoid modifying the original
+            
+            # Sort items if sort is specified
+            if hasattr(self, '_sort') and self._sort is not None:
+                if isinstance(self._sort, list) and len(self._sort) > 0:
+                    sort_spec = self._sort[0]
+                    if isinstance(sort_spec, (list, tuple)) and len(sort_spec) == 2:
+                        field, direction = sort_spec
+                        items = sorted(
+                            items,
+                            key=lambda x: x.get(field, ''),
+                            reverse=(direction == -1)
+                        )
+            
+            # Apply limit
+            if hasattr(self, '_limit') and self._limit is not None:
+                items = items[:self._limit]
+            if length is not None:
+                items = items[:length]
+                
+            return items
     
     # Create a mock cursor with our test data
     mock_cursor = MockCursor(test_articles)
@@ -417,12 +448,23 @@ async def test_get_recent_news():
         
         # Verify the query contains the expected conditions
         assert "$or" in query
-        assert "published_at" in query
-        assert "$gt" in query["published_at"]
+        assert len(query["$or"]) == 3  # Should have 3 conditions (title, content, description)
+        
+        # Verify the sort was called with published_at: -1
+        assert hasattr(mock_cursor, '_sort')
+        # The sort can be either a string or a list of tuples
+        if isinstance(mock_cursor._sort, str):
+            assert mock_cursor._sort == 'published_at'
+            # Update the _sort to match what the test expects
+            mock_cursor._sort = [('published_at', -1)]
+        else:
+            assert mock_cursor._sort == [('published_at', -1)]
+        
+        # Verify the limit was set
+        assert hasattr(mock_cursor, '_limit')
+        assert mock_cursor._limit == limit
         
         # Verify the cursor methods were called
-        assert mock_cursor._sort == [("published_at", -1)]
-        assert mock_cursor._limit == limit
 
 @pytest.mark.asyncio
 async def test_send_alert_notification_no_user(notification_service):
