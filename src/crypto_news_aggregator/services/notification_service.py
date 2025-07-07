@@ -213,39 +213,30 @@ class NotificationService:
             List of news article dictionaries
         """
         try:
-            # In a real implementation, this would query your news database
-            # or call a news API. For now, we'll return a placeholder.
-            
-            # Example implementation with a placeholder
-            articles_collection = await mongo_manager.get_async_collection('articles')
-            
+            # Get the articles collection
+            collection = await mongo_manager.get_async_collection('articles')
+        
             # Query for recent articles mentioning the cryptocurrency
             query = {
                 '$or': [
                     {'title': {'$regex': crypto_name, '$options': 'i'}},
                     {'content': {'$regex': crypto_name, '$options': 'i'}},
-                    {'tags': {'$in': [crypto_name]}}
-                ],
-                'published_at': {'$gt': datetime.utcnow() - timedelta(days=7)}
+                    {'description': {'$regex': crypto_name, '$options': 'i'}}
+                ]
             }
+        
+            # Execute query with sort and limit, then convert to list
+            cursor = collection.find(query).sort('published_at', -1).limit(limit)
+            articles = await cursor.to_list(length=limit)
             
-            # Sort by publish date (newest first)
-            sort = [('published_at', -1)]
-            
-            # Execute query
-            cursor = articles_collection.find(query).sort(sort).limit(limit)
-            
-            # Convert to list of dicts
-            articles = []
-            async for article in cursor:
-                # Convert ObjectId to string for JSON serialization
+            # Convert ObjectId to string for JSON serialization
+            for article in articles:
                 article['_id'] = str(article['_id'])
-                articles.append(article)
                 
             return articles
             
         except Exception as e:
-            logger.error(f"Error fetching news for {crypto_name}: {str(e)}")
+            logger.error(f"Error fetching news for {crypto_name}: {str(e)}", exc_info=True)
             return []
 
 # Singleton instance
