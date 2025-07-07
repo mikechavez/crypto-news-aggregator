@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, HttpUrl
 from bson import ObjectId
-from enum import Enum
+from enum import Enum, IntEnum
 
 class PyObjectId(ObjectId):
     """Custom type for MongoDB ObjectId that works with Pydantic v2."""
@@ -164,6 +164,73 @@ ALERT_INDEXES = [
         "expireAfterSeconds": 90 * 24 * 60 * 60  # 90 days in seconds
     }
 ]
+
+class EmailEventType(str, Enum):
+    """Types of email events that can be tracked."""
+    SENT = "sent"
+    DELIVERED = "delivered"
+    OPENED = "opened"
+    CLICKED = "clicked"
+    BOUNCED = "bounced"
+    COMPLAINED = "complained"
+    UNSUBSCRIBED = "unsubscribed"
+
+
+class EmailEvent(BaseModel):
+    """Model for tracking individual email events."""
+    event_type: EmailEventType
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    details: Dict[str, Any] = Field(default_factory=dict)
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    location: Optional[Dict[str, Any]] = None
+
+
+class EmailTracking(BaseModel):
+    """Model for tracking email delivery and interactions."""
+    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
+    message_id: str  # Unique identifier for the email
+    user_id: PyObjectId  # Reference to the user
+    recipient_email: str
+    template_name: str
+    subject: str
+    sent_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    events: List[EmailEvent] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    
+    class Config:
+        """Pydantic config."""
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
+
+
+# Email tracking indexes
+EMAIL_TRACKING_INDEXES = [
+    # Index for message lookups
+    {
+        "keys": [("message_id", 1)],
+        "name": "message_id_unique",
+        "unique": True
+    },
+    # Index for user's email history
+    {
+        "keys": [("user_id", 1), ("sent_at", -1)],
+        "name": "user_email_history"
+    },
+    # Index for tracking events by type and time
+    {
+        "keys": [("events.event_type", 1), ("events.timestamp", -1)],
+        "name": "event_type_tracking"
+    },
+    # TTL index to automatically remove old tracking data after 1 year
+    {
+        "keys": [("sent_at", 1)],
+        "name": "email_tracking_ttl",
+        "expireAfterSeconds": 31536000  # 1 year in seconds
+    }
+]
+
 
 ARTICLE_INDEXES = [
     {

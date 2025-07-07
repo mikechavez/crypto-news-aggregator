@@ -1,6 +1,8 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, JSON, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
+from sqlalchemy.dialects.postgresql import UUID
+import uuid
 
 # Import the Base class
 from .base import Base
@@ -83,3 +85,52 @@ class Trend(Base):
     time_window = Column(String)  # e.g., "1h", "24h", "7d"
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class User(Base):
+    """User model for database storage."""
+    __tablename__ = "users"
+    __table_args__ = (
+        {'extend_existing': True},
+        {'schema': 'public'}
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    first_name = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=True)
+    is_active = Column(Boolean, default=True)
+    is_superuser = Column(Boolean, default=False)
+    email_verified = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
+
+
+class Alert(Base):
+    """Price alert model for tracking user price alerts."""
+    __tablename__ = "alerts"
+    __table_args__ = {'extend_existing': True}
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    symbol = Column(String, default="BTC", nullable=False)
+    threshold_percentage = Column(Float, nullable=False)  # e.g., 5.0 for 5%
+    direction = Column(String, default="both")  # "up", "down", "both"
+    active = Column(Boolean, default=True)
+    last_triggered = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="alerts")
+
+    def __repr__(self):
+        return f"<Alert(id={self.id}, user_id={self.user_id}, symbol={self.symbol}, threshold={self.threshold_percentage}%>"
