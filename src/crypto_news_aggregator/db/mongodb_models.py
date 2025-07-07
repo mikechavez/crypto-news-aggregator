@@ -129,6 +129,21 @@ class AlertStatus(str, Enum):
 
 
 # Indexes to be created on MongoDB collections
+PRICE_HISTORY_INDEXES = [
+    # Compound index for querying price history by cryptocurrency and timestamp
+    [
+        ("cryptocurrency", 1),  # Group by cryptocurrency
+        ("timestamp", -1)       # Sort by timestamp descending (newest first)
+    ],
+    # TTL index to automatically remove old price data (keep 30 days)
+    [
+        ("timestamp", 1),
+        {
+            "expireAfterSeconds": 2592000  # 30 days in seconds
+        }
+    ]
+]
+
 ALERT_INDEXES = [
     # Index for fast lookups by user_id and active status
     {
