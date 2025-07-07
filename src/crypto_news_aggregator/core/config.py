@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     PROJECT_NAME: str = "Crypto News Aggregator"
     VERSION: str = "0.1.0"
+    API_V1_STR: str = "/api/v1"
 
     # PostgreSQL settings (kept for backward compatibility)
     POSTGRES_SERVER: str = "localhost"
@@ -44,13 +45,43 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
     CELERY_RESULT_BACKEND: str = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
+    # Security settings
+    SECRET_KEY: str = "your-secret-key-here"  # Change this to a secure secret key
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutes
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7  # 7 days
+    
+    # CORS settings
+    CORS_ORIGINS: str = "*"  # In production, replace with specific origins
+    
     # Email settings
     SMTP_SERVER: str = "smtp.gmail.com"  # Default to Gmail's SMTP server
     SMTP_PORT: int = 465  # SSL port for Gmail
+    SMTP_USERNAME: str = ""  # Your email username
+    SMTP_PASSWORD: str = ""  # Your email password or app password
+    EMAILS_FROM_EMAIL: str = "noreply@example.com"  # Sender email
+    EMAILS_FROM_NAME: str = "Crypto News Aggregator"  # Sender name
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
-    EMAIL_FROM: str = ""  # Should match SMTP username for most providers
-    ALERT_EMAIL: str = ""  # Email address to send alerts to
+    EMAIL_FROM: str = "noreply@example.com"  # Should match SMTP username for most providers
+    EMAIL_FROM_NAME: str = "Crypto News Aggregator"
+    EMAIL_DOMAIN: str = "cryptonewsaggregator.com"  # Used for Message-ID header
+    SUPPORT_EMAIL: str = "support@cryptonewsaggregator.com"
+    ALERT_EMAIL: str = "alerts@cryptonewsaggregator.com"  # Email address to send alerts to
+    
+    # Email tracking settings
+    EMAIL_TRACKING_ENABLED: bool = True
+    EMAIL_TRACKING_PIXEL_URL: str = "{BASE_URL}/api/v1/emails/track/open/{message_id}"
+    EMAIL_TRACKING_CLICK_URL: str = "{BASE_URL}/api/v1/emails/track/click/{message_id}/{link_hash}"
+    EMAIL_UNSUBSCRIBE_URL: str = "{BASE_URL}/api/v1/emails/unsubscribe/{token}"
+    
+    # Email rate limiting
+    EMAIL_RATE_LIMIT: int = 100  # Max emails per hour
+    EMAIL_RATE_LIMIT_WINDOW: int = 3600  # 1 hour in seconds
+    
+    # Email retry settings
+    EMAIL_MAX_RETRIES: int = 3
+    EMAIL_RETRY_DELAY: int = 60  # seconds
     
     # Price monitoring settings
     PRICE_CHECK_INTERVAL: int = 300  # 5 minutes in seconds
