@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        .header {
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .content {
+            padding: 20px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px 0;
+            font-size: 12px;
+            color: #999999;
+            border-top: 1px solid #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Welcome to Crypto News Aggregator!</h1>
+        </div>
+        <div class="content">
+            <p>Hello {{ name }},</p>
+            <p>Thank you for signing up! Please verify your email address by clicking the button below:</p>
+            <p style="text-align: center;">
+                <a href="{{ verification_url }}" class="button">Verify Email Address</a>
+            </p>
+            <p>If you didn't create an account, you can safely ignore this email.</p>
+            <p>Or copy and paste this link into your browser:</p>
+            <p><small>{{ verification_url }}</small></p>
+        </div>
+        <div class="footer">
+            <p>This email was sent to {{ email }}. If you didn't sign up for this account, please ignore this email.</p>
+            <p>&copy; {{ now.year }} Crypto News Aggregator. All rights reserved.</p>
+        </div>
+    </div>
+    <!-- Tracking pixel -->
+    <img src="{{ tracking_pixel_url }}" alt="" width="1" height="1" style="display:none;">
+</body>
+</html>
