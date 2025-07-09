@@ -2,14 +2,14 @@
 Notification service for handling different types of alerts and notifications.
 """
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
-from bson import ObjectId
 
-from ..models.alert import AlertInDB, AlertCondition
-from ..services.alert_service import alert_service
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..db.models import Alert
+from ..db.operations.alert import get_active_alerts, update_alert_last_triggered
 from ..services.email_service import send_price_alert
-from ..db.mongodb import mongo_manager
 from ..core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -19,16 +19,18 @@ class NotificationService:
     
     async def process_price_alert(
         self,
+        db: AsyncSession,
         crypto_id: str,
         crypto_name: str,
         crypto_symbol: str,
         current_price: float,
         price_change_24h: float,
-    ) -> Dict[str, Any]:
+    ) -> Dict[str, int]:
         """
         Process price alerts for a given cryptocurrency.
         
         Args:
+            db: Database session
             crypto_id: Cryptocurrency ID (e.g., 'bitcoin')
             crypto_name: Cryptocurrency name (e.g., 'Bitcoin')
             crypto_symbol: Cryptocurrency symbol (e.g., 'BTC')
@@ -40,204 +42,128 @@ class NotificationService:
         """
         logger.info(f"Processing price alerts for {crypto_name} ({crypto_symbol}): ${current_price:.2f} ({price_change_24h:+.2f}%)")
         
-        # Find all active alerts for this cryptocurrency
-        collection = await mongo_manager.get_async_collection('alerts')
-        query = {
-            'crypto_id': crypto_id,
-            'is_active': True,
-            '$or': [
-                {'last_triggered': {'$exists': False}},
-                {'last_triggered': {'$lt': datetime.now(timezone.utc) - timedelta(minutes=5)}}  # Cooldown period
-            ]
-        }
+        # Get all active alerts for this cryptocurrency
+        alerts = await get_active_alerts(db)
+        alerts = [alert for alert in alerts if alert.symbol.upper() == crypto_symbol.upper()]
         
-        alerts = []
-        async for alert in collection.find(query):
-            alerts.append(AlertInDB(**alert))
-        
-        if not alerts:
-            return {
-                'crypto_id': crypto_id,
-                'alerts_processed': 0,
-                'alerts_triggered': 0,
-                'notifications_sent': 0,
-                'errors': 0
-            }
-        
-        # Process each alert
         stats = {
-            'crypto_id': crypto_id,
-            'alerts_processed': len(alerts),
+            'alerts_processed': 0,
             'alerts_triggered': 0,
             'notifications_sent': 0,
             'errors': 0
         }
-        
+            
         for alert in alerts:
             try:
-                # Check if the alert condition is met
-                should_trigger = self._check_alert_condition(
-                    alert=alert,
-                    current_price=current_price,
-                    price_change_24h=price_change_24h
-                )
+                stats['alerts_processed'] += 1
                 
-                if should_trigger:
+                # Check if alert conditions are met
+                if self._should_trigger_alert(alert, price_change_24h):
                     stats['alerts_triggered'] += 1
                     
                     # Send notification
-                    success = await self._send_alert_notification(
-                        alert=alert,
-                        crypto_name=crypto_name,
-                        crypto_symbol=crypto_symbol,
-                        current_price=current_price,
-                        price_change_24h=price_change_24h
-                    )
-                    
-                    if success:
+                    try:
+                        await self._send_alert_notification(
+                            alert=alert,
+                            crypto_name=crypto_name,
+                            crypto_symbol=crypto_symbol,
+                            current_price=current_price,
+                            price_change_24h=price_change_24h
+                        )
                         stats['notifications_sent'] += 1
                         
-                        # Update last_triggered timestamp with timezone
-                        now = datetime.now(timezone.utc)
-                        await collection.update_one(
-                            {'_id': ObjectId(alert.id)},
-                            {'$set': {'last_triggered': now}}
-                        )
-                    else:
+                        # Update last triggered time
+                        await update_alert_last_triggered(db, alert.id)
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to send notification for alert {alert.id}: {e}")
                         stats['errors'] += 1
                         
             except Exception as e:
-                logger.error(f"Error processing alert {alert.id}: {str(e)}", exc_info=True)
+                logger.error(f"Error processing alert {alert.id}: {e}")
                 stats['errors'] += 1
+                continue
         
         return stats
     
-    def _check_alert_condition(
-        self,
-        alert: AlertInDB,
-        current_price: float,
-        price_change_24h: float
-    ) -> bool:
-        """Check if an alert condition is met."""
-        if alert.condition == AlertCondition.ABOVE:
-            return current_price > alert.threshold
-        elif alert.condition == AlertCondition.BELOW:
-            return current_price < alert.threshold
-        elif alert.condition == AlertCondition.PERCENT_UP:
-            return price_change_24h >= alert.threshold
-        elif alert.condition == AlertCondition.PERCENT_DOWN:
-            return price_change_24h <= -abs(alert.threshold)
-        return False
+    def _should_trigger_alert(self, alert: Alert, price_change_24h: float) -> bool:
+        """
+        Check if an alert should be triggered based on price change and alert conditions.
+        
+        Args:
+            alert: The alert to check
+            price_change_24h: 24-hour price change percentage
+            
+        Returns:
+            bool: True if the alert should be triggered, False otherwise
+        """
+        # Check if price change meets the threshold
+        if abs(price_change_24h) < alert.threshold_percentage:
+            return False
+            
+        # Check direction
+        if alert.direction == 'up' and price_change_24h <= 0:
+            return False
+        if alert.direction == 'down' and price_change_24h >= 0:
+            return False
+            
+        # Check cooldown (1 hour)
+        if alert.last_triggered:
+            time_since_last = datetime.utcnow() - alert.last_triggered
+            if time_since_last < timedelta(hours=1):
+                return False
+                
+        return True
     
     async def _send_alert_notification(
         self,
-        alert: AlertInDB,
+        alert: Alert,
         crypto_name: str,
         crypto_symbol: str,
         current_price: float,
-        price_change_24h: float,
-    ) -> bool:
+        price_change_24h: float
+    ) -> None:
         """
-        Send a notification for a triggered alert with relevant news articles.
+        Send an alert notification to the user.
         
         Args:
             alert: The alert that was triggered
             crypto_name: Name of the cryptocurrency
-            crypto_symbol: Symbol of the cryptocurrency (e.g., BTC)
-            current_price: Current price of the cryptocurrency
+            crypto_symbol: Symbol of the cryptocurrency
+            current_price: Current price
             price_change_24h: 24-hour price change percentage
-            
-        Returns:
-            bool: True if notification was sent successfully, False otherwise
         """
-        try:
-            # Get user details
-            user = await self._get_user(alert.user_id)
-            if not user or not user.get('email'):
-                logger.warning(f"User {alert.user_id} not found or has no email")
-                return False
+        if not alert.user or not alert.user.email:
+            logger.warning(f"Alert {alert.id} has no associated user or email")
+            return
             
-            # Generate dashboard URL
-            dashboard_url = f"{settings.BASE_URL}/dashboard"
-            settings_url = f"{settings.BASE_URL}/settings/alerts"
+        # Determine direction text
+        if price_change_24h > 0:
+            change_text = f"📈 {abs(price_change_24h):.2f}% increase"
+        else:
+            change_text = f"📉 {abs(price_change_24h):.2f}% decrease"
             
-            # Get relevant news articles
-            news_articles = await self._get_recent_news(crypto_name, limit=3)
-            
-            # Send email notification with news context
-            return await send_price_alert(
-                to=user['email'],
-                user_name=user.get('name', 'there'),
-                crypto_name=crypto_name,
-                crypto_symbol=crypto_symbol,
-                condition=alert.condition.value,
-                threshold=alert.threshold,
-                current_price=current_price,
-                price_change_24h=price_change_24h,
-                news_articles=news_articles,
-                dashboard_url=dashboard_url,
-                settings_url=settings_url
-            )
-            
-        except Exception as e:
-            logger.error(f"Error sending alert notification: {str(e)}", exc_info=True)
-            return False
-    
-    async def _get_user(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get user details from the database.
+        # Prepare template context
+        context = {
+            "username": alert.user.username,
+            "crypto_name": crypto_name,
+            "crypto_symbol": crypto_symbol,
+            "current_price": f"${current_price:,.2f}",
+            "price_change_24h": f"{price_change_24h:+.2f}%",
+            "change_text": change_text,
+            "alert_threshold": f"{alert.threshold_percentage}% {alert.direction}",
+            "unsubscribe_link": f"{settings.BASE_URL}/alerts/{alert.id}/unsubscribe"
+        }
         
-        Args:
-            user_id: ID of the user to fetch
-            
-        Returns:
-            User document or None if not found
-        """
-        try:
-            users = await mongo_manager.get_async_collection('users')
-            user = await users.find_one({'_id': ObjectId(user_id)})
-            return user
-        except Exception as e:
-            logger.error(f"Error fetching user {user_id}: {str(e)}")
-            return None
-            
-    async def _get_recent_news(self, crypto_name: str, limit: int = 3) -> List[Dict[str, Any]]:
-        """
-        Fetch recent news articles related to a cryptocurrency.
+        # Send email
+        await send_price_alert(
+            to_email=alert.user.email,
+            subject=f"🚨 {crypto_symbol} Price Alert: {change_text}",
+            template_name="price_alert.html",
+            context=context
+        )
         
-        Args:
-            crypto_name: Name of the cryptocurrency (e.g., 'Bitcoin')
-            limit: Maximum number of articles to return
-            
-        Returns:
-            List of news article dictionaries
-        """
-        try:
-            # Get the articles collection
-            collection = await mongo_manager.get_async_collection('articles')
-        
-            # Query for recent articles mentioning the cryptocurrency
-            query = {
-                '$or': [
-                    {'title': {'$regex': crypto_name, '$options': 'i'}},
-                    {'content': {'$regex': crypto_name, '$options': 'i'}},
-                    {'description': {'$regex': crypto_name, '$options': 'i'}}
-                ]
-            }
-        
-            # Execute query with sort and limit, then convert to list
-            cursor = collection.find(query).sort('published_at', -1).limit(limit)
-            articles = await cursor.to_list(length=limit)
-            
-            # Convert ObjectId to string for JSON serialization
-            for article in articles:
-                article['_id'] = str(article['_id'])
-                
-            return articles
-            
-        except Exception as e:
-            logger.error(f"Error fetching news for {crypto_name}: {str(e)}", exc_info=True)
-            return []
+        logger.info(f"Sent price alert email to {alert.user.email} for {crypto_symbol} {change_text}")
 
 # Singleton instance
 notification_service = NotificationService()
