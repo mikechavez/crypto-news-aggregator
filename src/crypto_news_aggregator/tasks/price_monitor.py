@@ -17,7 +17,9 @@ class PriceMonitor:
     
     def __init__(self):
         self.is_running = False
+        self.task: Optional[asyncio.Task] = None
         self.last_alert_time: Dict[str, datetime] = {}
+        self.last_checked_price: Dict[str, float] = {}
         self.min_alert_interval = timedelta(minutes=30)  # Minimum time between alerts for the same coin
     
     async def start(self):
@@ -42,13 +44,42 @@ class PriceMonitor:
         """Stop the price monitoring service."""
         logger.info("Stopping price monitor")
         self.is_running = False
+        if self.task and not self.task.done():
+            self.task.cancel()
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                logger.info("Price monitor task has been cancelled.")
     
     async def _check_prices(self):
         """Check prices and trigger alerts if needed."""
-        # Check for significant price movements
-        movement = await price_service.check_price_movement()
-        
-        if movement and self._should_alert(movement['symbol']):
+        symbol = 'bitcoin'  # Hardcoded for now
+        price_data = await price_service.get_bitcoin_price()
+        current_price = price_data.get('price')
+
+        if current_price is None:
+            logger.warning("Could not retrieve current price for bitcoin.")
+            return
+
+        last_price = self.last_checked_price.get(symbol)
+        self.last_checked_price[symbol] = current_price
+
+        if last_price is None:
+            logger.info(f"First price check for {symbol}: ${current_price}")
+            return
+
+        should_alert, change_pct = await price_service.should_trigger_alert(
+            current_price=current_price,
+            last_alert_price=last_price,
+            threshold=settings.PRICE_CHANGE_THRESHOLD
+        )
+
+        if should_alert and self._should_alert(symbol):
+            movement = {
+                'symbol': symbol,
+                'current_price': current_price,
+                'change_pct': change_pct
+            }
             await self._handle_price_movement(movement)
     
     def _should_alert(self, symbol: str) -> bool:
