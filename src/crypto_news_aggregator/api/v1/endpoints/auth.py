@@ -9,17 +9,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.crypto_news_aggregator.core import security
 from src.crypto_news_aggregator.core.config import settings
 from src.crypto_news_aggregator.core.security import Token, TokenData
-from src.crypto_news_aggregator.db.session import get_db
-from src.crypto_news_aggregator.models.user import UserCreate, User as UserModel, UserResponse
+from src.crypto_news_aggregator.db.session import get_session
+from src.crypto_news_aggregator.models.user_sql import UserSQL, UserCreateSQL
 from src.crypto_news_aggregator.db.operations import users as user_ops
 
 router = APIRouter()
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=UserSQL, status_code=status.HTTP_201_CREATED)
 async def register_user(
     *,
-    db: AsyncSession = Depends(get_db),
-    user_in: UserCreate,
+    db: AsyncSession = Depends(get_session),
+    user_in: UserCreateSQL,
 ) -> Any:
     """
     Register a new user.
@@ -53,7 +53,7 @@ async def register_user(
 @router.post("/login", response_model=Token)
 async def login_for_access_token(
     response: Response,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> Any:
     """
@@ -87,52 +87,23 @@ async def login_for_access_token(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email not verified. Please check your email for the verification link.",
         )
-    
-    # Create tokens
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    
     access_token = security.create_access_token(
-        subject=str(user.id),
-        expires_delta=access_token_expires,
-        username=user.username,
-        email=user.email,
-        is_superuser=user.is_superuser,
+        subject=str(user.id), expires_delta=access_token_expires
     )
-    
-    refresh_token = security.create_refresh_token(
-        subject=str(user.id),
-        expires_delta=refresh_token_expires,
-        username=user.username,
-        email=user.email,
-        is_superuser=user.is_superuser,
-    )
-    
-    # Set refresh token as HTTP-only cookie
-    response.set_cookie(
-        key="refresh_token",
-        value=f"Bearer {refresh_token}",
-        httponly=True,
-        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,  # in seconds
-        secure=not settings.DEBUG,  # Only send over HTTPS in production
-        samesite="lax",
-    )
-    
+
     # Update last login time
-    # Note: In a real app, you'd want to get the IP from the request
     await user_ops.update_last_login(db, user.id, "127.0.0.1")
-    
+
     return {
         "access_token": access_token,
-        "token_type": "bearer",
-        "expires_in": int(access_token_expires.total_seconds()),
-        "refresh_token": refresh_token,
+        "user_id": str(user.id),
     }
 
 @router.post("/refresh", response_model=Token)
 async def refresh_access_token(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ) -> Any:
     """
     Refresh an access token using a refresh token.
