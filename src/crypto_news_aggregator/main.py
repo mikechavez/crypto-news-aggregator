@@ -1,5 +1,6 @@
 """Main FastAPI application module."""
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from .api.v1 import router as api_router
 from .tasks.sync_tasks import sync_scheduler
+from .tasks.price_monitor import price_monitor
 from .core.config import get_settings
 from .core.auth import get_api_key, API_KEY_NAME
 
@@ -24,11 +26,21 @@ async def lifespan(app: FastAPI):
         logger.info("Starting database synchronization task...")
         await sync_scheduler.start()
     
+    # Start the price monitor as a background task
+    logger.info("Starting price monitor...")
+    # Create the task and assign it to the monitor instance
+    price_monitor.task = asyncio.create_task(price_monitor.start())
+    
     yield
     
     # Shutdown
     logger.info("Shutting down application...")
     
+    # Stop the price monitor if it's running
+    if price_monitor.is_running:
+        logger.info("Stopping price monitor...")
+        await price_monitor.stop()
+
     # Stop the sync scheduler if it's running
     if settings.ENABLE_DB_SYNC and sync_scheduler._task and not sync_scheduler._task.done():
         logger.info("Stopping database synchronization task...")

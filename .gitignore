@@ -71,7 +71,6 @@ logs/
 *.log
 
 # Alembic
-alembic.ini
 
 # Docker compose override
 docker-compose.override.yml

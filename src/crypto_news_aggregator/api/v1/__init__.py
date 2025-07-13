@@ -14,6 +14,10 @@ router = APIRouter(prefix=settings.API_V1_STR)
 from . import articles, sources, health, tasks
 from .endpoints import price, emails, auth
 
+# Import test endpoints (only in debug mode)
+if settings.DEBUG or settings.TESTING:
+    from .endpoints import test_alerts
+
 # OAuth2 scheme for token authentication
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login",
@@ -31,6 +35,10 @@ protected_router.include_router(sources.router, prefix="/sources", tags=["source
 protected_router.include_router(tasks.router, prefix="", tags=["tasks"])
 protected_router.include_router(price.router, prefix="/price", tags=["price"])
 
+# Include test endpoints only in debug mode
+if settings.DEBUG or settings.TESTING:
+    protected_router.include_router(test_alerts.router, prefix="/test", tags=["test"])
+
 # Email tracking endpoints (partially public - some endpoints don't require auth)
 router.include_router(emails.router, prefix="/emails", tags=["emails"])
 
@@ -40,20 +48,3 @@ router.include_router(
     dependencies=[Depends(security.get_current_active_user)]
 )
 
-# CORS middleware configuration
-@router.middleware("http")
-async def add_cors_headers(request: Request, call_next):
-    """Add CORS headers to responses."""
-    response = await call_next(request)
-    
-    # Skip if headers already set
-    if "Access-Control-Allow-Origin" in response.headers:
-        return response
-        
-    # Add CORS headers
-    response.headers["Access-Control-Allow-Origin"] = settings.CORS_ORIGINS
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    
-    return response

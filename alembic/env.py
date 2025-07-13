@@ -22,7 +22,7 @@ if config.config_file_name is not None:
 
 # Import Base and models (should work now with correct path)
 from crypto_news_aggregator.db import Base
-from crypto_news_aggregator.db.models import Source, Article, Sentiment, Trend
+from crypto_news_aggregator.db.models import Source, Article, Sentiment, Trend, User, Alert
 
 target_metadata = Base.metadata
 

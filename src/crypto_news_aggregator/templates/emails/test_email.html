@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Email - Crypto News Aggregator</title>
+    <style type="text/css">
+        /* Base styles */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f7fa;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+        
+        .header {
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 1px solid #eaeaea;
+        }
+        
+        .logo {
+            max-width: 180px;
+            height: auto;
+        }
+        
+        .content {
+            padding: 30px 20px;
+        }
+        
+        h1 {
+            color: #1a1a1a;
+            margin-top: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        p {
+            margin-bottom: 16px;
+            color: #4a4a4a;
+        }
+        
+        .success-icon {
+            color: #10b981;
+            font-size: 48px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .details {
+            background-color: #f8fafc;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 4px 4px 0;
+        }
+        
+        .detail-item {
+            margin-bottom: 8px;
+        }
+        
+        .detail-label {
+            font-weight: 600;
+            color: #4b5563;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 20px 0;
+            border-top: 1px solid #eaeaea;
+            font-size: 14px;
+            color: #6b7280;
+        }
+        
+        .button {
+            display: inline-block;
+            background-color: #3b82f6;
+            color: white !important;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-weight: 500;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        @media only screen and (max-width: 600px) {
+            .container {
+                width: 100% !important;
+                border-radius: 0;
+            }
+            
+            .content {
+                padding: 20px 15px;
+            }
+            
+            h1 {
+                font-size: 22px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="https://your-app-logo-url-here.com/logo.png" alt="Crypto News Aggregator" class="logo">
+        </div>
+        
+        <div class="content">
+            <div class="success-icon">
+                ✓
+            </div>
+            
+            <h1>Test Email Received Successfully!</h1>
+            
+            <p>Hello {{ user_name }},</p>
+            
+            <p>This test email confirms that your email service is properly configured and working as expected.</p>
+            
+            <div class="details">
+                <div class="detail-item">
+                    <span class="detail-label">Recipient:</span> {{ email }}
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Sent at:</span> {{ test_timestamp }}
+                </div>
+            </div>
+            
+            <p>If you received this email, it means that:</p>
+            <ul>
+                <li>Your SMTP server is properly configured</li>
+                <li>Email templates are being rendered correctly</li>
+                <li>Background tasks are processing as expected</li>
+            </ul>
+            
+            <p>You can now proceed with sending real notifications to your users.</p>
+            
+            <center>
+                <a href="{{ settings.BASE_URL }}/dashboard" class="button">Go to Dashboard</a>
+            </center>
+        </div>
+        
+        <div class="footer">
+            <p>© {{ current_year }} Crypto News Aggregator. All rights reserved.</p>
+            <p>
+                <a href="{{ settings.BASE_URL }}/privacy" style="color: #6b7280; text-decoration: none; margin: 0 8px;">Privacy Policy</a>
+                <span>•</span>
+                <a href="{{ settings.BASE_URL }}/terms" style="color: #6b7280; text-decoration: none; margin: 0 8px;">Terms of Service</a>
+                <span>•</span>
+                <a href="{{ settings.BASE_URL }}/unsubscribe" style="color: #6b7280; text-decoration: none; margin: 0 8px;">Unsubscribe</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

@@ -11,7 +11,7 @@ from bson import ObjectId
 from pydantic import BaseModel
 
 from ....core.config import settings
-from ....db.mongodb import get_database
+from ....db.mongodb import mongo_manager, get_mongodb
 from ....models.user import User, UserInDB, UserUpdate
 from ....services.email_service import email_service
 from ....db.mongodb_models import EmailTracking, EmailEvent, EmailEventType
