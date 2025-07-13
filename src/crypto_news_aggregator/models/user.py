@@ -29,7 +29,7 @@ class UserTrackingSettings(BaseModel):
 
 class UserBase(BaseModel):
     """Base user model with common fields."""
-    username: str = Field(..., min_length=3, max_length=50, regex=r'^[a-zA-Z0-9_]+$',
+    username: str = Field(..., min_length=3, max_length=50, pattern=r'^[a-zA-Z0-9_]+$',
                          description="Username must be 3-50 characters long and can only contain letters, numbers, and underscores")
     email: EmailStr
     first_name: Optional[str] = Field(None, max_length=100)
@@ -62,7 +62,7 @@ class UserBase(BaseModel):
 
 class UserCreate(BaseModel):
     """Model for creating a new user."""
-    username: str = Field(..., min_length=3, max_length=50, regex=r'^[a-zA-Z0-9_]+$',
+    username: str = Field(..., min_length=3, max_length=50, pattern=r'^[a-zA-Z0-9_]+$',
                          description="Username must be 3-50 characters long and can only contain letters, numbers, and underscores")
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100,
@@ -104,7 +104,7 @@ class UserUpdate(BaseModel):
         None, 
         min_length=3, 
         max_length=50, 
-        regex=r'^[a-zA-Z0-9_]+$',
+        pattern=r'^[a-zA-Z0-9_]+$',
         description="Username must be 3-50 characters long and can only contain letters, numbers, and underscores"
     )
     first_name: Optional[str] = Field(None, max_length=100)

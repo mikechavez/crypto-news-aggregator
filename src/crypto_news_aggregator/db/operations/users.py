@@ -1,50 +1,49 @@
 """Database operations for user management."""
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import or_
 
-from src.crypto_news_aggregator.models.user import (
-    UserCreate, 
-    UserUpdate, 
-    User as UserModel,
-    UserInDB
+from src.crypto_news_aggregator.models.user_sql import (
+    UserCreateSQL, 
+    UserUpdateSQL, 
+    UserSQL
 )
 from src.crypto_news_aggregator.db.models import User as UserDB
 from src.crypto_news_aggregator.core.security import get_password_hash, verify_password
 
 
-async def get_user(db: AsyncSession, user_id: int) -> Optional[UserModel]:
+async def get_user(db: AsyncSession, user_id: int) -> Optional[UserSQL]:
     """Get a user by ID."""
     result = await db.execute(select(UserDB).filter(UserDB.id == user_id))
     user = result.scalars().first()
-    return UserModel.from_orm(user) if user else None
+    return UserSQL.model_validate(user) if user else None
 
 
-async def get_user_by_email(db: AsyncSession, email: str) -> Optional[UserModel]:
+async def get_user_by_email(db: AsyncSession, email: str) -> Optional[UserSQL]:
     """Get a user by email (case-insensitive)."""
     result = await db.execute(
         select(UserDB).filter(UserDB.email.ilike(email))
     )
     user = result.scalars().first()
-    return UserModel.from_orm(user) if user else None
+    return UserSQL.model_validate(user) if user else None
 
 
-async def get_user_by_username(db: AsyncSession, username: str) -> Optional[UserModel]:
+async def get_user_by_username(db: AsyncSession, username: str) -> Optional[UserSQL]:
     """Get a user by username (case-insensitive)."""
     result = await db.execute(
         select(UserDB).filter(UserDB.username.ilike(username))
     )
     user = result.scalars().first()
-    return UserModel.from_orm(user) if user else None
+    return UserSQL.model_validate(user) if user else None
 
 
 async def get_user_by_credentials(
     db: AsyncSession, 
     username_or_email: str, 
     password: str
-) -> Optional[UserModel]:
+) -> Optional[UserSQL]:
     """Get user by username/email and verify password."""
     # Try to find user by username or email
     result = await db.execute(
@@ -60,23 +59,11 @@ async def get_user_by_credentials(
     if not user or not verify_password(password, user.hashed_password):
         return None
         
-    return UserModel.from_orm(user)
+    return UserSQL.model_validate(user)
 
 
-async def create_user(db: AsyncSession, user_in: UserCreate) -> UserModel:
+async def create_user(db: AsyncSession, user_in: UserCreateSQL) -> UserSQL:
     """Create a new user."""
-    # Check if user with email or username already exists
-    existing_user = await db.execute(
-        select(UserDB).filter(
-            or_(
-                UserDB.email.ilike(user_in.email),
-                UserDB.username.ilike(user_in.username)
-            )
-        )
-    )
-    if existing_user.scalars().first():
-        raise ValueError("User with this email or username already exists")
-    
     # Hash the password
     hashed_password = get_password_hash(user_in.password)
     
@@ -89,22 +76,22 @@ async def create_user(db: AsyncSession, user_in: UserCreate) -> UserModel:
         last_name=user_in.last_name,
         is_active=True,
         email_verified=False,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc)
     )
     
     db.add(db_user)
     await db.commit()
     await db.refresh(db_user)
     
-    return UserModel.from_orm(db_user)
+    return UserSQL.model_validate(db_user)
 
 
 async def update_user(
     db: AsyncSession, 
     db_user: UserDB, 
-    user_in: UserUpdate
-) -> UserModel:
+    user_in: UserUpdateSQL
+) -> UserSQL:
     """Update a user."""
     update_data = user_in.dict(exclude_unset=True)
     
@@ -116,18 +103,18 @@ async def update_user(
     
     # Update user fields
     for field, value in update_data.items():
-        if field == 'password':
+        if field == 'password' and value:
             setattr(db_user, 'hashed_password', get_password_hash(value))
-        else:
+        elif value is not None:
             setattr(db_user, field, value)
     
-    db_user.updated_at = datetime.utcnow()
+    db_user.updated_at = datetime.now(timezone.utc)
     
     db.add(db_user)
     await db.commit()
     await db.refresh(db_user)
     
-    return UserModel.from_orm(db_user)
+    return UserSQL.model_validate(db_user)
 
 
 async def update_last_login(db: AsyncSession, user_id: int, ip_address: str) -> None:
@@ -135,7 +122,7 @@ async def update_last_login(db: AsyncSession, user_id: int, ip_address: str) -> 
     result = await db.execute(select(UserDB).filter(UserDB.id == user_id))
     user = result.scalars().first()
     if user:
-        user.last_login_at = datetime.utcnow()
+        user.last_login_at = datetime.now(timezone.utc)
         user.last_login_ip = ip_address
         user.login_count = (user.login_count or 0) + 1
         db.add(user)
@@ -158,7 +145,7 @@ async def get_users(
     db: AsyncSession, 
     skip: int = 0, 
     limit: int = 100
-) -> List[UserModel]:
+) -> List[UserSQL]:
     """Get a list of users with pagination."""
     result = await db.execute(
         select(UserDB)
@@ -167,4 +154,4 @@ async def get_users(
         .order_by(UserDB.created_at.desc())
     )
     users = result.scalars().all()
-    return [UserModel.from_orm(user) for user in users]
+    return [UserSQL.model_validate(user) for user in users]
