@@ -2,7 +2,7 @@
 import pytest
 import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from crypto_news_aggregator.tasks.news import fetch_news, analyze_sentiment, process_article
 from crypto_news_aggregator.core.news_collector import NewsCollector

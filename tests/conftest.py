@@ -10,9 +10,11 @@ import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import StaticPool
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import sessionmaker
 from src.crypto_news_aggregator.core.config import get_settings
+from src.crypto_news_aggregator.db.session import get_session
 
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -34,7 +36,7 @@ class TestSettings(Settings):
     
     # Database settings
     FORCE_SQLITE: bool = True
-    DATABASE_URL: str = "sqlite+aiosqlite:///:memory:"
+
     
     # MongoDB settings
     MONGODB_URI: str = "mongodb://localhost:27017"
@@ -129,7 +131,8 @@ os.environ["MONGODB_NAME"] = TEST_MONGODB_DB
 
 # Now import the rest of the application
 from src.crypto_news_aggregator.db.base import Base
-from src.crypto_news_aggregator.db.session import get_session, get_engine, get_sessionmaker
+from src.crypto_news_aggregator.db.session import get_sessionmaker, get_session
+from src.crypto_news_aggregator.db import models
 from src.crypto_news_aggregator.services.article_service import ArticleService, article_service
 
 # Clear any existing tables
@@ -290,65 +293,47 @@ def event_loop():
     yield loop
     loop.close()
 
-@pytest_asyncio.fixture(scope="session")
-async def db_engine():
-    """Create and configure a test database engine."""
-    # Use a file-based SQLite database for testing to avoid in-memory DB issues
-    TEST_DB_URL = "sqlite+aiosqlite:///./test.db"
-    
-    # Clean up any existing test database
-    if os.path.exists("./test.db"):
-        os.remove("./test.db")
-    
-    # Create engine with echo=True for debugging
-    engine = create_async_engine(
-        TEST_DB_URL,
-        echo=True,
-        future=True
-    )
-    
-    # Create all tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-    
-    # Verify tables were created
-    async with engine.connect() as conn:
-        result = await conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
-        tables = [row[0] for row in result.all()]
-        logger.info(f"Tables in database: {tables}")
-    
-    yield engine
-    
-    # Clean up
-    await engine.dispose()
-    if os.path.exists("./test.db"):
-        os.remove("./test.db")
+# Import the Base and all models to ensure tables are created
+from src.crypto_news_aggregator.db.base import Base
+from src.crypto_news_aggregator.db.models import Alert, User, Source, Article, Sentiment, Trend
 
-@pytest_asyncio.fixture
-async def db_session(db_engine):
-    """Create a new database session for testing."""
-    connection = await db_engine.connect()
-    transaction = await connection.begin()
+@pytest_asyncio.fixture(scope="session")
+async def db_connection() -> AsyncGenerator[AsyncConnection, None]:
+    """Create a single database connection for the test session with a pre-initialized schema."""
+    import tempfile
+    import os
+
+    db_fd, db_path = tempfile.mkstemp(suffix=".db")
+    os.close(db_fd)
+
+    database_url = f"sqlite+aiosqlite:///{db_path}"
+
+    engine = create_async_engine(database_url, echo=True)
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    async with engine.connect() as conn:
+        yield conn
+
+    await engine.dispose()
+    os.unlink(db_path)
+
+@pytest_asyncio.fixture(scope="function")
+async def db_session(db_connection: AsyncConnection) -> AsyncGenerator[AsyncSession, None]:
+    """Create a new database session for testing, running within a nested transaction."""
+    await db_connection.begin_nested()
     
-    # Create a session with the connection
-    session = AsyncSession(bind=connection, expire_on_commit=False)
-    
-    # Begin a nested transaction (using SAVEPOINT)
-    await session.begin_nested()
-    
-    # Add finalizer to rollback and close the session after the test
-    @pytest.hookimpl(hookwrapper=True)
-    async def finalize():
-        await session.rollback()
-        await session.close()
-        await transaction.rollback()
-        await connection.close()
-    
+    async_session_factory = async_sessionmaker(
+        bind=db_connection, expire_on_commit=False, class_=AsyncSession
+    )
+    session = async_session_factory()
+
     try:
         yield session
     finally:
-        await finalize()
+        await session.close()
+        await db_connection.rollback()
 
 @pytest.fixture
 def override_get_db(db_session: AsyncSession):
@@ -379,55 +364,26 @@ class TestSettingsWithAPIKey(Settings):
 app.dependency_overrides[get_settings] = lambda: TestSettingsWithAPIKey()
 
 @pytest.fixture
-def client(monkeypatch) -> Generator[TestClient, None, None]:
+def client(db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
     """
-    Create a test client that includes the database session and authentication.
-    
+    Create a test client that uses the test database session.
+
     This fixture ensures that:
-    1. The test API key is properly set in the environment
-    2. The test client includes the API key in all requests
-    3. The database session is properly configured for testing
+    1. The test client uses a non-persistent, in-memory database.
+    2. The API key is properly configured for authenticated requests.
     """
-    # Ensure the API key is set in the environment
+    async def override_get_session() -> AsyncGenerator[AsyncSession, None]:
+        yield db_session
+
+    app.dependency_overrides[get_session] = override_get_session
+
     monkeypatch.setenv("API_KEYS", TEST_API_KEY)
-    
-    # Create a new test client for each test with the API key in the headers
-    with TestClient(app) as test_client:
-        # Add API key to all requests from this client
-        test_client.headers.update({
-            "X-API-Key": TEST_API_KEY,
-            "Content-Type": "application/json"
-        })
-        
-        # Debug logging
-        logger.debug(f"Test client created with API key: {TEST_API_KEY[:3]}...{TEST_API_KEY[-3:] if len(TEST_API_KEY) > 6 else '***'}")
-        logger.debug(f"Test client headers: {dict(test_client.headers)}")
-        
-        # Setup test database session
-        async def override_get_session() -> AsyncGenerator[AsyncSession, None]:
-            async with async_sessionmaker(
-                autocommit=False,
-                autoflush=False,
-                bind=create_async_engine(settings.DATABASE_URL)
-            )() as session:
-                try:
-                    yield session
-                except Exception as e:
-                    logger.error(f"Database session error: {str(e)}")
-                    await session.rollback()
-                    raise
-                finally:
-                    await session.close()
-        
-        # Override the get_session dependency
-        app.dependency_overrides[get_session] = override_get_session
-        
-        try:
-            yield test_client
-        finally:
-            # Clean up
-            app.dependency_overrides = {}
-            logger.debug("Test client cleanup complete")
+
+    with TestClient(app) as c:
+        c.headers.update({"X-API-KEY": TEST_API_KEY})
+        yield c
+
+    app.dependency_overrides.clear()
 
 @pytest.fixture
 def mock_newsapi() -> Dict[str, Any]:

@@ -7,12 +7,7 @@ from unittest.mock import patch, AsyncMock
 from bson import ObjectId
 from datetime import datetime, timedelta
 
-from src.crypto_news_aggregator.main import app
 from src.crypto_news_aggregator.db.mongodb_models import EmailEventType
-from src.crypto_news_aggregator.core.auth import create_access_token
-
-# Test client
-client = TestClient(app)
 
 # Test data
 TEST_USER_ID = str(ObjectId())
@@ -26,6 +21,7 @@ TEST_UNSUBSCRIBE_TOKEN = "test_unsubscribe_token"
 @pytest.fixture
 def auth_headers():
     """Generate authentication headers with a test token."""
+    from src.crypto_news_aggregator.core.auth import create_access_token
     token = create_access_token(data={"sub": TEST_USER_ID})
     return {"Authorization": f"Bearer {token}"}
 
@@ -48,7 +44,7 @@ def mock_db():
 class TestEmailTrackingEndpoints:
     """Tests for email tracking endpoints."""
     
-    async def test_track_email_open(self, mock_db):
+    async def test_track_email_open(self, client: TestClient, mock_db):
         """Test tracking an email open event."""
         # Mock the database response
         mock_db.email_tracking.update_one.return_value.modified_count = 1
@@ -67,7 +63,7 @@ class TestEmailTrackingEndpoints:
         # Check that the database was updated
         mock_db.email_tracking.update_one.assert_called_once()
         
-    async def test_track_email_click(self, mock_db):
+    async def test_track_email_click(self, client: TestClient, mock_db):
         """Test tracking an email link click."""
         # Mock the database response
         mock_db.email_tracking.find_one.return_value = {
@@ -95,7 +91,7 @@ class TestEmailTrackingEndpoints:
         # Check that the database was updated
         mock_db.email_tracking.update_one.assert_called_once()
         
-    async def test_unsubscribe(self, mock_db):
+    async def test_unsubscribe(self, client: TestClient, mock_db):
         """Test the unsubscribe endpoint."""
         # Mock the database response
         mock_db.users.update_one.return_value.modified_count = 1
@@ -113,7 +109,7 @@ class TestEmailTrackingEndpoints:
         # Check that the database was updated
         mock_db.users.update_one.assert_called_once()
         
-    async def test_get_tracking_info(self, mock_db, auth_headers):
+    async def test_get_tracking_info(self, client: TestClient, mock_db, auth_headers):
         """Test getting tracking info for a message."""
         # Mock the database response
         test_tracking_data = {
@@ -156,7 +152,7 @@ class TestEmailTrackingEndpoints:
         assert data["events"][0]["event_type"] == EmailEventType.SENT.value
         assert data["events"][1]["event_type"] == EmailEventType.OPENED.value
         
-    async def test_get_user_tracking_info(self, mock_db, auth_headers):
+    async def test_get_user_tracking_info(self, client: TestClient, mock_db, auth_headers):
         """Test getting tracking info for a user."""
         # Mock the database response
         test_tracking_data = [
@@ -206,7 +202,7 @@ class TestEmailTrackingEndpoints:
         args, _ = mock_db.email_tracking.find.call_args
         assert args[0]["user_id"] == ObjectId(TEST_USER_ID)
         
-    async def test_unauthorized_access_to_tracking_info(self, mock_db):
+    async def test_unauthorized_access_to_tracking_info(self, client: TestClient, mock_db):
         """Test that unauthorized users cannot access tracking info."""
         # Make the request without authentication
         response = client.get(f"/api/v1/emails/tracking/{TEST_MESSAGE_ID}")
@@ -214,7 +210,7 @@ class TestEmailTrackingEndpoints:
         # Check the response
         assert response.status_code == 401
         
-    async def test_unauthorized_access_to_user_tracking_info(self, mock_db):
+    async def test_unauthorized_access_to_user_tracking_info(self, client: TestClient, mock_db):
         """Test that users cannot access other users' tracking info."""
         # Create a token for a different user
         other_user_id = str(ObjectId())
@@ -230,7 +226,7 @@ class TestEmailTrackingEndpoints:
         # Check the response
         assert response.status_code == 403
         
-    async def test_admin_access_to_user_tracking_info(self, mock_db):
+    async def test_admin_access_to_user_tracking_info(self, client: TestClient, mock_db):
         """Test that admins can access any user's tracking info."""
         # Create an admin token
         admin_token = create_access_token(data={"sub": "admin_user_id", "is_admin": True})
