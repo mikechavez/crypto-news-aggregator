@@ -2,7 +2,7 @@
 Notification service for handling different types of alerts and notifications.
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,7 @@ class NotificationService:
         crypto_symbol: str,
         current_price: float,
         price_change_24h: float,
+        context_articles: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, int]:
         """
         Process price alerts for a given cryptocurrency.
@@ -36,6 +37,7 @@ class NotificationService:
             crypto_symbol: Cryptocurrency symbol (e.g., 'BTC')
             current_price: Current price of the cryptocurrency
             price_change_24h: 24-hour price change percentage
+            context_articles: List of relevant articles for context (optional)
             
         Returns:
             Dict with processing statistics
@@ -63,12 +65,16 @@ class NotificationService:
                     
                     # Send notification
                     try:
+                        # Only include articles if the price change is significant
+                        articles_to_include = context_articles if abs(price_change_24h) >= 1.0 else []
+                        
                         await self._send_alert_notification(
                             alert=alert,
                             crypto_name=crypto_name,
                             crypto_symbol=crypto_symbol,
                             current_price=current_price,
-                            price_change_24h=price_change_24h
+                            price_change_24h=price_change_24h,
+                            context_articles=articles_to_include
                         )
                         stats['notifications_sent'] += 1
                         
@@ -109,9 +115,10 @@ class NotificationService:
             
         # Check cooldown (1 hour)
         if alert.last_triggered:
-            time_since_last = datetime.utcnow() - alert.last_triggered
-            if time_since_last < timedelta(hours=1):
-                return False
+            time_since_last = datetime.now(timezone.utc) - alert.last_triggered
+            if time_since_last < timedelta(minutes=60):
+                logger.debug(f"Alert {alert.id} is in cooldown. Last triggered {time_since_last.total_seconds() / 60:.2f} minutes ago.")
+                return False  # Cooldown period
                 
         return True
     
@@ -121,10 +128,11 @@ class NotificationService:
         crypto_name: str,
         crypto_symbol: str,
         current_price: float,
-        price_change_24h: float
+        price_change_24h: float,
+        context_articles: Optional[List[Dict[str, Any]]] = None
     ) -> None:
         """
-        Send an alert notification to the user.
+        Send an alert notification to the user with optional context articles.
         
         Args:
             alert: The alert that was triggered
@@ -132,35 +140,51 @@ class NotificationService:
             crypto_symbol: Symbol of the cryptocurrency
             current_price: Current price
             price_change_24h: 24-hour price change percentage
+            context_articles: List of relevant articles for context (optional)
         """
         if not alert.user or not alert.user.email:
             logger.warning(f"Alert {alert.id} has no associated user or email")
             return
             
-        # Determine direction text
-        if price_change_24h > 0:
-            change_text = f"📈 {abs(price_change_24h):.2f}% increase"
-        else:
-            change_text = f"📉 {abs(price_change_24h):.2f}% decrease"
-            
-        # Prepare template context
-        context = {
-            "username": alert.user.username,
-            "crypto_name": crypto_name,
-            "crypto_symbol": crypto_symbol,
-            "current_price": f"${current_price:,.2f}",
-            "price_change_24h": f"{price_change_24h:+.2f}%",
-            "change_text": change_text,
-            "alert_threshold": f"{alert.threshold_percentage}% {alert.direction}",
-            "unsubscribe_link": f"{settings.BASE_URL}/alerts/{alert.id}/unsubscribe"
-        }
+        # Determine direction and condition
+        direction = "up" if price_change_24h >= 0 else "down"
+        change_text = f"{abs(price_change_24h):.2f}%"
         
-        # Send email
+        # Prepare article data for template
+        articles_data = []
+        if context_articles:
+            for article in context_articles:
+                article_data = {
+                    'title': article.get('title', 'No title'),
+                    'source': article.get('source', 'Unknown source'),
+                    'url': article.get('url', ''),
+                    'published_at': article.get('published_at', ''),
+                    'snippet': article.get('snippet', ''),
+                    'relevance_score': article.get('score', 0)
+                }
+                articles_data.append(article_data)
+        
+        # Log the alert
+        logger.info(
+            f"Sending price alert to {alert.user.email} - "
+            f"{crypto_symbol} {change_text} {direction} - "
+            f"{len(articles_data)} context articles included"
+        )
+        
+        # Send email using the enhanced email service
         await send_price_alert(
-            to_email=alert.user.email,
-            subject=f"🚨 {crypto_symbol} Price Alert: {change_text}",
-            template_name="price_alert.html",
-            context=context
+            to=alert.user.email,
+            user_id=str(alert.user.id) if alert.user else None,
+            user_name=alert.user.username or 'User',
+            crypto_name=crypto_name,
+            crypto_symbol=crypto_symbol,
+            condition=alert.direction,  # 'up' or 'down'
+            threshold=alert.threshold_percentage,
+            current_price=current_price,
+            price_change_24h=price_change_24h,
+            news_articles=articles_data[:5],  # Limit to top 5 articles
+            dashboard_url=f"{settings.BASE_URL.rstrip('/')}/dashboard",
+            settings_url=f"{settings.BASE_URL.rstrip('/')}/settings/alerts"
         )
         
         logger.info(f"Sent price alert email to {alert.user.email} for {crypto_symbol} {change_text}")
