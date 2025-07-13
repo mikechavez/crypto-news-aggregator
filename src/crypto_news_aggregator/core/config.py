@@ -4,9 +4,11 @@ from functools import lru_cache
 class Settings(BaseSettings):
     # Core settings
     DEBUG: bool = False
+    TESTING: bool = False
     PROJECT_NAME: str = "Crypto News Aggregator"
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
+    BASE_URL: str = "http://localhost:8001"  # Base URL for generating absolute URLs in emails
 
     # PostgreSQL settings (kept for backward compatibility)
     POSTGRES_SERVER: str = "localhost"
@@ -54,39 +56,39 @@ class Settings(BaseSettings):
     # CORS settings
     CORS_ORIGINS: str = "*"  # In production, replace with specific origins
     
-    # Email settings
-    SMTP_SERVER: str = "smtp.gmail.com"  # Default to Gmail's SMTP server
-    SMTP_PORT: int = 465  # SSL port for Gmail
-    SMTP_USERNAME: str = ""  # Your email username
-    SMTP_PASSWORD: str = ""  # Your email password or app password
-    EMAILS_FROM_EMAIL: str = "noreply@example.com"  # Sender email
-    EMAILS_FROM_NAME: str = "Crypto News Aggregator"  # Sender name
-    SMTP_USERNAME: str = ""
-    SMTP_PASSWORD: str = ""
-    EMAIL_FROM: str = "noreply@example.com"  # Should match SMTP username for most providers
-    EMAIL_FROM_NAME: str = "Crypto News Aggregator"
-    EMAIL_DOMAIN: str = "cryptonewsaggregator.com"  # Used for Message-ID header
-    SUPPORT_EMAIL: str = "support@cryptonewsaggregator.com"
-    ALERT_EMAIL: str = "alerts@cryptonewsaggregator.com"  # Email address to send alerts to
+    # Email Settings
+    SMTP_SERVER: str = "smtp.gmail.com"  # SMTP server address
+    SMTP_PORT: int = 587  # 587 for TLS, 465 for SSL
+    SMTP_USERNAME: str = ""  # SMTP auth username
+    SMTP_PASSWORD: str = ""  # SMTP auth password or app password
+    SMTP_USE_TLS: bool = True  # Use TLS for encryption
+    SMTP_TIMEOUT: int = 10  # Connection timeout in seconds
     
-    # Email tracking settings
+    # Email Sender Information
+    EMAIL_FROM: str = ""  # Sender email address (defaults to SMTP_USERNAME if empty)
+    EMAIL_FROM_NAME: str = "Crypto News Aggregator"  # Sender display name
+    SUPPORT_EMAIL: str = "support@example.com"  # Support contact email
+    ALERT_EMAIL: str = ""  # Email address for receiving test alerts
+    EMAIL_DOMAIN: str = "cryptonewsaggregator.com"  # Domain for Message-ID
+    
+    # Email Tracking & Links
     EMAIL_TRACKING_ENABLED: bool = True
     EMAIL_TRACKING_PIXEL_URL: str = "{BASE_URL}/api/v1/emails/track/open/{message_id}"
     EMAIL_TRACKING_CLICK_URL: str = "{BASE_URL}/api/v1/emails/track/click/{message_id}/{link_hash}"
     EMAIL_UNSUBSCRIBE_URL: str = "{BASE_URL}/api/v1/emails/unsubscribe/{token}"
     
-    # Email rate limiting
+    # Email Rate Limiting
     EMAIL_RATE_LIMIT: int = 100  # Max emails per hour
     EMAIL_RATE_LIMIT_WINDOW: int = 3600  # 1 hour in seconds
     
-    # Email retry settings
-    EMAIL_MAX_RETRIES: int = 3
-    EMAIL_RETRY_DELAY: int = 60  # seconds
+    # Email Retry Settings
+    EMAIL_MAX_RETRIES: int = 3  # Max retry attempts for failed sends
+    EMAIL_RETRY_DELAY: int = 60  # Delay between retries in seconds
     
-    # Price monitoring settings
-    PRICE_CHECK_INTERVAL: int = 300  # 5 minutes in seconds
-    PRICE_CHANGE_THRESHOLD: float = 3.0  # 3% change to trigger alert
-    MIN_ALERT_INTERVAL: int = 1800  # 30 minutes in seconds
+    # Alert Settings
+    ALERT_COOLDOWN_MINUTES: int = 60  # 1 hour between alerts for same condition
+    PRICE_CHECK_INTERVAL: int = 300  # 5 minutes between price checks
+    PRICE_CHANGE_THRESHOLD: float = 1.0  # 1% change to trigger alerts
     
     # CoinGecko API settings
     COINGECKO_API_URL: str = "https://api.coingecko.com/api/v3"

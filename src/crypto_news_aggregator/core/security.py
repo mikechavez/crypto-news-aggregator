@@ -31,9 +31,8 @@ class TokenData(BaseModel):
 class Token(BaseModel):
     """Token response model."""
     access_token: str
-    token_type: str
-    expires_in: int
-    refresh_token: Optional[str] = None
+    token_type: str = "bearer"
+    user_id: str
 
 class TokenPayload(BaseModel):
     """JWT token payload."""
