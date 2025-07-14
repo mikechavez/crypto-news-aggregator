@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, List
 
 from ..services.price_service import price_service
 from ..services.notification_service import notification_service
+from ..services.news_correlator import NewsCorrelator
 from ..core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -118,13 +119,23 @@ class PriceMonitor:
             crypto_id = symbol.lower()  # This should be the CoinGecko ID (e.g., 'bitcoin')
             crypto_name = symbol.capitalize()  # This should be replaced with actual name from CoinGecko
             
-            # Process alerts for this cryptocurrency
+            # Get relevant news articles for this price movement
+            news_correlator = NewsCorrelator()
+            relevant_articles = await news_correlator.get_relevant_news(
+                price_change_percent=abs(change_pct),  # Use absolute value for correlation
+                max_articles=3
+            )
+            
+            logger.info(f"Found {len(relevant_articles)} relevant articles for price movement")
+            
+            # Process alerts with news context
             stats = await notification_service.process_price_alert(
                 crypto_id=crypto_id,
                 crypto_name=crypto_name,
                 crypto_symbol=symbol.upper(),
                 current_price=current_price,
-                price_change_24h=change_pct
+                price_change_24h=change_pct,
+                context_articles=relevant_articles
             )
             
             logger.info(
