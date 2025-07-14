@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Alert
 from ..db.operations.alert import get_active_alerts, update_alert_last_triggered
-from ..services.email_service import send_price_alert
+from ..services.email_service import email_service
 from ..core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -140,41 +140,31 @@ class NotificationService:
             crypto_symbol: Symbol of the cryptocurrency
             current_price: Current price
             price_change_24h: 24-hour price change percentage
-            context_articles: List of relevant articles for context (optional)
+            context_articles: List of relevant articles (optional)
         """
-        if not alert.user or not alert.user.email:
-            logger.warning(f"Alert {alert.id} has no associated user or email")
-            return
-            
-        # Determine direction and condition
-        direction = "up" if price_change_24h >= 0 else "down"
-        change_text = f"{abs(price_change_24h):.2f}%"
+        # Determine the condition text based on alert direction
+        if alert.direction == 'up':
+            change_text = f"rose above ${alert.threshold_percentage:,.2f}"
+        else:  # 'down'
+            change_text = f"fell below ${alert.threshold_percentage:,.2f}"
         
-        # Prepare article data for template
+        # Prepare article data for the email
         articles_data = []
         if context_articles:
             for article in context_articles:
-                article_data = {
+                articles_data.append({
                     'title': article.get('title', 'No title'),
                     'source': article.get('source', 'Unknown source'),
                     'url': article.get('url', ''),
                     'published_at': article.get('published_at', ''),
-                    'snippet': article.get('snippet', ''),
-                    'relevance_score': article.get('score', 0)
-                }
-                articles_data.append(article_data)
+                    'relevance_score': article.get('relevance_score', 0),
+                    'snippet': article.get('snippet', '')
+                })
         
-        # Log the alert
-        logger.info(
-            f"Sending price alert to {alert.user.email} - "
-            f"{crypto_symbol} {change_text} {direction} - "
-            f"{len(articles_data)} context articles included"
-        )
-        
-        # Send email using the enhanced email service
-        await send_price_alert(
+        # Send the email using the email_service instance
+        await email_service.send_price_alert(
             to=alert.user.email,
-            user_id=str(alert.user.id) if alert.user else None,
+            user_id=str(alert.user_id),
             user_name=alert.user.username or 'User',
             crypto_name=crypto_name,
             crypto_symbol=crypto_symbol,
