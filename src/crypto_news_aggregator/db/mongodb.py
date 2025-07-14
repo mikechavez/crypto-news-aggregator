@@ -13,6 +13,29 @@ from functools import lru_cache, wraps
 import logging
 import asyncio
 from contextlib import asynccontextmanager
+from bson import ObjectId
+from pydantic import BaseModel, Field
+
+
+class PyObjectId(ObjectId):
+    """Custom type for MongoDB ObjectId that works with Pydantic v2."""
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v):
+        if not ObjectId.is_valid(v):
+            raise ValueError("Invalid ObjectId")
+        return ObjectId(v)
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, field_schema):
+        field_schema.update(type="string", format="objectid")
+
+
+# Add PyObjectId to the module's __all__ for better import handling
+__all__ = ["PyObjectId"]
 
 from ..core.config import get_settings
 from .mongodb_models import ARTICLE_INDEXES, ALERT_INDEXES
