@@ -18,7 +18,7 @@ from ..core.config import get_settings
 logger = logging.getLogger(__name__)
 
 # Get settings
-settings = get_settings()
+# settings = get_settings()  # Removed top-level settings; use lazy initialization in functions as needed.
 
 # Constants
 DEFAULT_PAGE_SIZE = 100

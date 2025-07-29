@@ -2,6 +2,11 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 
 class Settings(BaseSettings):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        import logging
+        logging.info(f"[DEBUG_SETTINGS_FIELDS] {dir(self)}")
+        logging.info(f"[DEBUG_SETTINGS_DICT] {self.__dict__}")
     # Core settings
     DEBUG: bool = False
     TESTING: bool = False
@@ -19,7 +24,9 @@ class Settings(BaseSettings):
     
     # MongoDB settings
     MONGODB_URI: str = ""  # e.g., "mongodb+srv://<username>:<password>@<cluster>.mongodb.net/"
-    MONGODB_NAME: str = "crypto_news"  # Default database name
+    MONGODB_NAME: str = "crypto_news"
+    MONGODB_MAX_POOL_SIZE: int = 10  # Default pool size for MongoDB connections
+    MONGODB_MIN_POOL_SIZE: int = 1   # Default min pool size for MongoDB connections  # Default database name
     
     # For backward compatibility
     DATABASE_URL: str = POSTGRES_URL
@@ -119,12 +126,18 @@ class Settings(BaseSettings):
     # Database sync settings
     ENABLE_DB_SYNC: bool = False  # Enable/disable database synchronization
 
-    class Config:
-        env_file = ".env"
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "env_prefix": ""
+    }
 
 @lru_cache()
 def get_settings():
-    return Settings()
+    s = Settings()
+    import logging
+    logging.info(f"[DEBUG_SETTINGS] Loaded Settings: {s.dict()}")
+    return s
 
 # Create a settings instance for direct import
-settings = get_settings()
+# settings = get_settings()  # Removed top-level settings; use lazy initialization in functions as needed.

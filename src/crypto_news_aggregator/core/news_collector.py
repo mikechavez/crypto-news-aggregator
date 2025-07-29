@@ -30,7 +30,7 @@ MAX_RETRIES = 3
 NEWS_API_MAX_PAGES = 5  # Maximum number of pages to fetch per source
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
+# settings = get_settings()  # Removed top-level settings; use lazy initialization in functions as needed.
 
 def retry_with_backoff(retries: int = 3, backoff_in_seconds: float = 1.0):
     """Retry decorator with exponential backoff.

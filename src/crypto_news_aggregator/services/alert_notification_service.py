@@ -7,20 +7,22 @@ from typing import Dict, List, Optional, Any, Tuple
 
 from ..models.alert import AlertInDB, AlertStatus, AlertUpdate
 from ..services.price_service import price_service
-from ..services.alert_service import alert_service
+from ..services.alert_service import AlertService, alert_service
 from ..services.email_service import email_service
-from ..core.config import settings
+from ..core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 class AlertNotificationService:
     """Service for managing and sending price alert notifications."""
     
-    def __init__(self):
+    def __init__(self, alert_service: AlertService):
+        self.alert_service = alert_service
+        settings = get_settings()
         self.min_alert_interval = timedelta(
             minutes=getattr(settings, 'MIN_ALERT_INTERVAL_MINUTES', 15)
         )
-    
+
     async def check_and_send_alerts(self) -> Tuple[int, int]:
         """
         Check all active alerts and send notifications for triggered ones.
@@ -30,41 +32,48 @@ class AlertNotificationService:
         """
         try:
             # Get all active alerts
-            active_alerts = await alert_service.get_active_alerts()
-            logger.info(f"Found {len(active_alerts)} active alerts to process")
-            
+            active_alerts = await self.alert_service.get_active_alerts()
+            logger.info(f"[PIPELINE] Found {len(active_alerts)} active alerts to process")
+        
             sent_count = 0
             processed_count = 0
-            
+        
             for alert in active_alerts:
                 try:
+                    logger.info(f"[PIPELINE] Processing alert: {alert}")
                     processed_count += 1
-                    
+                
                     # Check if alert is ready to be sent (respecting cooldown)
                     if not self._is_alert_ready(alert):
+                        logger.info(f"[PIPELINE] Alert {alert.id} not ready due to cooldown.")
                         continue
-                    
+                
                     # Get current price data
                     price_data = await price_service.get_bitcoin_price()
+                    logger.info(f"[PIPELINE] Current price data: {price_data}")
                     if not price_data or 'price' not in price_data:
-                        logger.error("Failed to get current price data")
+                        logger.error("[PIPELINE] Failed to get current price data")
                         continue
-                    
+                
                     current_price = price_data['price']
                     change_24h = price_data.get('change_24h', 0)
-                    
+                
                     # Check if alert condition is met
+                    logger.info(f"[PIPELINE] Checking alert condition for alert {alert.id} at price {current_price}")
                     should_alert, change_percent = await self._check_alert_condition(
                         alert, current_price
                     )
-                    
+                    logger.info(f"[PIPELINE] Alert condition for alert {alert.id}: should_alert={should_alert}, change_percent={change_percent}")
+                
                     if should_alert:
                         # Get relevant news articles based on the price change
                         news_articles = await self._get_relevant_news(
                             price_change_percent=change_percent
                         )
-                        
+                        logger.info(f"[PIPELINE] News articles for alert {alert.id}: {news_articles}")
+                    
                         # Send notification with the relevant news
+                        logger.info(f"[PIPELINE] Sending notification for alert {alert.id}")
                         success = await self._send_alert_notification(
                             alert=alert,
                             current_price=current_price,
@@ -72,16 +81,17 @@ class AlertNotificationService:
                             change_24h=change_24h,
                             news_articles=news_articles
                         )
-                        
+                        logger.info(f"[PIPELINE] Notification send result for alert {alert.id}: {success}")
+                    
                         if success:
                             sent_count += 1
                             # Update alert with last triggered time
                             await self._update_alert_after_notification(alert, current_price)
-                
-                except Exception as e:
-                    logger.error(f"Error processing alert {alert.id}: {e}", exc_info=True)
             
-            logger.info(f"Processed {processed_count} alerts, sent {sent_count} notifications")
+                except Exception as e:
+                    logger.error(f"[PIPELINE] Error processing alert {alert.id}: {e}", exc_info=True)
+        
+            logger.info(f"[PIPELINE] Processed {processed_count} alerts, sent {sent_count} notifications")
             return processed_count, sent_count
             
         except Exception as e:
@@ -240,7 +250,7 @@ class AlertNotificationService:
         """Update alert after sending a notification."""
         try:
             # Update the alert using the service with direct parameters
-            await alert_service.update_alert(
+            await self.alert_service.update_alert(
                 alert_id=str(alert.id),
                 user_id=alert.user_id,
                 last_triggered=datetime.now(timezone.utc),
@@ -251,5 +261,8 @@ class AlertNotificationService:
             logger.error(f"Error updating alert {alert.id}: {e}", exc_info=True)
 
 
-# Singleton instance
-alert_notification_service = AlertNotificationService()
+# Create a single instance of the service
+alert_notification_service = AlertNotificationService(alert_service=alert_service)
+
+
+

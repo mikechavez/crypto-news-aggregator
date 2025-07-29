@@ -9,17 +9,22 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, ValidationError
 
-from ..core.config import settings
+from ..core.config import get_settings  # Use lazy initialization for settings
 from ..models.user import User as UserModel
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # OAuth2 scheme for token authentication
-oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl=f"{settings.API_V1_STR}/auth/login",
-    auto_error=False
-)
+def get_oauth2_scheme():
+    settings = get_settings()
+    return OAuth2PasswordBearer(
+        tokenUrl=f"{settings.API_V1_STR}/auth/login",
+        auto_error=False
+    )
+
+# Use this in dependencies:
+oauth2_scheme = get_oauth2_scheme()
 
 class TokenData(BaseModel):
     """Token data model."""
@@ -86,6 +91,7 @@ def create_access_token(
     Returns:
         str: Encoded JWT token
     """
+    settings = get_settings()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
@@ -121,6 +127,7 @@ def create_refresh_token(
     Returns:
         str: Encoded JWT refresh token
     """
+    settings = get_settings()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
@@ -162,6 +169,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     
+    settings = get_settings()
     try:
         payload = jwt.decode(
             token,

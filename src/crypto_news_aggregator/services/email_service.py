@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from bson import ObjectId
 
-from ..core.config import settings
+from ..core.config import get_settings
 from ..db.mongodb import get_mongodb
 from ..db.mongodb_models import EmailEvent, EmailEventType, EmailTracking
 from ..utils.template_renderer import template_renderer
@@ -35,6 +35,7 @@ class EmailService:
     """
 
     def __init__(self):
+        settings = get_settings()
         self.smtp_server = settings.SMTP_SERVER
         self.smtp_port = settings.SMTP_PORT
         self.smtp_username = settings.SMTP_USERNAME
@@ -240,6 +241,7 @@ class EmailService:
         track: bool = True,
     ) -> bool:
         """Sends a price alert email to the user."""
+        settings = get_settings()
         if not hasattr(settings, 'BASE_URL'):
             settings.BASE_URL = 'http://localhost:8000'
 

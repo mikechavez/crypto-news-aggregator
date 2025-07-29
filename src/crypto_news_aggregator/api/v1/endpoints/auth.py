@@ -7,7 +7,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.crypto_news_aggregator.core import security
-from src.crypto_news_aggregator.core.config import settings
+from src.crypto_news_aggregator.core.config import get_settings
 from src.crypto_news_aggregator.core.security import Token, TokenData
 from src.crypto_news_aggregator.db.session import get_session
 from src.crypto_news_aggregator.models.user_sql import UserSQL, UserCreateSQL
@@ -87,6 +87,7 @@ async def login_for_access_token(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email not verified. Please check your email for the verification link.",
         )
+    settings = get_settings()
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(
         subject=str(user.id), expires_delta=access_token_expires
@@ -127,6 +128,7 @@ async def refresh_access_token(
     
     try:
         # Verify refresh token
+        settings = get_settings()
         payload = security.jwt.decode(
             refresh_token,
             settings.SECRET_KEY,

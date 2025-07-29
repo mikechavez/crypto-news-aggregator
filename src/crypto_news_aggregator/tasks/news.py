@@ -10,7 +10,7 @@ from ..core.news_collector import NewsCollector
 from ..core.config import get_settings
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
+# settings = get_settings()  # Removed top-level settings; use lazy initialization in functions as needed.
 
 @shared_task(
     bind=True,

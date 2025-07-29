@@ -4,25 +4,33 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 
 from src.crypto_news_aggregator.core import security
-from src.crypto_news_aggregator.core.config import settings
+from src.crypto_news_aggregator.core.config import get_settings
 from src.crypto_news_aggregator.models.user import User as UserModel
 
 # Create a new router for v1 endpoints
-router = APIRouter(prefix=settings.API_V1_STR)
+def get_router():
+    settings = get_settings()
+    return APIRouter(prefix=settings.API_V1_STR)
+
+router = get_router()
 
 # Import all the v1 routes
 from . import articles, sources, health, tasks
 from .endpoints import price, emails, auth
 
 # Import test endpoints (only in debug mode)
-if settings.DEBUG or settings.TESTING:
+if get_settings().DEBUG or get_settings().TESTING:
     from .endpoints import test_alerts
 
 # OAuth2 scheme for token authentication
-oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl=f"{settings.API_V1_STR}/auth/login",
-    auto_error=False
-)
+def get_oauth2_scheme():
+    settings = get_settings()
+    return OAuth2PasswordBearer(
+        tokenUrl=f"{settings.API_V1_STR}/auth/login",
+        auto_error=False
+    )
+
+oauth2_scheme = get_oauth2_scheme()
 
 # Public routes (no authentication required)
 router.include_router(health.router, tags=["health"])
@@ -36,7 +44,7 @@ protected_router.include_router(tasks.router, prefix="", tags=["tasks"])
 protected_router.include_router(price.router, prefix="/price", tags=["price"])
 
 # Include test endpoints only in debug mode
-if settings.DEBUG or settings.TESTING:
+if get_settings().DEBUG or get_settings().TESTING:
     protected_router.include_router(test_alerts.router, prefix="/test", tags=["test"])
 
 # Email tracking endpoints (partially public - some endpoints don't require auth)

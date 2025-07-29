@@ -84,8 +84,8 @@ class RedisRESTClient:
             return False
 
 # Create a singleton instance
-settings = get_settings()
+# settings = get_settings()  # Removed top-level settings; use lazy initialization below
 redis_client = RedisRESTClient(
-    base_url=settings.UPSTASH_REDIS_REST_URL,
-    token=settings.UPSTASH_REDIS_TOKEN
+    base_url=get_settings().UPSTASH_REDIS_REST_URL,
+    token=get_settings().UPSTASH_REDIS_TOKEN
 )
