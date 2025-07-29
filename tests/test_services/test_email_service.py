@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 from src.crypto_news_aggregator.services.email_service import EmailService, email_service
 from src.crypto_news_aggregator.db.mongodb_models import EmailEventType
-from src.crypto_news_aggregator.core.config import settings
+from src.crypto_news_aggregator.core.config import get_settings
 
 # Test data
 TEST_USER_ID = "507f1f77bcf86cd799439011"
@@ -146,6 +146,7 @@ class TestEmailService:
         assert message_id is not None
         
         # Check that the SMTP server was called
+        settings = get_settings()
         mock_smtp.assert_called_once_with(settings.SMTP_SERVER, settings.SMTP_PORT)
         mock_server.login.assert_called_once()
         mock_server.send_message.assert_called_once()

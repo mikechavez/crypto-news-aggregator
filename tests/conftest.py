@@ -1,3 +1,7 @@
+import os
+os.environ.setdefault("MONGODB_URI", "mongodb://localhost:27017/test_crypto_news_aggregator")
+os.environ.setdefault("MONGODB_NAME", "test_crypto_news_aggregator")
+
 """Pytest configuration and fixtures for testing the Crypto News Aggregator."""
 import asyncio
 import logging
@@ -15,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, c
 from sqlalchemy.orm import sessionmaker
 from src.crypto_news_aggregator.core.config import get_settings
 from src.crypto_news_aggregator.db.session import get_session
+from src.crypto_news_aggregator.services.user_service import UserService
+from src.crypto_news_aggregator.services.alert_service import AlertService
 
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -26,8 +32,13 @@ from src.crypto_news_aggregator.core.config import Settings
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Define a constant for the test API key
+TEST_API_KEY = "testapikey123"
+
 # Create a test settings class that inherits from Settings
 class TestSettings(Settings):
+    API_KEYS: str = "testapikey123"
+
     # Core settings
     TESTING: bool = True
     PROJECT_NAME: str = "Crypto News Aggregator Test"
@@ -41,6 +52,7 @@ class TestSettings(Settings):
     # MongoDB settings
     MONGODB_URI: str = "mongodb://localhost:27017"
     MONGODB_NAME: str = "test_news_aggregator"
+    MONGODB_URI_SYNC: str = "mongodb://localhost:27017/test_news_aggregator_sync"
     
     # News API settings
     NEWS_API_KEY: str = "test_api_key"
@@ -113,21 +125,20 @@ class TestSettings(Settings):
                 
         super().__init__(**data)
 
-# Override the get_settings function to return our test settings
 def get_test_settings():
     return TestSettings()
 
-# Get test settings instance
-settings = get_test_settings()
-
-# Configure test databases
-TEST_DATABASE_URL = settings.DATABASE_URL
-TEST_MONGODB_URI = settings.MONGODB_URI
-TEST_MONGODB_DB = settings.MONGODB_NAME
-
 # Ensure the settings are properly set for testing
-os.environ["MONGODB_URI"] = TEST_MONGODB_URI
-os.environ["MONGODB_NAME"] = TEST_MONGODB_DB
+os.environ["MONGODB_URI"] = "mongodb://localhost:27017"
+os.environ["MONGODB_NAME"] = "test_news_aggregator"
+
+# Import the FastAPI app
+from src.crypto_news_aggregator.main import app
+
+# Override the settings with our test settings
+# This ensures that any part of the app that calls get_settings()
+# will receive the test settings.
+app.dependency_overrides[get_settings] = get_test_settings
 
 # Now import the rest of the application
 from src.crypto_news_aggregator.db.base import Base
@@ -141,8 +152,7 @@ Base.metadata.clear()
 # Import models after clearing metadata
 from src.crypto_news_aggregator.db import models
 
-# Import the FastAPI app after models to ensure tables are defined
-from src.crypto_news_aggregator.main import app
+
 
 # MongoDB client for testing
 @pytest_asyncio.fixture(scope="function")
@@ -338,33 +348,32 @@ async def db_session(db_connection: AsyncConnection) -> AsyncGenerator[AsyncSess
 @pytest.fixture
 def override_get_db(db_session: AsyncSession):
     """Override the get_db dependency for testing."""
-    async def _get_db():
-        try:
-            yield db_session
-        finally:
-            pass  # Don't close the session here, let the fixture handle it
-    
-    return _get_db
+    def _get_db():
+        yield db_session
 
-# Set test API key at module level to ensure it's available when the app starts
-# Using a key that matches the format expected by the auth middleware
-TEST_API_KEY = "testapikey123"
-
-# Set the API key in the environment before any app initialization
-os.environ["API_KEYS"] = TEST_API_KEY
-
-# Create a test settings class that includes the API key
-class TestSettingsWithAPIKey(Settings):
-    API_KEYS: str = TEST_API_KEY
-    
-    class Config:
-        env_file = None  # Prevent loading .env file in tests
-
-# Override the settings with our test settings
-app.dependency_overrides[get_settings] = lambda: TestSettingsWithAPIKey()
+    app.dependency_overrides[get_session] = _get_db
+    yield
+    app.dependency_overrides.clear()
 
 @pytest.fixture
-def client(db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
+def mock_user_service() -> UserService:
+    """Mock the user service for testing."""
+    from unittest.mock import AsyncMock
+    return AsyncMock(spec=UserService)
+
+@pytest.fixture
+def mock_alert_service() -> AlertService:
+    """Mock the alert service for testing."""
+    from unittest.mock import AsyncMock
+    return AsyncMock(spec=AlertService)
+
+@pytest.fixture
+def client(
+    db_session: AsyncSession, 
+    monkeypatch: pytest.MonkeyPatch,
+    mock_user_service: UserService,
+    mock_alert_service: AlertService
+) -> Generator[TestClient, None, None]:
     """
     Create a test client that uses the test database session.
 
@@ -372,10 +381,14 @@ def client(db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> Generat
     1. The test client uses a non-persistent, in-memory database.
     2. The API key is properly configured for authenticated requests.
     """
-    async def override_get_session() -> AsyncGenerator[AsyncSession, None]:
+    TEST_API_KEY = "testapikey123"
+
+    def override_get_session() -> Generator[AsyncSession, None, None]:
         yield db_session
 
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[UserService] = lambda: mock_user_service
+    app.dependency_overrides[AlertService] = lambda: mock_alert_service
 
     monkeypatch.setenv("API_KEYS", TEST_API_KEY)
 
@@ -423,13 +436,21 @@ def mock_article_data() -> Dict[str, Any]:
 pytest_plugins = ('pytest_asyncio',)
 
 @pytest.fixture(scope='session', autouse=True)
-def configure_celery_for_tests():
-    """Configure Celery for testing before any tests run."""
-    # This runs before any tests, so we can configure Celery here
+def configure_test_environment():
+    """Configure the test environment before any tests run."""
     import os
     from celery import current_app
+
+    # Set environment variables for the entire test session
+    os.environ['TESTING'] = 'True'
+    os.environ['MONGODB_URI'] = 'mongodb://localhost:27017/test_crypto_news_aggregator'
+    os.environ['MONGODB_NAME'] = 'test_crypto_news_aggregator'
+    os.environ['REDIS_URL'] = 'redis://localhost:6379/1'  # Use a different DB for tests
+    os.environ['NEWS_API_KEY'] = 'test-api-key'
+    os.environ['SECRET_KEY'] = 'test-secret-key-for-session'
+    os.environ['API_KEYS'] = 'testapikey123'
     
-    # Set test configuration in environment
+    # Configure Celery for testing
     os.environ['CELERY_BROKER_URL'] = 'memory://'
     os.environ['CELERY_RESULT_BACKEND'] = 'cache+memory://'
     os.environ['CELERY_TASK_ALWAYS_EAGER'] = 'True'

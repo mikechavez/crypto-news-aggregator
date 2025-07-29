@@ -14,8 +14,6 @@ from crypto_news_aggregator.core.news_collector import NewsCollector
 from crypto_news_aggregator.db.models import Article, Source
 from crypto_news_aggregator.core.config import get_settings
 
-# Get settings
-settings = get_settings()
 
 # Create a mock ArticleService class
 class MockArticleService:

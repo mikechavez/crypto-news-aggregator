@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from ..core.config import settings
+from ..core.config import get_settings
 from .template_filters import template_filters
 
 class TemplateRenderer:
@@ -29,9 +29,10 @@ class TemplateRenderer:
         self.env.globals['now'] = datetime.utcnow
         
         # Add global template variables
+        settings = get_settings()
         self.globals = {
             'app_name': 'Crypto News Aggregator',
-            'base_url': settings.BASE_URL if hasattr(settings, 'BASE_URL') else 'http://localhost:8000',
+            'base_url': settings.BASE_URL,
             'current_year': 2025  # This will be updated with actual year at runtime
         }
     
@@ -64,7 +65,7 @@ class TemplateRenderer:
         context['current_year'] = datetime.now().year
         
         # Add settings to context
-        context['settings'] = settings
+        context['settings'] = get_settings()
         
         # Render the template
         template = self.env.get_template(template_name)
