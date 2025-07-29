@@ -12,7 +12,7 @@ from ..core.news_sources import create_source, get_available_sources
 from ..services.article_service import ArticleService, get_article_service
 
 logger = get_task_logger(__name__)
-settings = get_settings()
+# settings = get_settings()  # Removed top-level settings; use lazy initialization in functions as needed.
 
 async def fetch_articles_from_source(
     source_id: str,

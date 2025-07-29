@@ -3,11 +3,14 @@ from celery.schedules import crontab
 from ..core.config import get_settings
 from .beat_schedule import get_schedule
 
-settings = get_settings()
+# settings = get_settings()  # Removed top-level settings; use lazy initialization in functions as needed.
 
 # Broker and result backend settings
-broker_url = settings.CELERY_BROKER_URL
-result_backend = settings.CELERY_RESULT_BACKEND
+def get_broker_url():
+    return get_settings().CELERY_BROKER_URL
+
+def get_result_backend():
+    return get_settings().CELERY_RESULT_BACKEND
 
 # Task settings
 task_serializer = 'json'
@@ -57,15 +60,17 @@ task_routes = {
 }
 
 # Beat settings
-beat_schedule = get_schedule()
-beat_schedule.update({
-    # Keep any existing schedules that aren't in our dynamic schedule
-    'update-trends-every-6-hours': {
-        'task': 'crypto_news_aggregator.tasks.trends.update_trends',
-        'schedule': crontab(minute=0, hour='*/6'),  # Run every 6 hours
-        'options': {
-            'expires': 3600,  # 1 hour
-            'time_limit': 1800,  # 30 minutes
+def get_beat_schedule():
+    schedule = get_schedule()
+    schedule.update({
+        # Keep any existing schedules that aren't in our dynamic schedule
+        'update-trends-every-6-hours': {
+            'task': 'crypto_news_aggregator.tasks.trends.update_trends',
+            'schedule': crontab(minute=0, hour='*/6'),  # Run every 6 hours
+            'options': {
+                'expires': 3600,  # 1 hour
+                'time_limit': 1800,  # 30 minutes
+            },
         },
-    },
-})
+    })
+    return schedule

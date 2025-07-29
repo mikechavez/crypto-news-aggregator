@@ -10,7 +10,7 @@ from ..db.models import Article, Trend, Sentiment
 from ..core.config import get_settings
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
+# settings = get_settings()  # Removed top-level settings; use lazy initialization in functions as needed.
 
 @shared_task
 def update_trends(time_window: str = "24h"):

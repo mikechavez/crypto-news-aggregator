@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional, List
 from ..services.price_service import price_service
 from ..services.notification_service import notification_service
 from ..services.news_correlator import NewsCorrelator
-from ..core.config import settings
+from ..core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ class PriceMonitor:
     
     async def start(self):
         """Start the price monitoring service."""
+        settings = get_settings()
         if self.is_running:
             logger.warning("Price monitor is already running")
             return
@@ -54,6 +55,7 @@ class PriceMonitor:
     
     async def _check_prices(self):
         """Check prices and trigger alerts if needed."""
+        settings = get_settings()
         symbol = 'bitcoin'  # Hardcoded for now
         price_data = await price_service.get_bitcoin_price()
         current_price = price_data.get('price')
