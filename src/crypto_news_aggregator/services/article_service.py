@@ -21,7 +21,7 @@ from ..db.mongodb import mongo_manager, COLLECTION_ARTICLES
 from ..core.config import get_settings
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
+# settings = get_settings()  # Removed top-level settings; use lazy initialization in methods as needed.
 
 class ArticleService:
     """Service for handling article operations."""

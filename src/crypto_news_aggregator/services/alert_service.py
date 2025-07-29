@@ -8,7 +8,7 @@ from bson import ObjectId
 
 from ..models.alert import AlertInDB, AlertCreate, AlertUpdate, AlertStatus
 from ..db.mongodb import mongo_manager, COLLECTION_ALERTS
-from ..core.config import settings
+from ..core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +46,19 @@ class AlertService:
         alert_dict.update({
             "created_at": now,
             "updated_at": now,
-            "status": AlertStatus.ACTIVE.value
+            "status": AlertStatus.ACTIVE.value,
+            "last_triggered_price": alert_dict.get('initial_price')
         })
+        
+        logger.info(f"[CREATE_ALERT] Creating alert with data: {alert_dict}")
+        
+        # Clean up initial_price if it exists
+        alert_dict.pop('initial_price', None)
         
         result = await collection.insert_one(alert_dict)
         created_alert = await collection.find_one({"_id": result.inserted_id})
+        
+        logger.info(f"[CREATE_ALERT] Alert created in DB: {created_alert}")
         
         # Convert ObjectId to string for Pydantic model
         if created_alert and "_id" in created_alert:
@@ -66,18 +74,20 @@ class AlertService:
             List[AlertInDB]: List of active alerts
         """
         collection = await self._get_collection()
+        logger.info("[GET_ACTIVE_ALERTS] Querying for alerts with is_active=True")
         cursor = collection.find({
-            "status": AlertStatus.ACTIVE.value
+            "is_active": True
         })
         
         alerts = []
         async for doc in cursor:
+            logger.info(f"[GET_ACTIVE_ALERTS] Retrieved alert doc: {doc}")
             # Convert ObjectId to string for Pydantic model
             if "_id" in doc:
                 doc["id"] = str(doc["_id"])
                 del doc["_id"]
             alerts.append(AlertInDB(**doc))
-            
+        logger.info(f"[GET_ACTIVE_ALERTS] Returning {len(alerts)} active alerts")
         return alerts
         
     async def update_alert(
@@ -286,5 +296,8 @@ class AlertService:
         )
 
 
-# Singleton instance
+# Create a single instance of the service
 alert_service = AlertService()
+
+
+

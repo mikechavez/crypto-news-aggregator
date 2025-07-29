@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..db.models import Alert
 from ..db.operations.alert import get_active_alerts, update_alert_last_triggered
 from ..services.email_service import email_service
-from ..core.config import settings
+from ..core.config import get_settings
 
 logger = logging.getLogger(__name__)
 

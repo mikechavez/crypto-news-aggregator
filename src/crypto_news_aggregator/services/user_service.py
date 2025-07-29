@@ -7,9 +7,9 @@ from uuid import uuid4
 from bson import ObjectId
 from passlib.context import CryptContext
 
-from ..core.config import settings
+from ..core.config import get_settings
 from ..core.security import create_access_token, get_password_hash, verify_password
-from ..db.mongodb import get_database
+from ..db.mongodb import get_mongodb
 from ..models.user import (
     UserInDB,
     UserCreate,
@@ -28,11 +28,18 @@ class UserService:
     
     def __init__(self):
         self.collection_name = "users"
-        self.db = get_database()
+        self._db = None  # Will be set asynchronously
     
     async def _get_collection(self):
-        """Get the users collection."""
-        return self.db[self.collection_name]
+        """Get the users collection (async Motor)."""
+        import logging
+        if self._db is None:
+            self._db = await get_mongodb()
+            logging.warning(f"[UserService._get_collection] Acquired async DB: type={type(self._db)}, value={self._db}")
+        collection = self._db[self.collection_name]
+        collection = self.db[self.collection_name]
+        logging.warning(f"[UserService._get_collection] collection type: {type(collection)}, value: {collection}")
+        return collection
     
     async def get_by_id(self, user_id: str) -> Optional[UserInDB]:
         """Get a user by ID."""
@@ -339,5 +346,4 @@ class UserService:
         return result.modified_count == 1
 
 
-# Create a singleton instance
-user_service = UserService()
+

@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 
 from ..models.article import ArticleInDB
 from ..db.mongodb import mongo_manager, COLLECTION_ARTICLES
-from ..core.config import settings
+from ..core.config import get_settings
 
 logger = logging.getLogger(__name__)
 

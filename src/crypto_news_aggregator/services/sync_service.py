@@ -16,7 +16,7 @@ from .article_service import article_service
 from ..core.config import get_settings
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
+# settings = get_settings()  # Removed top-level settings; use lazy initialization in methods as needed.
 
 class SyncService:
     """Service for synchronizing data between PostgreSQL and MongoDB."""
