@@ -13,7 +13,6 @@ from .core.config import get_settings
 from .core.auth import get_api_key, API_KEY_NAME
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,6 +21,8 @@ async def lifespan(app: FastAPI):
     logger.info("Starting application...")
     
     # Start the sync scheduler if enabled
+    from .core.config import get_settings
+    settings = get_settings()
     if settings.ENABLE_DB_SYNC:
         logger.info("Starting database synchronization task...")
         await sync_scheduler.start()
@@ -42,6 +43,8 @@ async def lifespan(app: FastAPI):
         await price_monitor.stop()
 
     # Stop the sync scheduler if it's running
+    from .core.config import get_settings
+    settings = get_settings()
     if settings.ENABLE_DB_SYNC and sync_scheduler._task and not sync_scheduler._task.done():
         logger.info("Stopping database synchronization task...")
         await sync_scheduler.stop()

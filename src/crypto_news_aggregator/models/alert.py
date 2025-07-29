@@ -50,7 +50,7 @@ class AlertBase(BaseModel):
 
 class AlertCreate(AlertBase):
     """Model for creating a new alert."""
-    pass
+    initial_price: Optional[float] = Field(None, description="Initial price to set for the first alert check")
 
 
 class AlertUpdate(BaseModel):
