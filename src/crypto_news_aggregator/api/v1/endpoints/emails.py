@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from bson import ObjectId
 from pydantic import BaseModel
 
-from ....core.config import settings
+from ....core.config import get_settings
 from ....db.mongodb import mongo_manager, get_mongodb
 from ....models.user import User, UserInDB, UserUpdate
 from ....services.email_service import email_service

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Backgrou
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import EmailStr, HttpUrl
 
-from ....core.config import settings
+from ....core.config import get_settings
 from ....core.security import (
     create_access_token,
     get_current_active_user,
@@ -23,20 +23,24 @@ from ....models.user import (
     UnsubscribeRequest,
     UserSubscriptionPreferences,
 )
-from ....services.user_service import user_service
+from ....services.user_service import UserService
 from ....services.email_service import email_service
 from ....core.templates import templates
 
 router = APIRouter()
 
 # Token expiration times
-ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+def get_access_token_expiry():
+    settings = get_settings()
+    return settings.ACCESS_TOKEN_EXPIRE_MINUTES
+
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(
     user_in: UserCreate,
     background_tasks: BackgroundTasks,
-    request: Request
+    request: Request,
+    user_service: UserService = Depends(UserService)
 ) -> Any:
     """
     Register a new user.
@@ -68,7 +72,9 @@ async def register_user(
 
 @router.post("/login", response_model=Token)
 async def login_for_access_token(
-    form_data: OAuth2PasswordRequestForm = Depends()
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    user_service: UserService = Depends(UserService)
 ) -> Dict[str, str]:
     """
     OAuth2 compatible token login, get an access token for future requests.
@@ -87,7 +93,7 @@ async def login_for_access_token(
             detail="Inactive user"
         )
     
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=get_access_token_expiry())
     access_token = create_access_token(
         data={"sub": user.email, "user_id": str(user.id)},
         expires_delta=access_token_expires
@@ -110,7 +116,8 @@ async def read_users_me(
 @router.put("/me", response_model=UserResponse)
 async def update_user_me(
     user_update: UserUpdate,
-    current_user: UserInDB = Depends(get_current_active_user)
+    current_user: UserInDB = Depends(get_current_active_user),
+    user_service: UserService = Depends(UserService)
 ) -> Any:
     """
     Update current user information.
@@ -127,7 +134,8 @@ async def update_user_me(
 async def request_password_reset(
     email: EmailStr,
     background_tasks: BackgroundTasks,
-    request: Request
+    request: Request,
+    user_service: UserService = Depends(UserService)
 ) -> Dict[str, str]:
     """
     Request a password reset email.
@@ -153,7 +161,8 @@ async def request_password_reset(
 @router.post("/password/reset")
 async def reset_password(
     token: str,
-    new_password: str
+    new_password: str,
+    user_service: UserService = Depends(UserService)
 ) -> Dict[str, str]:
     """
     Reset password using a valid reset token.
@@ -168,7 +177,8 @@ async def reset_password(
 
 @router.post("/verify-email")
 async def verify_email(
-    verification: EmailVerificationRequest
+    verification: EmailVerificationRequest,
+    user_service: UserService = Depends(UserService)
 ) -> Dict[str, str]:
     """
     Verify user's email using the verification token.
@@ -185,7 +195,8 @@ async def verify_email(
 async def resend_verification(
     email: EmailStr,
     background_tasks: BackgroundTasks,
-    request: Request
+    request: Request,
+    user_service: UserService = Depends(UserService)
 ) -> Dict[str, str]:
     """
     Resend email verification.
@@ -221,7 +232,8 @@ async def resend_verification(
 
 @router.post("/unsubscribe")
 async def unsubscribe(
-    unsubscribe_req: UnsubscribeRequest
+    unsubscribe_req: UnsubscribeRequest,
+    user_service: UserService = Depends(UserService)
 ) -> Dict[str, str]:
     """
     Unsubscribe from emails.
@@ -254,7 +266,8 @@ async def get_subscription_preferences(
 @router.put("/subscription-preferences", response_model=UserSubscriptionPreferences)
 async def update_subscription_preferences(
     preferences: UserSubscriptionPreferences,
-    current_user: UserInDB = Depends(get_current_active_user)
+    current_user: UserInDB = Depends(get_current_active_user),
+    user_service: UserService = Depends(UserService)
 ) -> Any:
     """
     Update current user's email subscription preferences.
@@ -274,7 +287,8 @@ async def update_subscription_preferences(
 @router.get("/", response_model=List[UserResponse], dependencies=[Depends(get_current_active_superuser)])
 async def list_users(
     skip: int = 0,
-    limit: int = 100
+    limit: int = 100,
+    user_service: UserService = Depends(UserService)
 ) -> Any:
     """
     Retrieve users (admin only).
@@ -284,7 +298,8 @@ async def list_users(
 
 @router.get("/{user_id}", response_model=UserResponse, dependencies=[Depends(get_current_active_superuser)])
 async def get_user(
-    user_id: str
+    user_id: str,
+    user_service: UserService = Depends(UserService)
 ) -> Any:
     """
     Get a specific user by ID (admin only).
@@ -299,7 +314,8 @@ async def get_user(
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(get_current_active_superuser)])
 async def delete_user(
-    user_id: str
+    user_id: str,
+    user_service: UserService = Depends(UserService)
 ) -> None:
     """
     Delete a user (admin only).
