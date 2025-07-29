@@ -19,7 +19,7 @@ async def get_active_alerts(db: AsyncSession) -> List[Alert]:
     """
     result = await db.execute(
         select(Alert)
-        .where(Alert.active == True)  # noqa: E712
+        .where(Alert.is_active == True)  # noqa: E712
         .options(selectinload(Alert.user))
     )
     return result.scalars().all()

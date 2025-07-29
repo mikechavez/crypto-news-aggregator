@@ -130,38 +130,40 @@ class AlertStatus(str, Enum):
 
 # Indexes to be created on MongoDB collections
 PRICE_HISTORY_INDEXES = [
-    # Compound index for querying price history by cryptocurrency and timestamp
-    [
-        ("cryptocurrency", 1),  # Group by cryptocurrency
-        ("timestamp", -1)       # Sort by timestamp descending (newest first)
-    ],
-    # TTL index to automatically remove old price data (keep 30 days)
-    [
-        ("timestamp", 1),
-        {
-            "expireAfterSeconds": 2592000  # 30 days in seconds
-        }
-    ]
+    {
+        # 'keys' must be a list of tuples: (field, direction)
+        "keys": [("cryptocurrency", 1), ("timestamp", -1)],
+        "name": "crypto_timestamp_compound",
+        "background": True
+    },
+    {
+        # 'keys' must be a list of tuples: (field, direction)
+        "keys": [("timestamp", 1)],
+        "name": "price_history_ttl",
+        "expireAfterSeconds": 2592000,  # 30 days in seconds
+        "background": True
+    }
 ]
 
 ALERT_INDEXES = [
-    # Index for fast lookups by user_id and active status
     {
+        # 'keys' must be a list of tuples: (field, direction)
         "keys": [("user_id", 1), ("is_active", 1)],
         "name": "user_active_alerts",
         "background": True
     },
-    # Index for finding active alerts for a specific cryptocurrency
     {
+        # 'keys' must be a list of tuples: (field, direction)
         "keys": [("crypto_id", 1), ("is_active", 1), ("last_triggered", -1)],
         "name": "crypto_active_alerts",
         "background": True
     },
-    # TTL index for automatically expiring old alerts after 90 days
     {
+        # 'keys' must be a list of tuples: (field, direction)
         "keys": [("created_at", 1)],
         "name": "alert_expiration",
-        "expireAfterSeconds": 90 * 24 * 60 * 60  # 90 days in seconds
+        "expireAfterSeconds": 90 * 24 * 60 * 60,  # 90 days in seconds
+        "background": True
     }
 ]
 
@@ -242,7 +244,11 @@ ARTICLE_INDEXES = [
         "keys": [("title", "text"), ("content", "text"), ("description", "text")],
         "name": "full_text_search",
         "default_language": "english",
-        "weights": {"title": 10, "description": 5, "content": 1}
+        "weights": {
+            "title": 10,
+            "description": 5,
+            "content": 1
+        }
     },
     {
         "keys": [("published_at", -1)],

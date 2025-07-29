@@ -99,18 +99,21 @@ class MongoManager:
                 if cls._instance is None:
                     cls._instance = super(MongoManager, cls).__new__(cls)
                     # Initialize instance variables
-                    cls._instance.settings = get_settings()
+                    cls._instance.settings = None
                     cls._instance._async_client = None
-                    cls._instance._sync_client = None  # Initialize sync client
+                    cls._instance._sync_client = None
                     cls._instance._initialized = False
                     logger.info("MongoDB Manager instance created")
         return cls._instance
     
     def __init__(self):
         """Initialize the MongoDB connection manager."""
-        # All initialization is handled in __new__
         pass
         
+    def _ensure_settings(self):
+        # Always fetch fresh settings to support test overrides and runtime config
+        self.settings = get_settings()
+
     async def initialize(self, force_reconnect: bool = False) -> bool:
         """Initialize the MongoDB connection asynchronously.
         
@@ -125,42 +128,32 @@ class MongoManager:
         """
         async with self._async_lock:
             if self._initialized and not force_reconnect:
-                logger.debug("MongoDB already initialized")
                 return True
-                
-            logger.info("Initializing MongoDB connection...")
-            
-            # Close existing connection if reinitializing
-            if self._async_client is not None:
-                await self.close()
-            
-            # Ensure we have a valid MongoDB URI
-            if not self.settings.MONGODB_URI:
-                self.settings.MONGODB_URI = "mongodb://localhost:27017"
-                logger.warning("MongoDB URI not set, using default: mongodb://localhost:27017")
             
             try:
-                # Create a new async client with connection pooling
+                self._ensure_settings()
+                if not self.settings.MONGODB_URI:
+                    logger.error("MongoDB URI is not configured.")
+                    return False
+
+                logger.info(f"Initializing async MongoDB connection to {self._get_masked_uri()}")
+                
                 self._async_client = AsyncIOMotorClient(
                     self.settings.MONGODB_URI,
-                    maxPoolSize=10,  # Adjust based on your needs
-                    minPoolSize=1,
-                    connectTimeoutMS=5000,  # 5 seconds
-                    serverSelectionTimeoutMS=5000,
-                    socketTimeoutMS=30000,  # 30 seconds
+                    maxPoolSize=self.settings.MONGODB_MAX_POOL_SIZE,
+                    minPoolSize=self.settings.MONGODB_MIN_POOL_SIZE,
+                    io_loop=asyncio.get_event_loop(),
                 )
                 
-                # Test the connection
                 await self._async_client.admin.command('ping')
-                self._initialized = True
-                logger.info("✅ MongoDB connection established successfully")
-                return True
                 
+                self._initialized = True
+                logger.info("Async MongoDB connection initialized successfully.")
+                return True
+
             except Exception as e:
-                self._async_client = None
+                logger.error(f"Failed to initialize async MongoDB connection: {e}")
                 self._initialized = False
-                logger.error(f"❌ Failed to initialize MongoDB: {str(e)}")
-                logger.debug("Stack trace: %s", str(e))
                 return False
 
     async def get_async_client(self) -> AsyncIOMotorClient:
@@ -172,41 +165,33 @@ class MongoManager:
         Raises:
             RuntimeError: If the client cannot be initialized.
         """
-        if not self._initialized:
-            async with self._async_lock:
-                if not self._initialized:  # Double-check after acquiring lock
-                    logger.warning("MongoDB not initialized. Initializing now...")
-                    if not await self.initialize():
-                        raise RuntimeError("Failed to initialize MongoDB client")
-        if self._async_client is None:
-            raise RuntimeError("MongoDB client is not available")
-            
+        if not self._initialized or self._async_client is None:
+            raise RuntimeError(
+                "Async client is not initialized. Call `initialize()` first."
+            )
         return self._async_client
     
     @property
     def sync_client(self) -> MongoClient:
         """Get a synchronous MongoDB client with connection pooling."""
-        if not hasattr(self, '_sync_client') or self._sync_client is None:
-            if not self.settings.MONGODB_URI:
-                raise ValueError("MongoDB URI is not configured")
-                
-            logger.info(f"Creating new sync MongoDB client with URI: {self._get_masked_uri()}")
-            self._sync_client = MongoClient(
-                self.settings.MONGODB_URI,
-                serverSelectionTimeoutMS=5000,  # 5 second timeout
-                connectTimeoutMS=30000,         # 30 second connection timeout
-                socketTimeoutMS=30000,          # 30 second socket timeout
-                maxPoolSize=100,                # Maximum number of connections
-                minPoolSize=10,                 # Minimum number of connections
-                retryWrites=True,               # Enable retryable writes
-                retryReads=True,                # Enable retryable reads
-                maxIdleTimeMS=60000,            # Close idle connections after 60s
-                waitQueueTimeoutMS=10000,        # Max wait time for a connection
-                waitQueueMultiple=10,            # Max number of queued connection requests
-                connect=False,                   # Don't connect immediately - let it connect on first operation
-                appname="crypto-news-aggregator" # Identify the application
-            )
-            logger.info("Created new synchronous MongoDB client")
+        if self._sync_client is None:
+            with self._instance_lock:
+                if self._sync_client is None:
+                    self._ensure_settings()
+                    if not self.settings.MONGODB_URI:
+                        raise ValueError("MongoDB URI is not configured")
+                    
+                    logger.info(f"Creating new sync MongoDB client for URI: {self._get_masked_uri()}")
+                    self._sync_client = MongoClient(
+                        self.settings.MONGODB_URI,
+                        maxPoolSize=self.settings.MONGODB_MAX_POOL_SIZE,
+                        minPoolSize=self.settings.MONGODB_MIN_POOL_SIZE,
+                        waitQueueTimeoutMS=10000,
+                        waitQueueMultiple=10,
+                        connect=False,
+                        appname="crypto-news-aggregator"
+                    )
+                    logger.info("Created new synchronous MongoDB client")
         return self._sync_client
     
     def _get_masked_uri(self) -> str:
@@ -551,6 +536,10 @@ async def get_collection(collection_name: str) -> AsyncIOMotorCollection:
     """Dependency to get an async MongoDB collection."""
     return await mongo_manager.get_async_collection(collection_name)
 
+def get_sync_database() -> Database:
+    """Dependency to get the sync MongoDB database instance."""
+    return mongo_manager.get_database()
+
 async def ensure_indexes():
     """Ensure MongoDB indexes are created on application startup."""
     await mongo_manager.initialize_indexes()
@@ -613,39 +602,3 @@ def get_lifespan():
     
     return lifespan
 
-def cleanup():
-    """Safely clean up resources on application exit."""
-    try:
-        # Get or create an event loop
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Schedule the cleanup to run when the loop is idle
-                asyncio.ensure_future(_cleanup_async(), loop=loop)
-                return
-        except RuntimeError:
-            # No running event loop, create a new one
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        # Run the cleanup in the current loop
-        loop.run_until_complete(_cleanup_async())
-        
-        # Close the loop if we created it
-        if loop.is_running():
-            loop.close()
-            
-    except Exception as e:
-        logger.error(f"Error during cleanup: {e}")
-
-# Register the cleanup function
-atexit.register(cleanup)
-
-async def _cleanup_async():
-    """Asynchronously clean up resources on application exit."""
-    try:
-        # Clean up MongoDB connections
-        await _on_shutdown()
-        logger.info("MongoDB cleanup completed successfully")
-    except Exception as e:
-        logger.error(f"Error during async cleanup: {e}")

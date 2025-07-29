@@ -65,16 +65,14 @@ async def get_user_alerts(
         symbol: Optional symbol to filter by
         
     Returns:
-        Tuple containing:
-            - List of AlertModel objects
-            - Total count of alerts matching the filters
+        Tuple containing a list of alerts and the total count
     """
     # Build the base query
     query = select(AlertDB).where(AlertDB.user_id == user_id)
     
     # Apply filters
     if active_only:
-        query = query.where(AlertDB.active == True)  # noqa: E712
+        query = query.where(AlertDB.is_active == True)  # noqa: E712
     
     if symbol:
         query = query.where(AlertDB.symbol == symbol.upper())
@@ -110,9 +108,9 @@ async def create_alert(
         AlertModel: The created alert
         
     Raises:
-        ValueError: If the user already has an identical active alert
+        ValueError: If the user already has an identical is_active alert
     """
-    # Check for duplicate active alert
+    # Check for duplicate is_active alert
     existing_alert = await db.execute(
         select(AlertDB).where(
             and_(
@@ -120,13 +118,13 @@ async def create_alert(
                 AlertDB.symbol == alert_in.symbol.upper(),
                 AlertDB.threshold_percentage == alert_in.threshold_percentage,
                 AlertDB.direction == alert_in.direction,
-                AlertDB.active == True  # noqa: E712
+                AlertDB.is_active == True  # noqa: E712
             )
         )
     )
     
     if existing_alert.scalars().first():
-        raise ValueError("An identical active alert already exists")
+        raise ValueError("An identical is_active alert already exists")
     
     # Create the alert
     db_alert = AlertDB(
@@ -134,7 +132,7 @@ async def create_alert(
         symbol=alert_in.symbol.upper(),
         threshold_percentage=alert_in.threshold_percentage,
         direction=alert_in.direction,
-        active=alert_in.active,
+        is_active=alert_in.is_active,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
@@ -163,11 +161,11 @@ async def update_alert(
         AlertModel: The updated alert
         
     Raises:
-        ValueError: If the update would create a duplicate active alert
+        ValueError: If the update would create a duplicate is_active alert
     """
     update_data = alert_in.dict(exclude_unset=True)
     
-    # Check if the update would create a duplicate active alert
+    # Check if the update would create a duplicate is_active alert
     if any(field in update_data for field in ['symbol', 'threshold_percentage', 'direction']):
         symbol = update_data.get('symbol', db_alert.symbol).upper()
         threshold = update_data.get('threshold_percentage', db_alert.threshold_percentage)
@@ -181,13 +179,13 @@ async def update_alert(
                     AlertDB.symbol == symbol,
                     AlertDB.threshold_percentage == threshold,
                     AlertDB.direction == direction,
-                    AlertDB.active == True  # noqa: E712
+                    AlertDB.is_active == True  # noqa: E712
                 )
             )
         )
         
         if existing_alert.scalars().first():
-            raise ValueError("An identical active alert already exists")
+            raise ValueError("An identical is_active alert already exists")
     
     # Update the alert
     for field, value in update_data.items():
@@ -238,7 +236,7 @@ async def get_active_alerts_for_symbol(
     current_price: float,
 ) -> List[Dict[str, Any]]:
     """
-    Get all active alerts that should be triggered for a given symbol and price.
+    Get all is_active alerts that should be triggered for a given symbol and price.
     
     Args:
         db: Database session
@@ -261,7 +259,7 @@ async def get_active_alerts_for_symbol(
         .where(
             and_(
                 AlertDB.symbol == symbol,
-                AlertDB.active == True,  # noqa: E712
+                AlertDB.is_active == True,  # noqa: E712
                 or_(
                     # Price went up and alert is for price going up
                     and_(
