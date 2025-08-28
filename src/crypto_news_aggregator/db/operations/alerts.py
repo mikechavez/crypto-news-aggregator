@@ -7,14 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, update, delete
 from sqlalchemy.orm import selectinload, joinedload
 
-from src.crypto_news_aggregator.models.alert import (
+from ...models.alert import (
     Alert as AlertModel,
     AlertCreate,
     AlertUpdate,
     AlertDirection,
 )
-from src.crypto_news_aggregator.db.models import Alert as AlertDB, User
-from src.crypto_news_aggregator.models.user import User as UserModel
+from ..models import Alert as AlertDB, User
+from ...models.user import User as UserModel
 
 
 async def get_alert(
@@ -163,7 +163,7 @@ async def update_alert(
     Raises:
         ValueError: If the update would create a duplicate is_active alert
     """
-    update_data = alert_in.dict(exclude_unset=True)
+    update_data = alert_in.model_dump(exclude_unset=True)
     
     # Check if the update would create a duplicate is_active alert
     if any(field in update_data for field in ['symbol', 'threshold_percentage', 'direction']):

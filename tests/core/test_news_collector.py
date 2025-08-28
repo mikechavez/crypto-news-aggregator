@@ -33,7 +33,7 @@ def mock_newsapi_response():
     }
 
 @pytest.mark.asyncio
-async def test_collect_from_source(mock_newsapi_response, db_session: AsyncSession):
+async def test_collect_from_source(mock_newsapi_response, db_session: AsyncSession, article_service: "ArticleService"):
     """Test collecting articles from a news source."""
     try:
         # Create a source in the database
@@ -48,7 +48,7 @@ async def test_collect_from_source(mock_newsapi_response, db_session: AsyncSessi
             mock_newsapi.return_value = mock_client
             
             # Initialize collector with test session
-            collector = NewsCollector()
+            collector = NewsCollector(newsapi_client=mock_newsapi.return_value, article_service=article_service)
             await collector.initialize()
             
             # Test collection
@@ -74,7 +74,7 @@ async def test_collect_from_source(mock_newsapi_response, db_session: AsyncSessi
         await db_session.rollback()
 
 @pytest.mark.asyncio
-async def test_process_article(db_session: AsyncSession):
+async def test_process_article(db_session: AsyncSession, article_service: "ArticleService"):
     """Test processing and storing an article."""
     try:
         # Create a source in the database
@@ -95,7 +95,7 @@ async def test_process_article(db_session: AsyncSession):
         }
         
         # Initialize collector
-        collector = NewsCollector()
+        collector = NewsCollector(article_service=article_service)
         await collector.initialize()
         
         # Test processing
@@ -120,7 +120,7 @@ async def test_process_article(db_session: AsyncSession):
         await db_session.rollback()
 
 @pytest.mark.asyncio
-async def test_duplicate_article_handling(db_session: AsyncSession):
+async def test_duplicate_article_handling(db_session: AsyncSession, article_service: "ArticleService"):
     """Test that duplicate articles are handled correctly."""
     try:
         # Create a source in the database
@@ -151,7 +151,7 @@ async def test_duplicate_article_handling(db_session: AsyncSession):
         }
         
         # Initialize collector
-        collector = NewsCollector()
+        collector = NewsCollector(article_service=article_service)
         await collector.initialize()
         
         # Test processing
@@ -172,7 +172,7 @@ async def test_duplicate_article_handling(db_session: AsyncSession):
         await db_session.rollback()
 
 @pytest.mark.asyncio
-async def test_error_handling(caplog, db_session: AsyncSession):
+async def test_error_handling(caplog, db_session: AsyncSession, article_service: "ArticleService"):
     """Test error handling during news collection."""
     try:
         # Create a source in the database
@@ -186,7 +186,7 @@ async def test_error_handling(caplog, db_session: AsyncSession):
             mock_client.get_everything.side_effect = Exception("API Error")
             mock_newsapi.return_value = mock_client
             
-            collector = NewsCollector()
+            collector = NewsCollector(newsapi_client=mock_newsapi.return_value, article_service=article_service)
             await collector.initialize()
             
             # Test error handling

@@ -39,7 +39,7 @@ class AlertService:
         if isinstance(alert, dict):
             alert_dict = alert
         else:
-            alert_dict = alert.dict(by_alias=True, exclude={"id"})
+            alert_dict = alert.model_dump(by_alias=True, exclude={"id"})
         
         # Set timestamps
         now = datetime.now(timezone.utc)
@@ -112,7 +112,7 @@ class AlertService:
         if isinstance(update_data, dict):
             update_dict = update_data
         else:
-            update_dict = update_data.dict(exclude_unset=True, exclude={"id"})
+            update_dict = update_data.model_dump(exclude_unset=True, exclude={"id"})
         
         # Add any additional fields from kwargs
         update_dict.update(kwargs)
@@ -226,7 +226,7 @@ class AlertService:
             Optional[AlertInDB]: The updated alert if found, None otherwise
         """
         collection = await self._get_collection()
-        update_data = alert_update.dict(exclude_unset=True)
+        update_data = alert_update.model_dump(exclude_unset=True)
         
         # Don't update these fields
         update_data.pop("id", None)

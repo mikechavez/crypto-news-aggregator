@@ -6,8 +6,8 @@ from typing import Any, Optional, Type, Callable, Dict, List, Union, TypeVar
 from pydantic import BaseModel, ConfigDict, field_serializer
 import json
 from celery.result import AsyncResult as CeleryAsyncResult
-from src.crypto_news_aggregator.tasks import fetch_news, analyze_sentiment, update_trends
-from src.crypto_news_aggregator.core.auth import get_api_key
+from ...tasks import fetch_news, analyze_sentiment, update_trends
+from ...core.auth import get_api_key
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -204,6 +204,9 @@ async def get_task_status(
     Args:
         task_id: The ID of the task to check
         async_result_class: The AsyncResult class to use (injected for testing)
+    
+    Returns:
+        TaskResponse: The task status and result if available
     """
     logger.info(f"[ENDPOINT] Getting status for task {task_id}")
     logger.info(f"[ENDPOINT] Using async_result_class: {async_result_class}")
@@ -214,16 +217,22 @@ async def get_task_status(
     logger.info(f"[ENDPOINT] Created AsyncResult instance: {task_result}")
     logger.info(f"[ENDPOINT] AsyncResult type: {type(task_result)}")
     
-    # Prepare the base response
-    response = {
-        "task_id": task_id,
-    }
+    # Initialize is_ready to False to handle cases where ready() is never called
+    is_ready = False
+    
+    # Prepare the base response using the Pydantic model
+    response = TaskResponse(
+        task_id=task_id,
+        status="PENDING",  # Default status
+        result=None,
+        error=None
+    )
     
     try:
         # Try to get the task status
         logger.info("[ENDPOINT] Getting task status...")
         task_status = task_result.status
-        response["status"] = task_status
+        response.status = task_status
         logger.info(f"[ENDPOINT] Task status: {task_status}")
         logger.info(f"[ENDPOINT] AsyncResult details: id={getattr(task_result, 'id', 'N/A')}, status={getattr(task_result, 'status', 'N/A')}")
         
@@ -235,16 +244,16 @@ async def get_task_status(
             
         except TimeoutError as e:
             logger.warning(f"[ENDPOINT] Task status check timed out: {str(e)}")
-            response["status"] = "TIMEOUT"
-            response["error"] = str(e) or "Task timed out"
+            response.status = "TIMEOUT"
+            response.error = str(e) or "Task timed out"
             logger.info(f"[ENDPOINT] Returning timeout response: {response}")
-            return make_serializable(response)
+            return response
             
         except Exception as e:
             logger.error(f"[ENDPOINT] Error checking if task is ready: {str(e)}", exc_info=True)
-            response["status"] = "FAILURE"
-            response["error"] = f"Error checking task status: {str(e)}"
-            return make_serializable(response)
+            response.status = "FAILURE"
+            response.error = f"Error checking task status: {str(e)}"
+            return response
             
         # If we get here, no timeout occurred
         logger.info(f"[ENDPOINT] Task ready state: {is_ready}")
@@ -253,17 +262,17 @@ async def get_task_status(
         # Handle connection errors
         error_msg = str(e) or "Failed to connect to message broker"
         logger.error(f"[ENDPOINT] Connection error getting task status: {error_msg}", exc_info=True)
-        response["status"] = "FAILURE"
-        response["error"] = error_msg
-        return make_serializable(response)
+        response.status = "FAILURE"
+        response.error = error_msg
+        return response
         
     except Exception as e:
         # Handle other unexpected errors
         error_msg = f"Error getting task status: {str(e)}"
         logger.error(f"[ENDPOINT] Unexpected error: {error_msg}", exc_info=True)
-        response["status"] = "FAILURE"
-        response["error"] = error_msg
-        return make_serializable(response)
+        response.status = "FAILURE"
+        response.error = error_msg
+        return response
         
     logger.info(f"[DEBUG] Initial response: {response}")
     
@@ -277,34 +286,24 @@ async def get_task_status(
             
             if has_issue:
                 logger.warning(f"[DEBUG] Non-serializable object found: {error_msg}")
-                response["error"] = f"Task result is not JSON serializable: {error_msg}"
-                # Remove any result to avoid serialization issues
-                if "result" in response:
-                    del response["result"]
+                response.error = f"Task result is not JSON serializable: {error_msg}"
             else:
                 # If no non-serializable objects found, try to add the result
                 try:
-                    # Try to serialize the entire response with the result
-                    test_response = response.copy()
-                    test_response["result"] = result
-                    json.dumps(test_response, default=str)
-                    
-                    # If we get here, the result is serializable
-                    response["result"] = result
+                    # Set the result directly - let Pydantic handle serialization
+                    response.result = result
                     logger.info("[DEBUG] Successfully added result to response")
                 except (TypeError, ValueError) as e:
                     logger.warning(f"[DEBUG] Serialization failed: {str(e)}")
-                    response["error"] = "Task result is not JSON serializable"
-                    if "result" in response:
-                        del response["result"]
+                    response.error = "Task result is not JSON serializable"
                 
         except Exception as e:
             error_msg = str(e)
             logger.error(f"[DEBUG] Error getting task result: {error_msg}", exc_info=True)
-            response["error"] = error_msg
+            response.error = error_msg
             # Also ensure the status is set to FAILURE if it's not already
-            if response.get("status") != "FAILURE":
-                response["status"] = "FAILURE"
+            if response.status != "FAILURE":
+                response.status = "FAILURE"
     
     logger.info(f"[DEBUG] Final response: {response}")
     return response

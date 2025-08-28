@@ -3,9 +3,9 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 
-from src.crypto_news_aggregator.core import security
-from src.crypto_news_aggregator.core.config import get_settings
-from src.crypto_news_aggregator.models.user import User as UserModel
+from ...core import security
+from ...core.config import get_settings
+from ...models.user import User as UserModel
 
 # Create a new router for v1 endpoints
 def get_router():
@@ -36,11 +36,14 @@ oauth2_scheme = get_oauth2_scheme()
 router.include_router(health.router, tags=["health"])
 router.include_router(auth.router, prefix="/auth", tags=["authentication"])
 
+# API key protected routes (no JWT required)
+# The tasks router itself applies API key security via Security(get_api_key)
+router.include_router(tasks.router, prefix="", tags=["tasks"])
+
 # Protected routes (require authentication)
 protected_router = APIRouter()
 protected_router.include_router(articles.router, prefix="/articles", tags=["articles"])
 protected_router.include_router(sources.router, prefix="/sources", tags=["sources"])
-protected_router.include_router(tasks.router, prefix="", tags=["tasks"])
 protected_router.include_router(price.router, prefix="/price", tags=["price"])
 
 # Include test endpoints only in debug mode
@@ -55,4 +58,3 @@ router.include_router(
     protected_router,
     dependencies=[Depends(security.get_current_active_user)]
 )
-

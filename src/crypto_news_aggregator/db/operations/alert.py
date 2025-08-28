@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..models import Alert, User
+from ...models import alert as alert_models
 
 
 async def get_active_alerts(db: AsyncSession) -> List[Alert]:
@@ -72,3 +73,43 @@ async def get_alert_by_id(
         
     result = await db.execute(query)
     return result.scalars().first()
+
+async def add_alert(db: AsyncSession, alert_in: alert_models.AlertCreate) -> Alert:
+    """
+    Add a new alert to the database.
+
+    Args:
+        db: AsyncSession - Database session
+        alert_in: AlertCreate - Pydantic model for alert creation
+
+    Returns:
+        Alert: The newly created Alert object
+    """
+    alert_data = alert_in.model_dump()
+    alert_data['symbol'] = alert_data.pop('crypto_id', 'BTC')
+    
+    condition = alert_data.pop('condition')
+    threshold = alert_data.pop('threshold')
+
+    if condition == alert_models.AlertCondition.PERCENT_UP:
+        alert_data['direction'] = 'above'
+        alert_data['threshold_percentage'] = threshold
+    elif condition == alert_models.AlertCondition.PERCENT_DOWN:
+        alert_data['direction'] = 'below'
+        alert_data['threshold_percentage'] = threshold
+    elif condition == alert_models.AlertCondition.ABOVE:
+        alert_data['direction'] = 'above'
+        alert_data['price_target'] = threshold
+    elif condition == alert_models.AlertCondition.BELOW:
+        alert_data['direction'] = 'below'
+        alert_data['price_target'] = threshold
+
+    # Remove fields from Pydantic model that are not in the SQLAlchemy model
+    alert_data.pop('cooldown_minutes', None)
+    alert_data.pop('initial_price', None)
+
+    new_alert = Alert(**alert_data)
+    db.add(new_alert)
+    await db.commit()
+    await db.refresh(new_alert)
+    return new_alert

@@ -49,7 +49,7 @@ async def list_articles(
     
     # Add X-Total-Count header for pagination
     response = JSONResponse(
-        content=[article.dict(by_alias=True) for article in articles]
+        content=[article.model_dump(by_alias=True) for article in articles]
     )
     response.headers["X-Total-Count"] = str(total)
     return response
@@ -82,7 +82,7 @@ async def search_articles(
     
     # Add X-Total-Count header for pagination
     response = JSONResponse(
-        content=[article.dict(by_alias=True) for article in articles]
+        content=[article.model_dump(by_alias=True) for article in articles]
     )
     response.headers["X-Total-Count"] = str(total)
     return response

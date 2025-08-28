@@ -79,7 +79,15 @@ def mock_current_user():
 @pytest.fixture
 def user_access_token():
     """Fixture to provide a test JWT token."""
-    return "test-jwt-token"
+    from src.crypto_news_aggregator.core.security import create_access_token
+    # Minimal payload required by get_current_user -> TokenPayload
+    token = create_access_token(
+        subject="1",
+        username="testuser",
+        email="test@example.com",
+        is_superuser=False,
+    )
+    return token
 
 @pytest.fixture
 def test_user():
@@ -203,7 +211,7 @@ def test_get_task_status_success(client, monkeypatch, capsys):
         test_app.dependency_overrides = {}
         print("[DEBUG] Cleaned up test app")
 
-def test_get_task_status_pending(client, monkeypatch, capsys):
+def test_get_task_status_pending(client, monkeypatch, user_access_token, capsys):
     """Test getting the status of a pending task."""
     # Import the tasks module to access its attributes
     from crypto_news_aggregator.api.v1 import tasks
@@ -259,7 +267,7 @@ def test_get_task_status_pending(client, monkeypatch, capsys):
         app.dependency_overrides = {}
 
 @patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
-def test_get_task_status_failed(mock_async_result_class, client, capsys):
+def test_get_task_status_failed(mock_async_result_class, client, user_access_token, capsys):
     """Test getting the status of a failed task."""
     # Arrange
     task_id = 'failed-task-id'
@@ -305,7 +313,7 @@ def test_get_task_status_failed(mock_async_result_class, client, capsys):
         assert error_message in data["result"]["error"], f"Expected error message in result to contain '{error_message}', but got '{data.get('result', {}).get('error')}'"
 
 @patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
-def test_get_task_status_revoked(mock_async_result_class, client, capsys):
+def test_get_task_status_revoked(mock_async_result_class, client, user_access_token, capsys):
     """Test getting the status of a revoked task."""
     # Arrange
     task_id = 'revoked-task-id'
@@ -339,7 +347,7 @@ def test_get_task_status_revoked(mock_async_result_class, client, capsys):
     assert data.get("result") is None, f"Expected result to be None for revoked task, but got {data.get('result')}"
 
 @patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
-def test_get_task_status_retry(mock_async_result_class, client, capsys):
+def test_get_task_status_retry(mock_async_result_class, client, user_access_token, capsys):
     """Test getting the status of a task that's being retried."""
     # Arrange
     task_id = 'retry-task-id'
@@ -373,7 +381,7 @@ def test_get_task_status_retry(mock_async_result_class, client, capsys):
     assert data.get("result") == retry_message, f"Expected result '{retry_message}', got '{data.get('result')}'"
 
 @patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
-def test_get_task_status_with_large_result(mock_async_result_class, client, capsys):
+def test_get_task_status_with_large_result(mock_async_result_class, client, user_access_token, capsys):
     """Test getting the status of a task with a large result."""
     # Arrange
     task_id = 'large-result-task-id'
@@ -419,7 +427,7 @@ def test_get_task_status_with_large_result(mock_async_result_class, client, caps
     assert first_item == "x" * 1000, f"Expected first item to be 'x' * 1000, got {first_item}"
 
 @pytest.mark.asyncio
-async def test_get_task_status_not_found():
+async def test_get_task_status_not_found(user_access_token):
     """Test getting the status of a non-existent task."""
     # Arrange
     task_id = 'nonexistent-task-id'
@@ -469,7 +477,8 @@ async def test_get_task_status_not_found():
         
         # Act
         print(f"[DEBUG] Sending request to API for non-existent task...")
-        response = test_client.get(f"/api/v1/tasks/{task_id}")
+        headers = {"X-API-Key": "testapikey123"}
+        response = test_client.get(f"/api/v1/tasks/{task_id}", headers=headers)
         print(f"[DEBUG] Response status: {response.status_code}")
         print(f"[DEBUG] Response content: {response.text}")
         
@@ -491,7 +500,7 @@ async def test_get_task_status_not_found():
 
 @pytest.mark.asyncio
 @patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
-async def test_get_task_status_with_exception(mock_celery_async_result, client):
+async def test_get_task_status_with_exception(mock_celery_async_result, client, user_access_token):
     """Test handling of exceptions when getting task status."""
     # Arrange
     task_id = 'exceptional-task-id'
@@ -544,7 +553,7 @@ async def test_get_task_status_with_exception(mock_celery_async_result, client):
 
 @pytest.mark.asyncio
 @patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
-async def test_get_task_status_with_serialization_error(mock_celery_async_result, client):
+async def test_get_task_status_with_serialization_error(mock_celery_async_result, client, user_access_token):
     """Test handling of non-serializable task results."""
     # Arrange
     task_id = 'non-serializable-task-id'
@@ -595,7 +604,7 @@ async def test_get_task_status_with_serialization_error(mock_celery_async_result
     
     print("\n[DEBUG] All assertions passed!")
 
-def test_get_task_status_with_custom_status():
+def test_get_task_status_with_custom_status(user_access_token):
     """Test handling of custom task status values."""
     from unittest.mock import MagicMock, PropertyMock, patch
     from fastapi.testclient import TestClient
@@ -689,7 +698,7 @@ from tests.test_utils import create_mock_async_result
 
 @pytest.mark.asyncio
 @patch('src.crypto_news_aggregator.api.v1.tasks.fetch_news')
-async def test_trigger_news_fetch(mock_fetch_news, client, test_user):
+async def test_trigger_news_fetch(mock_fetch_news, client, user_access_token, test_user):
     """Test triggering a news fetch task."""
     # Arrange
     source_param = "test-source"
@@ -709,7 +718,6 @@ async def test_trigger_news_fetch(mock_fetch_news, client, test_user):
     # Act - Make request to the endpoint with source as a query parameter
     url = f"/api/v1/news/fetch?source={source_param}"
     print(f"\n[DEBUG] Making POST request to: {url}")
-    
     response = client.post(url, json={})
     
     # Print debug information
@@ -760,7 +768,7 @@ async def test_trigger_news_fetch(mock_fetch_news, client, test_user):
     print("\n[DEBUG] All assertions passed!")
     
 @pytest.mark.asyncio
-async def test_trigger_sentiment_analysis(client, test_user):
+async def test_trigger_sentiment_analysis(client, user_access_token, test_user):
     """Test triggering sentiment analysis for an article."""
     # Import necessary modules
     from unittest.mock import patch, MagicMock
@@ -789,7 +797,6 @@ async def test_trigger_sentiment_analysis(client, test_user):
         # Act - Make request to the endpoint using the authenticated client
         url = f"/api/v1/sentiment/analyze/{article_id}"
         print(f"\n[DEBUG] Making authenticated POST request to: {url}")
-        
         response = client.post(url)
         
         # Debug output
@@ -843,7 +850,7 @@ async def test_trigger_sentiment_analysis(client, test_user):
         print("\n[DEBUG] All assertions passed!")
 
 @pytest.mark.asyncio
-async def test_trigger_trends_update(client, test_user):
+async def test_trigger_trends_update(client, user_access_token, test_user):
     """Test triggering a trends update task."""
     # Import necessary modules
     from unittest.mock import patch, MagicMock
@@ -870,7 +877,6 @@ async def test_trigger_trends_update(client, test_user):
         # Act - Make request to the endpoint using the authenticated client
         url = "/api/v1/trends/update"
         print(f"\n[DEBUG] Making authenticated POST request to: {url}")
-        
         response = client.post(url)
         
         # Debug output
@@ -1125,7 +1131,7 @@ def test_get_article_sentiment(client, mock_db_session, test_user):
     assert data["sentiment"]["score"] == 0.8
 
 @pytest.mark.asyncio
-async def test_trigger_sentiment_analysis_invalid_article(client, test_user):
+async def test_trigger_sentiment_analysis_invalid_article(client, user_access_token, test_user):
     """Test triggering sentiment analysis with a non-existent article ID."""
     # Import necessary modules
     from unittest.mock import patch, MagicMock

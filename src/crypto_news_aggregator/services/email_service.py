@@ -116,7 +116,7 @@ class EmailService:
             link_mapping=link_mapping,
             metadata=metadata or {},
         )
-        await db.email_tracking.insert_one(tracking_doc.dict(by_alias=True))
+        await db.email_tracking.insert_one(tracking_doc.model_dump(by_alias=True))
 
     async def _record_email_event(
         self,
@@ -137,7 +137,7 @@ class EmailService:
         )
         await db.email_tracking.update_one(
             {"message_id": message_id},
-            {"$push": {"events": event.dict()}}
+            {"$push": {"events": event.model_dump()}}
         )
 
     async def send_email(
@@ -190,20 +190,23 @@ class EmailService:
                 print("✅ Email sent successfully!")
 
             if track and self.tracking_enabled and user_id:
-                await self._save_tracking_data(
-                    message_id=message_id,
-                    user_id=user_id,
-                    recipient_email=to,
-                    subject=subject,
-                    template_name=template_name or "custom",
-                    link_mapping=link_mapping,
-                    metadata=metadata
-                )
-                await self._record_email_event(
-                    message_id=message_id,
-                    event_type=EmailEventType.DELIVERED,
-                    details={"status": "sent"}
-                )
+                try:
+                    await self._save_tracking_data(
+                        message_id=message_id,
+                        user_id=user_id,
+                        recipient_email=to,
+                        subject=subject,
+                        template_name=template_name or "custom",
+                        link_mapping=link_mapping,
+                        metadata=metadata
+                    )
+                    await self._record_email_event(
+                        message_id=message_id,
+                        event_type=EmailEventType.DELIVERED,
+                        details={"status": "sent"}
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to save email tracking data for message {message_id}: {e}")
             return True, message_id
             
         except smtplib.SMTPException as e:

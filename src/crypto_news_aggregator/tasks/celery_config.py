@@ -6,11 +6,9 @@ from .beat_schedule import get_schedule
 # settings = get_settings()  # Removed top-level settings; use lazy initialization in functions as needed.
 
 # Broker and result backend settings
-def get_broker_url():
-    return get_settings().CELERY_BROKER_URL
-
-def get_result_backend():
-    return get_settings().CELERY_RESULT_BACKEND
+settings = get_settings()
+broker_url = settings.CELERY_BROKER_URL
+result_backend = settings.CELERY_RESULT_BACKEND
 
 # Task settings
 task_serializer = 'json'

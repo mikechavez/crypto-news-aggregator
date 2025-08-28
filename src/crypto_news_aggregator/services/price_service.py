@@ -22,7 +22,12 @@ class CoinGeckoPriceService:
     async def get_session(self) -> aiohttp.ClientSession:
         """Get or create an aiohttp client session."""
         if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession()
+            settings = get_settings()
+            headers = {}
+            if settings.COINGECKO_API_KEY:
+                # For Pro API plans, the header is x-cg-pro-api-key
+                headers['x-cg-pro-api-key'] = settings.COINGECKO_API_KEY
+            self.session = aiohttp.ClientSession(headers=headers)
         return self.session
         
     async def close(self):

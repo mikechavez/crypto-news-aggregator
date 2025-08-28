@@ -161,6 +161,7 @@ class NotificationService:
                     'snippet': article.get('snippet', '')
                 })
         
+        settings = get_settings()
         # Send the email using the email_service instance
         await email_service.send_price_alert(
             to=alert.user.email,

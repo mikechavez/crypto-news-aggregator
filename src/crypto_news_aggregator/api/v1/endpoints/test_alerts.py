@@ -100,7 +100,7 @@ async def trigger_manual_alert(
         return {
             "status": "success",
             "message": "Test alert processed successfully",
-            "alert_data": alert_data.dict(),
+            "alert_data": alert_data.model_dump(),
             "stats": stats
         }
         

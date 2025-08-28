@@ -8,6 +8,7 @@ import hashlib
 import re
 from unidecode import unidecode
 from bson import ObjectId
+import inspect
 
 from ..db.mongodb_models import (
     ArticleInDB,
@@ -19,6 +20,7 @@ from ..db.mongodb_models import (
 )
 from ..db.mongodb import mongo_manager, COLLECTION_ARTICLES
 from ..core.config import get_settings
+from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
 
 logger = logging.getLogger(__name__)
 # settings = get_settings()  # Removed top-level settings; use lazy initialization in methods as needed.
@@ -26,15 +28,49 @@ logger = logging.getLogger(__name__)
 class ArticleService:
     """Service for handling article operations."""
     
-    def __init__(self):
+    def __init__(
+        self,
+        db: Optional[AsyncIOMotorDatabase] = None,
+        collection: Optional[AsyncIOMotorCollection] = None,
+    ):
         self.collection_name = COLLECTION_ARTICLES
+        # Optional injected resources for tests or specialized usage
+        self._db: Optional[AsyncIOMotorDatabase] = db
+        self._collection: Optional[AsyncIOMotorCollection] = collection
     
     async def _get_collection(self) -> Any:
         """Get the MongoDB collection for articles."""
-        if not hasattr(self, '_collection'):
-            # Get the collection and store it
-            self._collection = await mongo_manager.get_async_collection("articles")
+        if getattr(self, "_collection", None) is not None:
+            return self._collection
+        # Prefer injected DB when provided
+        if self._db is not None:
+            self._collection = self._db[self.collection_name]
+            return self._collection
+        # Fallback to global mongo_manager
+        self._collection = await mongo_manager.get_async_collection(self.collection_name)
         return self._collection
+
+    async def ping(self) -> bool:
+        """Check MongoDB connectivity for this service."""
+        try:
+            if self._db is not None:
+                await self._db.client.admin.command("ping")
+                return True
+            return await mongo_manager.ping()
+        except Exception as e:
+            logger.error(f"MongoDB ping failed in ArticleService: {e}")
+            return False
+
+    async def close(self) -> None:
+        """Close underlying MongoDB client if owned by this service."""
+        try:
+            if self._db is not None:
+                # Motor client's close() is sync
+                self._db.client.close()
+            else:
+                await mongo_manager.aclose()
+        except Exception as e:
+            logger.warning(f"Error closing MongoDB resources in ArticleService: {e}")
     
     async def _generate_fingerprint(self, title: str, content: str) -> str:
         """
@@ -233,17 +269,19 @@ class ArticleService:
         # Get the MongoDB collection
         collection = await self._get_collection()
         
-        # Get total count
-        total = await collection.count_documents(query)
+        # Get total count (await only if needed)
+        total_call = collection.count_documents(query)
+        total = await total_call if inspect.isawaitable(total_call) else total_call
         
-        # Get paginated results with proper async/await and method chaining
-        # First get the cursor by awaiting the find() call
-        cursor = await collection.find(query)
-        # Then chain the cursor methods (these are synchronous operations)
+        # Get the cursor from find (handle both awaitable and direct return)
+        find_result = collection.find(query)
+        cursor = await find_result if inspect.isawaitable(find_result) else find_result
+        # Chain cursor methods
         cursor = cursor.sort("published_at", -1).skip(skip).limit(limit)
         
         # Execute the query and get results
-        articles_data = await cursor.to_list(length=limit)
+        to_list_call = cursor.to_list(length=limit)
+        articles_data = await to_list_call if inspect.isawaitable(to_list_call) else to_list_call
         articles = [ArticleInDB(**doc) for doc in articles_data]
         
         return articles, total
@@ -296,7 +334,8 @@ class ArticleService:
         collection = await self._get_collection()
         
         # Get total count
-        total = await collection.count_documents(query)
+        total_call = collection.count_documents(query)
+        total = await total_call if inspect.isawaitable(total_call) else total_call
         
         # Get search results with text score for sorting
         pipeline = [
@@ -308,8 +347,10 @@ class ArticleService:
         ]
         
         # Execute aggregation and convert to list
-        cursor = await collection.aggregate(pipeline)
-        articles_data = await cursor.to_list(length=limit)
+        agg_result = collection.aggregate(pipeline)
+        cursor = await agg_result if inspect.isawaitable(agg_result) else agg_result
+        to_list_call = cursor.to_list(length=limit)
+        articles_data = await to_list_call if inspect.isawaitable(to_list_call) else to_list_call
         articles = [ArticleInDB(**doc) for doc in articles_data]
         
         return articles, total

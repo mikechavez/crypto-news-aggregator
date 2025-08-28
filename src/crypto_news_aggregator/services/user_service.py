@@ -69,7 +69,7 @@ class UserService:
         unsubscribe_token = secrets.token_urlsafe(32)
         
         # Create user document
-        user_dict = user_data.dict(exclude={"password"})
+        user_dict = user_data.model_dump(exclude={"password"})
         user_dict.update({
             "hashed_password": get_password_hash(user_data.password),
             "email_verification_token": verification_token,
@@ -94,7 +94,7 @@ class UserService:
     ) -> Optional[UserInDB]:
         """Update user information."""
         collection = await self._get_collection()
-        update_dict = update_data.dict(exclude_unset=True)
+        update_dict = update_data.model_dump(exclude_unset=True)
         
         # Don't allow certain fields to be updated this way
         for field in ["email", "hashed_password", "is_superuser"]:
@@ -248,7 +248,7 @@ class UserService:
             {"_id": ObjectId(user_id)},
             {
                 "$set": {
-                    "subscription_preferences": preferences.dict(),
+                    "subscription_preferences": preferences.model_dump(),
                     "updated_at": datetime.utcnow()
                 }
             }

@@ -5,13 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import or_
 
-from src.crypto_news_aggregator.models.user_sql import (
+from ...models.user_sql import (
     UserCreateSQL, 
     UserUpdateSQL, 
     UserSQL
 )
-from src.crypto_news_aggregator.db.models import User as UserDB
-from src.crypto_news_aggregator.core.security import get_password_hash, verify_password
+from ..models import User as UserDB
+from ...core.security import get_password_hash, verify_password
 
 
 async def get_user(db: AsyncSession, user_id: int) -> Optional[UserSQL]:
@@ -93,7 +93,7 @@ async def update_user(
     user_in: UserUpdateSQL
 ) -> UserSQL:
     """Update a user."""
-    update_data = user_in.dict(exclude_unset=True)
+    update_data = user_in.model_dump(exclude_unset=True)
     
     # Check if updating to a new username that's already taken
     if 'username' in update_data:

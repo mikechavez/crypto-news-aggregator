@@ -23,14 +23,17 @@ async def lifespan(app: FastAPI):
     # Start the sync scheduler if enabled
     from .core.config import get_settings
     settings = get_settings()
-    if settings.ENABLE_DB_SYNC:
-        logger.info("Starting database synchronization task...")
-        await sync_scheduler.start()
-    
-    # Start the price monitor as a background task
-    logger.info("Starting price monitor...")
-    # Create the task and assign it to the monitor instance
-    price_monitor.task = asyncio.create_task(price_monitor.start())
+    if settings.TESTING:
+        logger.info("TESTING mode detected: Skipping background tasks startup.")
+    else:
+        if settings.ENABLE_DB_SYNC:
+            logger.info("Starting database synchronization task...")
+            await sync_scheduler.start()
+        
+        # Start the price monitor as a background task
+        logger.info("Starting price monitor...")
+        # Create the task and assign it to the monitor instance
+        price_monitor.task = asyncio.create_task(price_monitor.start())
     
     yield
     

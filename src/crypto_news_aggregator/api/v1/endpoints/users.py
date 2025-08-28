@@ -63,7 +63,7 @@ async def register_user(
         )
         
         # Return user data (without sensitive info)
-        return UserResponse(**user.dict())
+        return UserResponse(**user.model_dump())
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -111,7 +111,7 @@ async def read_users_me(
     """
     Get current user information.
     """
-    return UserResponse(**current_user.dict())
+    return UserResponse(**current_user.model_dump())
 
 @router.put("/me", response_model=UserResponse)
 async def update_user_me(
@@ -128,7 +128,7 @@ async def update_user_me(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to update user"
         )
-    return UserResponse(**updated_user.dict())
+    return UserResponse(**updated_user.model_dump())
 
 @router.post("/password/request-reset")
 async def request_password_reset(
@@ -294,7 +294,7 @@ async def list_users(
     Retrieve users (admin only).
     """
     users = await user_service.get_users(skip=skip, limit=limit)
-    return [UserResponse(**user.dict()) for user in users]
+    return [UserResponse(**user.model_dump()) for user in users]
 
 @router.get("/{user_id}", response_model=UserResponse, dependencies=[Depends(get_current_active_superuser)])
 async def get_user(
@@ -310,7 +310,7 @@ async def get_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
-    return UserResponse(**user.dict())
+    return UserResponse(**user.model_dump())
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(get_current_active_superuser)])
 async def delete_user(
