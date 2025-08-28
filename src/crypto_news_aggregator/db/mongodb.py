@@ -38,7 +38,7 @@ class PyObjectId(ObjectId):
 __all__ = ["PyObjectId"]
 
 from ..core.config import get_settings
-from .mongodb_models import ARTICLE_INDEXES, ALERT_INDEXES
+from .mongodb_models import ARTICLE_INDEXES, ALERT_INDEXES, PRICE_HISTORY_INDEXES
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +142,6 @@ class MongoManager:
                     self.settings.MONGODB_URI,
                     maxPoolSize=self.settings.MONGODB_MAX_POOL_SIZE,
                     minPoolSize=self.settings.MONGODB_MIN_POOL_SIZE,
-                    io_loop=asyncio.get_event_loop(),
                 )
                 
                 await self._async_client.admin.command('ping')
@@ -261,89 +260,25 @@ class MongoManager:
             await price_history_col.drop_indexes()
         
         # Create indexes for articles collection
-        for index in ARTICLE_INDEXES:
-            keys = index["keys"]
-            index_name = "_".join([f"{k[0]}_{k[1]}" for k in keys])
-            
-            # Handle TTL indexes
-            if "expireAfterSeconds" in index:
-                if not await self._has_index(articles_col, index_name):
-                    await articles_col.create_index(
-                        keys,
-                        name=index_name,
-                        expireAfterSeconds=index["expireAfterSeconds"]
-                    )
-            # Handle regular indexes
-            else:
-                if not await self._has_index(articles_col, index_name):
-                    await articles_col.create_index(
-                        keys,
-                        name=index_name,
-                        background=True
-                    )
+        for index_info in ARTICLE_INDEXES:
+            index_options = index_info.copy()
+            keys = index_options.pop("keys")
+            if not await self._has_index(articles_col, index_options.get("name")):
+                await articles_col.create_index(keys, **index_options)
         
         # Create indexes for alerts collection
-        for index in ALERT_INDEXES:
-            if isinstance(index, dict):
-                # Handle single field index
-                field = list(index.keys())[0]
-                direction = index[field]
-                index_name = f"{field}_{direction}"
-                keys = [(field, direction)]
-            else:
-                # Handle compound index or special index
-                if isinstance(index[0], str):
-                    # Special index like "text"
-                    index_name = f"{index[0]}_1"
-                    keys = [(index[0], 1)]
-                else:
-                    # Compound index
-                    keys = index
-                    index_name = "_".join([f"{k[0]}_{k[1]}" for k in keys])
-            
-            # Handle TTL indexes
-            if isinstance(index, dict) and "expireAfterSeconds" in index:
-                if not await self._has_index(alerts_col, index_name):
-                    await alerts_col.create_index(
-                        keys,
-                        name=index_name,
-                        expireAfterSeconds=index["expireAfterSeconds"]
-                    )
-            # Handle regular indexes
-            else:
-                if not await self._has_index(alerts_col, index_name):
-                    await alerts_col.create_index(
-                        keys,
-                        name=index_name,
-                        background=True
-                    )
+        for index_info in ALERT_INDEXES:
+            index_options = index_info.copy()
+            keys = index_options.pop("keys")
+            if not await self._has_index(alerts_col, index_options.get("name")):
+                await alerts_col.create_index(keys, **index_options)
         
         # Create indexes for price history collection
-        for index in PRICE_HISTORY_INDEXES:
-            if isinstance(index[0], tuple):
-                # Regular compound index
-                keys = index
-                index_name = "_".join([f"{k[0]}_{k[1]}" for k in keys])
-                
-                # Check if this is a TTL index
-                is_ttl = any(isinstance(k, dict) and "expireAfterSeconds" in k for k in keys)
-                
-                if not await self._has_index(price_history_col, index_name):
-                    if is_ttl:
-                        # Extract TTL config and filter out non-key parts
-                        ttl_config = next(k for k in keys if isinstance(k, dict))
-                        clean_keys = [k for k in keys if not isinstance(k, dict)]
-                        await price_history_col.create_index(
-                            clean_keys,
-                            name=index_name,
-                            expireAfterSeconds=ttl_config["expireAfterSeconds"]
-                        )
-                    else:
-                        await price_history_col.create_index(
-                            keys,
-                            name=index_name,
-                            background=True
-                        )
+        for index_info in PRICE_HISTORY_INDEXES:
+            index_options = index_info.copy()
+            keys = index_options.pop("keys")
+            if not await self._has_index(price_history_col, index_options.get("name")):
+                await price_history_col.create_index(keys, **index_options)
         
         logger.info("MongoDB indexes initialized successfully")
         self._indexes_created = True
@@ -449,7 +384,6 @@ class MongoManager:
         if hasattr(self, '_async_client') and self._async_client:
             try:
                 self._async_client.close()
-                await self._async_client.wait_closed()
                 logger.info("Closed async MongoDB connection")
             except Exception as e:
                 logger.error(f"Error closing async MongoDB connection: {e}")
@@ -480,24 +414,9 @@ class MongoManager:
         # Try to close async client if it exists
         if hasattr(self, '_async_client') and self._async_client:
             try:
-                # Create a new event loop if one doesn't exist
-                loop = None
-                try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                
-                # Run the close in the event loop
-                if loop.is_running():
-                    # If loop is running, schedule the close
-                    asyncio.create_task(self._async_client.close())
-                else:
-                    # Otherwise run it directly
-                    loop.run_until_complete(self._async_client.close())
-                    
+                self._async_client.close()
             except Exception as e:
-                logger.warning(f"Error in __del__: {e}")
+                logger.warning(f"Error closing async client in __del__: {e}")
 
 # Initialize the global MongoDB manager instance
 mongo_manager = MongoManager()
