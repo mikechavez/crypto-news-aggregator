@@ -249,7 +249,7 @@ async def test_alert_notification(alert: AlertInDB):
             raise AssertionError(f"Alert update failed. Expected last_triggered_price={initial_price}, got {alert.last_triggered_price}")
             
         logger.info(f"Verified alert update - last_triggered_price: {alert.last_triggered_price}")
-        logger.debug(f"Full alert object after update: {alert.dict()}")
+        logger.debug(f"Full alert object after update: {alert.model_dump()}")
         
         # Test 1: Small price change (should not trigger alert)
         logger.info("Testing price change below threshold...")
@@ -302,7 +302,7 @@ async def test_alert_notification(alert: AlertInDB):
             raise AssertionError(f"Alert update failed. Expected last_triggered_price={new_baseline_price}, got {alert.last_triggered_price}")
             
         logger.info(f"Verified alert update - last_triggered_price: {alert.last_triggered_price}")
-        logger.debug(f"Full alert object before large price change test: {alert.dict()}")
+        logger.debug(f"Full alert object before large price change test: {alert.model_dump()}")
         
         # Test large price increase (should trigger alert)
         await price_service.update_price("bitcoin", 51000.0)  # 2% increase
