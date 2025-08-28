@@ -6,12 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.crypto_news_aggregator.core import security
-from src.crypto_news_aggregator.core.config import get_settings
-from src.crypto_news_aggregator.core.security import Token, TokenData
-from src.crypto_news_aggregator.db.session import get_session
-from src.crypto_news_aggregator.models.user_sql import UserSQL, UserCreateSQL
-from src.crypto_news_aggregator.db.operations import users as user_ops
+from ....core import security
+from ....core.config import get_settings
+from ....core.security import Token, TokenData
+from ....db.session import get_session
+from ....models.user_sql import UserSQL, UserCreateSQL
+from ....db.operations import users as user_ops
 
 router = APIRouter()
 
@@ -90,7 +90,11 @@ async def login_for_access_token(
     settings = get_settings()
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(
-        subject=str(user.id), expires_delta=access_token_expires
+        subject=str(user.id),
+        expires_delta=access_token_expires,
+        username=user.username,
+        email=user.email,
+        is_superuser=user.is_superuser,
     )
 
     # Update last login time
@@ -98,6 +102,7 @@ async def login_for_access_token(
 
     return {
         "access_token": access_token,
+        "token_type": "bearer",
         "user_id": str(user.id),
     }
 
