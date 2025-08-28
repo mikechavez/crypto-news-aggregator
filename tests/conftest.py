@@ -189,8 +189,6 @@ async def mongo_client() -> AsyncGenerator[AsyncIOMotorClient, None]:
         await client.drop_database(settings.MONGODB_NAME)
         logger.info(f"Dropped test database: {settings.MONGODB_NAME}")
         
-        # Initialize the mongo_manager
-        await mongo_manager.initialize()
         
         yield client
         
@@ -204,7 +202,7 @@ async def mongo_client() -> AsyncGenerator[AsyncIOMotorClient, None]:
         
         try:
             if client:
-                await client.close()
+                client.close()
                 logger.info("Closed MongoDB connection")
         except Exception as e:
             cleanup_errors.append(f"Error closing MongoDB client: {e}")
@@ -237,8 +235,16 @@ async def mongo_db(mongo_client: AsyncIOMotorClient) -> AsyncGenerator[AsyncIOMo
         # Get a fresh database reference
         db = mongo_client[settings.MONGODB_NAME]
         
+        # Initialize the mongo_manager with the test client and db name
+        mongo_manager._async_client = mongo_client
+        mongo_manager.db_name = settings.MONGODB_NAME
+        mongo_manager._db = db
+        mongo_manager._sync_client = mongo_manager.sync_client
+        mongo_manager._sync_db = mongo_manager._sync_client[settings.MONGODB_NAME]
+        mongo_manager._initialized = True
+
         # Initialize the database with required collections and indexes
-        await mongo_manager.initialize_indexes()
+        await mongo_manager.initialize_indexes(force_recreate=True)
         
         yield db
         
@@ -288,13 +294,6 @@ async def article_service(mongo_db: AsyncIOMotorDatabase):
                 await service.close()
             except Exception as e:
                 logger.warning(f"Warning: Error closing ArticleService: {e}")
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create an instance of the default event loop for each test case."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
 
 @pytest.fixture(scope="session")
 def event_loop():
@@ -393,7 +392,7 @@ def client(
     monkeypatch.setenv("API_KEYS", TEST_API_KEY)
 
     with TestClient(app) as c:
-        c.headers.update({"X-API-KEY": TEST_API_KEY})
+        c.headers.update({"X-API-Key": TEST_API_KEY})
         yield c
 
     app.dependency_overrides.clear()
@@ -492,17 +491,6 @@ def mock_env_vars(monkeypatch):
     # Use the same test API key that's used in the test client
     monkeypatch.setenv("API_KEYS", TEST_API_KEY)
 
-@pytest.fixture
-def mock_celery_app(monkeypatch):
-    """Mock the Celery app to avoid using a real backend in tests."""
-    from unittest.mock import MagicMock, patch
-    
-    # Create a mock Celery app
-    mock_app = MagicMock()
-    
-    # Patch the Celery app in the tasks module
-    with patch('crypto_news_aggregator.tasks.app', mock_app):
-        yield mock_app
 
 def pytest_configure(config):
     """Configure pytest with custom markers."""
