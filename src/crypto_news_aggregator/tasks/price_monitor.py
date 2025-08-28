@@ -10,6 +10,7 @@ from ..services.price_service import price_service
 from ..services.notification_service import notification_service
 from ..services.news_correlator import NewsCorrelator
 from ..core.config import get_settings
+from ..db.session import get_sessionmaker
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ class PriceMonitor:
         """Check prices and trigger alerts if needed."""
         settings = get_settings()
         symbol = 'bitcoin'  # Hardcoded for now
+        
         price_data = await price_service.get_bitcoin_price()
         current_price = price_data.get('price')
 
@@ -68,7 +70,7 @@ class PriceMonitor:
         self.last_checked_price[symbol] = current_price
 
         if last_price is None:
-            logger.info(f"First price check for {symbol}: ${current_price}")
+            logger.info(f"First price check for {symbol}: {current_price}")
             return
 
         should_alert, change_pct = await price_service.should_trigger_alert(
@@ -91,55 +93,51 @@ class PriceMonitor:
         last_alert = self.last_alert_time.get(symbol)
         
         if last_alert and (now - last_alert) < self.min_alert_interval:
-            logger.debug(f"Skipping alert for {symbol}: too soon since last alert")
             return False
             
         self.last_alert_time[symbol] = now
         return True
     
     async def _handle_price_movement(self, movement: Dict[str, Any]):
-        """
-        Handle a significant price movement by processing alerts.
-        
-        Args:
-            movement: Dictionary containing price movement details
-        """
+        """Handle a significant price movement."""
         symbol = movement['symbol']
         current_price = movement['current_price']
         change_pct = movement['change_pct']
         
         logger.info(
             f"Significant price movement detected: {symbol} "
-            f"{change_pct}% to ${current_price}"
+            f"{change_pct:.2f}% to ${current_price}"
         )
         
         try:
-            # Get market data for context
-            market_data = await price_service.get_market_data()
-            
+            # Fetch news articles, but don't let it block alerts if it fails
+            relevant_articles = []
+            try:
+                news_correlator = NewsCorrelator()
+                relevant_articles = await news_correlator.get_relevant_news(
+                    price_change_percent=abs(change_pct),
+                    max_articles=3
+                )
+            except Exception as e:
+                logger.warning(f"Could not fetch relevant news: {e}")
+
             # Get cryptocurrency details
-            crypto_id = symbol.lower()  # This should be the CoinGecko ID (e.g., 'bitcoin')
-            crypto_name = symbol.capitalize()  # This should be replaced with actual name from CoinGecko
-            
-            # Get relevant news articles for this price movement
-            news_correlator = NewsCorrelator()
-            relevant_articles = await news_correlator.get_relevant_news(
-                price_change_percent=abs(change_pct),  # Use absolute value for correlation
-                max_articles=3
-            )
-            
-            logger.info(f"Found {len(relevant_articles)} relevant articles for price movement")
-            
-            # Process alerts with news context
-            stats = await notification_service.process_price_alert(
-                crypto_id=crypto_id,
-                crypto_name=crypto_name,
-                crypto_symbol=symbol.upper(),
-                current_price=current_price,
-                price_change_24h=change_pct,
-                context_articles=relevant_articles
-            )
-            
+            crypto_id = symbol.lower()
+            crypto_name = symbol.capitalize()
+
+            # Create a new database session for this task
+            SessionLocal = get_sessionmaker()
+            async with SessionLocal() as db:
+                stats = await notification_service.process_price_alert(
+                    db=db,
+                    crypto_id=crypto_id,
+                    crypto_name=crypto_name,
+                    crypto_symbol=symbol.upper(),
+                    current_price=current_price,
+                    price_change_24h=change_pct,
+                    context_articles=relevant_articles
+                )
+
             logger.info(
                 f"Processed {stats['alerts_processed']} alerts for {symbol}. "
                 f"Triggered: {stats['alerts_triggered']}, "
