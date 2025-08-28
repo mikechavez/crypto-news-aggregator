@@ -40,7 +40,7 @@ class AlertCondition(str, Enum):
 
 class AlertBase(BaseModel):
     """Base alert model with common fields."""
-    user_id: str = Field(..., description="ID of the user who created the alert")
+    user_id: int = Field(..., description="ID of the user who created the alert")
     crypto_id: str = Field(..., description="Cryptocurrency symbol (e.g., 'bitcoin')")
     condition: AlertCondition = Field(..., description="Alert condition type")
     threshold: float = Field(..., description="Price or percentage threshold for the alert")
