@@ -386,6 +386,76 @@ class ArticleService:
             logger.error(f"Error updating article {article_id} sentiment: {str(e)}")
             return False
 
+    async def get_average_sentiment_for_symbols(
+        self, 
+        symbols: List[str],
+        days_ago: int = 7
+    ) -> Dict[str, Optional[float]]:
+        """
+        Calculate the average sentiment score for a list of symbols from recent articles.
+
+        Args:
+            symbols: A list of symbols (e.g., ['BTC', 'ETH']).
+            days_ago: How many days back to include articles from.
+
+        Returns:
+            A dictionary mapping each symbol to its average sentiment score or None.
+        """
+        if not symbols:
+            return {}
+
+        collection = await self._get_collection()
+        start_date = datetime.now(timezone.utc) - timedelta(days=days_ago)
+        
+        # Prepare the aggregation pipeline
+        pipeline = [
+            {
+                "$match": {
+                    "keywords": {"$in": symbols},
+                    "published_at": {"$gte": start_date},
+                    "sentiment.score": {"$ne": None}
+                }
+            },
+            {
+                "$unwind": "$keywords"
+            },
+            {
+                "$match": {
+                    "keywords": {"$in": symbols}
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$keywords",
+                    "average_sentiment": {"$avg": "$sentiment.score"}
+                }
+            },
+            {
+                "$project": {
+                    "symbol": "$_id",
+                    "average_sentiment": 1,
+                    "_id": 0
+                }
+            }
+        ]
+
+        try:
+            cursor = collection.aggregate(pipeline)
+            results = await cursor.to_list(length=len(symbols))
+            
+            sentiment_map = {res['symbol']: res['average_sentiment'] for res in results}
+            
+            # Ensure all requested symbols are in the output dict
+            for symbol in symbols:
+                if symbol not in sentiment_map:
+                    sentiment_map[symbol] = None # No articles found or no sentiment score
+
+            return sentiment_map
+        except Exception as e:
+            logger.error(f"Error calculating average sentiment for symbols {symbols}: {e}", exc_info=True)
+            # Re-raise the exception to provide a clearer server error
+            raise e
+
 
 # Singleton instance
 article_service = ArticleService()

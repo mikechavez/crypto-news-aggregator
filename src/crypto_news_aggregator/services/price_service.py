@@ -66,6 +66,76 @@ class CoinGeckoPriceService:
         except Exception as e:
             logger.error(f"Unexpected error in get_bitcoin_price: {e}")
             raise
+
+    async def get_prices(self, coin_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """
+        Get current prices and 24h change for a list of cryptocurrencies.
+
+        Args:
+            coin_ids: A list of CoinGecko coin IDs (e.g., ['bitcoin', 'ethereum']).
+
+        Returns:
+            A dictionary mapping each coin ID to its price data.
+        """
+        if not coin_ids:
+            return {}
+
+        session = await self.get_session()
+        ids_str = ",".join(coin_ids)
+        url = f"{self.BASE_URL}/simple/price?ids={ids_str}&vs_currencies=usd&include_24hr_change=true"
+
+        try:
+            async with session.get(url) as response:
+                response.raise_for_status()
+                data = await response.json()
+
+                result = {}
+                for coin_id, price_data in data.items():
+                    price = price_data.get('usd')
+                    change_24h = price_data.get('usd_24h_change', 0)
+                    result[coin_id] = {
+                        'price': float(price) if price is not None else None,
+                        'change_24h': float(change_24h) if change_24h is not None else 0.0,
+                        'timestamp': datetime.now(timezone.utc)
+                    }
+                return result
+
+        except aiohttp.ClientError as e:
+            logger.error(f"Error fetching prices from CoinGecko: {e}")
+            return {coin_id: {} for coin_id in coin_ids} # Return empty dicts for failed coins
+        except Exception as e:
+            logger.error(f"Unexpected error in get_prices: {e}")
+            return {coin_id: {} for coin_id in coin_ids}
+
+    async def get_historical_prices(self, coin_id: str, days: int) -> Optional[List[Tuple[datetime, float]]]:
+        """
+        Get historical price data for a specific coin.
+
+        Args:
+            coin_id: The CoinGecko ID of the coin (e.g., 'bitcoin').
+            days: The number of days to fetch historical data for.
+
+        Returns:
+            A list of (timestamp, price) tuples, or None if an error occurs.
+        """
+        session = await self.get_session()
+        url = f"{self.BASE_URL}/coins/{coin_id}/market_chart?vs_currency=usd&days={days}&interval=daily"
+
+        try:
+            async with session.get(url) as response:
+                response.raise_for_status()
+                data = await response.json()
+                
+                prices = data.get('prices', [])
+                # Convert timestamp from ms to datetime object
+                return [(datetime.fromtimestamp(p[0] / 1000, tz=timezone.utc), p[1]) for p in prices]
+
+        except aiohttp.ClientError as e:
+            logger.error(f"Error fetching historical data for {coin_id}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error in get_historical_prices for {coin_id}: {e}")
+            return None
     
     async def calculate_price_change_percent(
         self, 
