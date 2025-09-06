@@ -89,6 +89,9 @@ coverage.xml
 .mypy_cache/
 .dmypy.json
 
+# Local config
+config.ini
+
 # Pyre
 .pyre/
 

@@ -32,7 +32,8 @@ dependencies = [
     "python-multipart (>=0.0.20,<0.0.21)",
     "bcrypt (>=4.3.0,<5.0.0)",
     "motor (>=3.5.0,<4.0.0)",
-    "unidecode"
+    "unidecode",
+    "numpy (>=1.22.3,<2.0.0)"
 ]
 
 [tool.poetry]
