@@ -18,8 +18,14 @@ router = get_router()
 from . import articles, sources, health, tasks
 from .endpoints import price, emails, auth
 
-# Import test endpoints (only in debug mode)
-if get_settings().DEBUG or get_settings().TESTING:
+# Import test endpoints only when explicitly enabled
+def _enable_test_endpoints() -> bool:
+    try:
+        return bool(get_settings().model_dump().get("ENABLE_TEST_ENDPOINTS", False))
+    except Exception:
+        return False
+
+if _enable_test_endpoints():
     from .endpoints import test_alerts
 
 # OAuth2 scheme for token authentication
@@ -46,8 +52,8 @@ protected_router.include_router(articles.router, prefix="/articles", tags=["arti
 protected_router.include_router(sources.router, prefix="/sources", tags=["sources"])
 protected_router.include_router(price.router, prefix="/price", tags=["price"])
 
-# Include test endpoints only in debug mode
-if get_settings().DEBUG or get_settings().TESTING:
+# Include test endpoints only when explicitly enabled
+if _enable_test_endpoints():
     protected_router.include_router(test_alerts.router, prefix="/test", tags=["test"])
 
 # Email tracking endpoints (partially public - some endpoints don't require auth)

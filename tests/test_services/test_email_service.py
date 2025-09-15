@@ -9,7 +9,7 @@ from bson import ObjectId
 from datetime import datetime, timedelta
 
 from src.crypto_news_aggregator.services.email_service import EmailService, email_service
-from src.crypto_news_aggregator.db.mongodb_models import EmailEventType
+from src.crypto_news_aggregator.models.email import EmailEventType
 from src.crypto_news_aggregator.core.config import get_settings
 
 # Test data
@@ -22,7 +22,7 @@ TEST_TEXT_CONTENT = "Test email content"
 # Mock the database
 @pytest.fixture
 def mock_db():
-    with patch('src.crypto_news_aggregator.services.email_service.get_database') as mock_get_db:
+    with patch('src.crypto_news_aggregator.services.email_service.get_mongodb') as mock_get_db:
         mock_db = AsyncMock()
         mock_get_db.return_value = mock_db
         mock_db.email_tracking = AsyncMock()

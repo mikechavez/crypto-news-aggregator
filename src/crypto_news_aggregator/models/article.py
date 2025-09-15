@@ -3,7 +3,7 @@ Article model for storing and processing news articles.
 """
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, ConfigDict
 from bson import ObjectId
 from ..db.mongodb import PyObjectId
 
@@ -27,17 +27,33 @@ class ArticleCreate(ArticleBase):
     """Model for creating a new article."""
     pass
 
+
+class ArticleUpdate(BaseModel):
+    """Model for updating an existing article."""
+    title: Optional[str] = None
+    content: Optional[str] = None
+    source_name: Optional[str] = None
+    url: Optional[HttpUrl] = None
+    published_at: Optional[datetime] = None
+    author: Optional[str] = None
+    description: Optional[str] = None
+    image_url: Optional[HttpUrl] = None
+    language: Optional[str] = None
+    category: Optional[str] = None
+    tags: Optional[List[str]] = None
+    sentiment_score: Optional[float] = None
+    entities: Optional[List[Dict[str, Any]]] = None
+
 class ArticleInDB(ArticleBase):
     """Model for article data stored in the database."""
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-        schema_extra = {
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_schema_extra={
             "example": {
                 "title": "Bitcoin Price Surges Past $60,000",
                 "content": "Bitcoin has reached a new all-time high...",
@@ -55,10 +71,11 @@ class ArticleInDB(ArticleBase):
                 ]
             }
         }
+    )
 
 class Article(ArticleInDB):
     """Public-facing article model (excludes internal fields)."""
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+    )

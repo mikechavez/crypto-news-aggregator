@@ -498,3 +498,7 @@ def pytest_configure(config):
         "markers",
         "asyncio: mark test as async so it can use async/await"
     )
+    config.addinivalue_line(
+        "markers",
+        "integration: mark test as an integration test that may start subprocesses or external services"
+    )

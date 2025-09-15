@@ -5,11 +5,14 @@ from typing import List, Optional, Dict, AsyncGenerator
 import json
 import re
 import asyncio
+import logging
+import logging
 
 from ..services.price_service import price_service
 from ..services.article_service import article_service
 from ..services.correlation_service import correlation_service
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Mappings for symbols, names, and CoinGecko IDs
@@ -75,13 +78,18 @@ def _get_sentiment_label(score: Optional[float]) -> str:
 
 async def get_market_sentiment(symbols: List[str]) -> Dict:
     """Gets market sentiment from the article service."""
-    # Fetch average sentiment scores
-    sentiment_scores = await article_service.get_average_sentiment_for_symbols(symbols)
+    try:
+        logger.info(f"Fetching market sentiment for symbols: {symbols}")
+        # Fetch average sentiment scores
+        sentiment_scores = await article_service.get_average_sentiment_for_symbols(symbols)
 
-    # Convert scores to labels
-    sentiment_labels = {symbol: _get_sentiment_label(score) for symbol, score in sentiment_scores.items()}
+        # Convert scores to labels
+        sentiment_labels = {symbol: _get_sentiment_label(score) for symbol, score in sentiment_scores.items()}
 
-    return {"sentiment": sentiment_labels}
+        return {"sentiment": sentiment_labels}
+    except Exception as e:
+        logger.error(f"Error fetching market sentiment: {e}", exc_info=True)
+        raise HTTPException(status_code=503, detail="Could not fetch market sentiment due to a service error.")
 
 async def analyze_price_correlation(symbol: str) -> Dict:
     """Analyzes price correlation using the correlation service."""
@@ -159,9 +167,12 @@ async def generate_response_content(intent: str, symbols: List[str]) -> str:
         return ", ".join([f"The current price of {s} is ${p:,.2f}" for s, p in prices.items()])
 
     elif intent == "sentiment_analysis":
-        data = await get_market_sentiment(symbols)
-        sentiments = data.get("sentiment", {})
-        return ", ".join([f"The current market sentiment for {s} is {sent}" for s, sent in sentiments.items()])
+        try:
+            data = await get_market_sentiment(symbols)
+            sentiments = data.get("sentiment", {})
+            return ", ".join([f"The current market sentiment for {s} is {sent}" for s, sent in sentiments.items()])
+        except HTTPException as e:
+            return f"An error occurred while fetching market sentiment: {e.detail}"
 
     elif intent == "correlation_analysis":
         if not symbols:
@@ -176,9 +187,14 @@ async def generate_response_content(intent: str, symbols: List[str]) -> str:
 @router.post("/completions")
 async def chat_completions(request: OpenAIChatRequest):
     """OpenAI-compatible chat completions endpoint."""
+    logger.info("Received chat completion request")
     last_message = request.messages[-1].content
     symbols = extract_symbols(last_message)
     intent = classify_intent(last_message)
+
+    logger.info(f"Classified intent as '{intent}' for symbols {symbols}")
+    if intent == "sentiment_analysis":
+        logger.info("Performing sentiment analysis query.")
 
     if request.stream:
         async def response_generator():
@@ -201,13 +217,25 @@ async def chat_completions(request: OpenAIChatRequest):
         return StreamingResponse(stream_chunks(), media_type="text/event-stream")
 
     else:
-        content = await generate_response_content(intent, symbols)
-        response = {
-            "choices": [
-                {
-                    "message": {"role": "assistant", "content": content},
-                    "finish_reason": "stop"
-                }
-            ]
-        }
-        return response
+        try:
+            content = await generate_response_content(intent, symbols)
+            response = {
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": content},
+                        "finish_reason": "stop"
+                    }
+                ]
+            }
+            return response
+        except HTTPException as e:
+            logger.error(f"HTTPException in chat_completions: {e.detail}")
+            return {
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": f"An error occurred: {e.detail}"},
+                        "finish_reason": "stop"
+                    }
+                ]
+            }
+

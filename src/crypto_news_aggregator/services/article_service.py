@@ -10,17 +10,17 @@ from unidecode import unidecode
 from bson import ObjectId
 import inspect
 
-from ..db.mongodb_models import (
+from ..models.article import (
     ArticleInDB,
     ArticleCreate,
     ArticleUpdate,
-    SentimentAnalysis,
-    SentimentLabel,
-    PyObjectId
 )
+from ..models.sentiment import SentimentAnalysis
+from ..db.mongodb import PyObjectId
 from ..db.mongodb import mongo_manager, COLLECTION_ARTICLES
 from ..core.config import get_settings
 from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
+from ..core.sentiment_analyzer import SentimentAnalyzer
 
 logger = logging.getLogger(__name__)
 # settings = get_settings()  # Removed top-level settings; use lazy initialization in methods as needed.
@@ -166,6 +166,23 @@ class ArticleService:
         article_data["created_at"] = datetime.now(timezone.utc)
         article_data["updated_at"] = datetime.now(timezone.utc)
         
+        # Compute sentiment for the article content/title
+        try:
+            s = SentimentAnalyzer.analyze_article(
+                content=article_data.get("content") or "",
+                title=article_data.get("title")
+            )
+            # Map to Mongo-friendly schema
+            sentiment_payload = {
+                "score": float(s.get("polarity", 0.0)),
+                "magnitude": abs(float(s.get("polarity", 0.0))),
+                "label": (str(s.get("label", "Neutral")).lower()),
+                "subjectivity": float(s.get("subjectivity", 0.0)),
+            }
+            article_data["sentiment"] = sentiment_payload
+        except Exception as e:
+            logger.warning(f"Failed to compute sentiment for article '{article_data.get('title','')}': {e}")
+
         # Create the article in MongoDB
         collection = await self._get_collection()
         result = await collection.insert_one(article_data)
@@ -453,8 +470,8 @@ class ArticleService:
             return sentiment_map
         except Exception as e:
             logger.error(f"Error calculating average sentiment for symbols {symbols}: {e}", exc_info=True)
-            # Re-raise the exception to provide a clearer server error
-            raise e
+            # Return an empty dict to indicate failure without crashing
+            return {}
 
 
 # Singleton instance

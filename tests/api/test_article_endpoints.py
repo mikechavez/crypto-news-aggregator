@@ -27,9 +27,9 @@ os.environ["SECRET_KEY"] = "test-secret-key"
 
 # Import the FastAPI app after setting environment variables
 from src.crypto_news_aggregator.main import app
-from src.crypto_news_aggregator.db.mongodb_models import ArticleInDB, ArticleSource, SentimentAnalysis, SentimentLabel
+from src.crypto_news_aggregator.models.article import ArticleInDB
 from src.crypto_news_aggregator.services.article_service import article_service
-from src.crypto_news_aggregator.db.mongodb_models import PyObjectId
+from src.crypto_news_aggregator.db.mongodb import PyObjectId
 
 # Client fixture will be provided by conftest.py
 
@@ -41,35 +41,20 @@ test_article_id = "507f1f77bcf86cd799439011"
 
 # Create test article data that matches the ArticleInDB model
 test_article_data = {
-    "_id": PyObjectId(test_article_id),
+    "id": PyObjectId(test_article_id),
     "title": "Test Article",
-    "description": "This is a test article description",
     "content": "This is the full content of the test article.",
+    "source_name": "Test Source",
     "url": "https://example.com/test-article",
-    "url_to_image": "https://example.com/image.jpg",
-    "author": "Test Author",
-    "source": ArticleSource(
-        id="test-source-1",
-        name="Test Source",
-        url="https://example.com"
-    ),
-    "language": "en",
-    "category": "test",
-    "keywords": ["test", "crypto", "blockchain"],
-    "entities": {},
-    "metadata": {},
     "published_at": now,
     "created_at": now,
     "updated_at": now,
-    "sentiment": SentimentAnalysis(
-        score=0.8,
-        magnitude=0.9,
-        label=SentimentLabel.POSITIVE,
-        subjectivity=0.6
-    ),
-    "is_analyzed": True,
-    "is_duplicate": False,
-    "processed": True
+    "description": "A test article description",
+    "author": "Test Author",
+    "image_url": "https://example.com/image.jpg",
+    "tags": ["test"],
+    "sentiment_score": 0.5,
+    "entities": [],
 }
 
 # Create an ArticleInDB instance from the test data
@@ -78,7 +63,7 @@ test_article = ArticleInDB(**test_article_data)
 # Mock for the article service
 @pytest.fixture
 def mock_article_service():
-    with patch('src.crypto_news_aggregator.api.v1.endpoints.articles.article_service') as mock_service:
+    with patch('src.crypto_news_aggregator.services.article_service.article_service') as mock_service:
         # Configure the mock to return our test article
         mock_service.get_article = AsyncMock(return_value=test_article)
         
@@ -102,7 +87,8 @@ def mock_article_service():
         from bson import ObjectId
         
         mock_user = UserInDB(
-            _id=str(ObjectId()),
+            id=str(ObjectId()),
+            username="testuser",
             email="test@example.com",
             hashed_password="hashed_password",
             is_active=True,
@@ -147,10 +133,8 @@ class TestArticleEndpoints:
         # Verify article data
         article = data[0]
         assert article["id"] == test_article_id, f"Unexpected article ID: {article.get('id')}"
-        assert article["title"] == test_article_data.title
-        # The API should return the source as an object
-        assert isinstance(article["source"], dict)
-        assert article["source"]["name"] == test_article_data.source.name
+        assert article["title"] == test_article.title
+        assert article["source_name"] == test_article.source_name
         
         # Verify the X-Total-Count header is set
         assert "X-Total-Count" in response.headers
@@ -165,10 +149,8 @@ class TestArticleEndpoints:
         assert response.status_code == status.HTTP_200_OK, f"Unexpected status code: {response.status_code}. Response: {response.text}"
         data = response.json()
         assert str(data["id"]) == test_article_id  # Should be string ID in response
-        assert data["title"] == test_article_data.title
-        # The API should return the source as an object
-        assert isinstance(data["source"], dict)
-        assert data["source"]["name"] == test_article_data.source.name
+        assert data["title"] == test_article.title
+        assert data["source_name"] == test_article.source_name
         
         # Test with invalid ID format
         response = client.get("/api/v1/articles/invalid-id")

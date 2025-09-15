@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
     BASE_URL: str = "http://localhost:8001"  # Base URL for generating absolute URLs in emails
+    PORT: int = 8000 # Port for the Uvicorn server
 
     # PostgreSQL settings (kept for backward compatibility)
     POSTGRES_SERVER: str = "localhost"
@@ -23,7 +24,8 @@ class Settings(BaseSettings):
     POSTGRES_URL: str = f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_SERVER}/{POSTGRES_DB}"
     
     # MongoDB settings
-    MONGODB_URI: str = ""  # e.g., "mongodb+srv://<username>:<password>@<cluster>.mongodb.net/"
+    # Default to local MongoDB instance if env var is not provided
+    MONGODB_URI: str = "mongodb://localhost:27017"  # override with env var MONGODB_URI
     MONGODB_NAME: str = "crypto_news"
     MONGODB_MAX_POOL_SIZE: int = 10  # Default pool size for MongoDB connections
     MONGODB_MIN_POOL_SIZE: int = 1   # Default min pool size for MongoDB connections  # Default database name

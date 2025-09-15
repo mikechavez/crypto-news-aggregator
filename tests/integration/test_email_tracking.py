@@ -7,7 +7,8 @@ from unittest.mock import patch, AsyncMock
 from bson import ObjectId
 from datetime import datetime, timedelta
 
-from src.crypto_news_aggregator.db.mongodb_models import EmailEventType
+from src.crypto_news_aggregator.models.email import EmailEventType
+from src.crypto_news_aggregator.core.security import create_access_token
 
 # Test data
 TEST_USER_ID = str(ObjectId())
@@ -21,14 +22,13 @@ TEST_UNSUBSCRIBE_TOKEN = "test_unsubscribe_token"
 @pytest.fixture
 def auth_headers():
     """Generate authentication headers with a test token."""
-    from src.crypto_news_aggregator.core.auth import create_access_token
-    token = create_access_token(data={"sub": TEST_USER_ID})
+    token = create_access_token(subject=TEST_USER_ID)
     return {"Authorization": f"Bearer {token}"}
 
 @pytest.fixture
 def mock_db():
     """Mock the database for testing."""
-    with patch('src.crypto_news_aggregator.api.v1.endpoints.emails.get_database') as mock_get_db:
+    with patch('src.crypto_news_aggregator.api.v1.endpoints.emails.get_mongodb') as mock_get_db:
         mock_db = AsyncMock()
         mock_get_db.return_value = mock_db
         

@@ -9,11 +9,11 @@ from bson import ObjectId
 from pymongo.results import InsertOneResult, UpdateResult
 
 from src.crypto_news_aggregator.services.article_service import ArticleService, article_service
-from src.crypto_news_aggregator.db.mongodb_models import ArticleInDB, ArticleSource, SentimentAnalysis, SentimentLabel
+from src.crypto_news_aggregator.models.article import ArticleInDB
+from src.crypto_news_aggregator.models.sentiment import SentimentAnalysis, SentimentLabel
 
 # Test data
 TEST_ARTICLE_ID = "507f1f77bcf86cd799439011"
-TEST_SOURCE = ArticleSource(id="test-source", name="Test Source")
 TEST_SENTIMENT = SentimentAnalysis(
     score=0.8,
     magnitude=0.9,
@@ -24,27 +24,22 @@ TEST_SENTIMENT = SentimentAnalysis(
 def create_test_article(article_id=TEST_ARTICLE_ID, **overrides):
     """Helper to create a test article dictionary."""
     article = {
-        "_id": ObjectId(article_id),
+        "id": ObjectId(article_id),
         "title": "Test Article",
         "description": "Test description",
         "content": "This is a test article content.",
         "url": "https://example.com/test-article",
-        "url_to_image": "https://example.com/image.jpg",
+        "image_url": "https://example.com/image.jpg",
         "author": "Test Author",
-        "source": TEST_SOURCE.model_dump(),
+        "source_name": "Test Source",
         "language": "en",
         "category": "test",
-        "keywords": ["test", "crypto"],
-        "entities": {},
-        "metadata": {},
+        "tags": ["test", "crypto"],
+        "entities": [],
+        "sentiment_score": 0.0,
         "published_at": datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
         "created_at": datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
         "updated_at": datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
-        "is_analyzed": False,
-        "is_duplicate": False,
-        "processed": False,
-        "sentiment": None,
-        "fingerprint": "test_fingerprint_123"
     }
     article.update(overrides)
     return article

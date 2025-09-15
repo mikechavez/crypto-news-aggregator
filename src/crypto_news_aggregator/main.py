@@ -2,7 +2,6 @@
 import logging
 import asyncio
 import os
-import subprocess
 import sys
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
@@ -17,6 +16,7 @@ from .tasks.sync_tasks import sync_scheduler
 from .tasks.price_monitor import price_monitor
 from .core.config import get_settings
 from .core.auth import get_api_key, API_KEY_NAME
+from .db.mongodb import initialize_mongodb, mongo_manager
 
 def setup_logging():
     """Configure logging for the application."""
@@ -59,6 +59,11 @@ async def lifespan(app: FastAPI):
     logger.info("Starting application...")
     try:
         settings = get_settings()
+        # Initialize MongoDB connection and indexes early so services can use it
+        logger.info("Initializing MongoDB connection...")
+        mongo_ok = await initialize_mongodb()
+        if not mongo_ok:
+            logger.error("MongoDB initialization failed. The service will run but DB features may be degraded.")
         if settings.TESTING:
             logger.info("TESTING mode detected: Skipping background tasks startup.")
         else:
@@ -85,6 +90,9 @@ async def lifespan(app: FastAPI):
         if settings.ENABLE_DB_SYNC and sync_scheduler._task and not sync_scheduler._task.done():
             logger.info("Stopping database synchronization task...")
             await sync_scheduler.stop()
+        # Close MongoDB connections gracefully
+        logger.info("Closing MongoDB connections...")
+        await mongo_manager.aclose()
         logger.info("Application shutdown tasks completed successfully.")
     except Exception as e:
         logger.error(f"Application shutdown failed: {e}", exc_info=True)
@@ -139,36 +147,3 @@ app.include_router(openai_api.router, prefix="/v1/chat", tags=["OpenAI Compatibi
 
 # Health check endpoint is now in api/v1/health.py
 
-def kill_process_on_port(port: int):
-    """Find and kill the process running on the given port."""
-    if sys.platform == "win32":
-        command = f"netstat -ano | findstr :{port}"
-        try:
-            output = subprocess.check_output(command, shell=True, text=True)
-            if output:
-                pid = output.strip().split()[-1]
-                subprocess.run(f"taskkill /F /PID {pid}", shell=True)
-                logger.info(f"Killed process {pid} on port {port}")
-        except subprocess.CalledProcessError:
-            logger.info(f"No process found on port {port}")
-    else:
-        command = f"lsof -ti :{port}"
-        try:
-            pid = subprocess.check_output(command, shell=True, text=True).strip()
-            if pid:
-                subprocess.run(["kill", "-9", pid])
-                logger.info(f"Killed process {pid} on port {port}")
-        except subprocess.CalledProcessError:
-            logger.info(f"No process found on port {port}")
-
-if __name__ == "__main__":
-    import uvicorn
-    PORT = 8000
-    kill_process_on_port(PORT)
-    uvicorn.run(
-        "crypto_news_aggregator.main:app", 
-        host="0.0.0.0", 
-        port=PORT, 
-        reload=True, 
-        log_config=None
-    )

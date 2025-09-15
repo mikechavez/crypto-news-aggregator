@@ -14,7 +14,7 @@ from ....core.config import get_settings
 from ....db.mongodb import mongo_manager, get_mongodb
 from ....models.user import User, UserInDB, UserUpdate
 from ....services.email_service import email_service
-from ....db.mongodb_models import EmailTracking, EmailEvent, EmailEventType
+from ....models.email import EmailTracking, EmailEvent, EmailEventType
 from ....core.security import get_current_active_user
 from ....utils.template_renderer import template_renderer
 
@@ -35,7 +35,7 @@ async def track_email_open(
     Track when an email is opened by the recipient.
     This endpoint is called when the tracking pixel in an email is loaded.
     """
-    db = await get_database()
+    db = await get_mongodb()
     
     # Record the open event
     ip_address = request.client.host if request.client else None
@@ -93,7 +93,7 @@ async def track_link_click(
     Track when a link in an email is clicked.
     This endpoint redirects to the original URL after recording the click.
     """
-    db = await get_database()
+    db = await get_mongodb()
     
     # Get the tracking record
     tracking = await db.email_tracking.find_one({"message_id": message_id})
@@ -148,7 +148,7 @@ async def unsubscribe_email(
     Handle email unsubscription requests.
     This endpoint is called when a user clicks the unsubscribe link in an email.
     """
-    db = await get_database()
+    db = await get_mongodb()
     
     # In a real implementation, you would validate the token and identify the user
     # For now, we'll just log the unsubscription
@@ -196,7 +196,7 @@ async def get_email_tracking(
     Get tracking information for a specific email.
     Only accessible by the recipient or an admin.
     """
-    db = await get_database()
+    db = await get_mongodb()
     
     # Get the tracking record
     tracking = await db.email_tracking.find_one({"message_id": message_id})
@@ -230,7 +230,7 @@ async def get_user_email_tracking(
             detail="Not authorized to view this user's email tracking information"
         )
     
-    db = await get_database()
+    db = await get_mongodb()
     
     # Get tracking records for the user, most recent first
     cursor = db.email_tracking.find({"user_id": ObjectId(user_id)}) \

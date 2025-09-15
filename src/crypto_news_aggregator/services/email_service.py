@@ -18,7 +18,7 @@ from bson import ObjectId
 
 from ..core.config import get_settings
 from ..db.mongodb import get_mongodb
-from ..db.mongodb_models import EmailEvent, EmailEventType, EmailTracking
+from ..models.email import EmailEvent, EmailEventType, EmailTracking
 from ..utils.template_renderer import template_renderer
 
 logger = logging.getLogger(__name__)

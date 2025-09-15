@@ -9,6 +9,7 @@ from pymongo import MongoClient, IndexModel, TEXT, ASCENDING, DESCENDING
 from pymongo.database import Database
 from pymongo.collection import Collection
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorCollection
+import certifi
 from functools import lru_cache, wraps
 import logging
 import asyncio
@@ -17,28 +18,123 @@ from bson import ObjectId
 from pydantic import BaseModel, Field
 
 
-class PyObjectId(ObjectId):
+from pydantic_core import core_schema
+from pydantic import GetCoreSchemaHandler
+
+class PyObjectId(str):
     """Custom type for MongoDB ObjectId that works with Pydantic v2."""
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
 
     @classmethod
-    def validate(cls, v):
+    def __get_pydantic_core_schema__(
+        cls,
+        _source_type: Any,
+        _handler: GetCoreSchemaHandler,
+    ) -> core_schema.CoreSchema:
+        return core_schema.json_or_python_schema(
+            json_schema=core_schema.str_schema(),
+            python_schema=core_schema.union_schema(
+                [
+                    core_schema.is_instance_schema(ObjectId),
+                    core_schema.chain_schema(
+                        [
+                            core_schema.str_schema(),
+                            core_schema.no_info_plain_validator_function(cls.validate),
+                        ]
+                    ),
+                ]
+            ),
+            serialization=core_schema.plain_serializer_function_ser_schema(lambda x: str(x)),
+        )
+
+    @classmethod
+    def validate(cls, v: str) -> ObjectId:
         if not ObjectId.is_valid(v):
             raise ValueError("Invalid ObjectId")
         return ObjectId(v)
-
-    @classmethod
-    def __get_pydantic_json_schema__(cls, field_schema):
-        field_schema.update(type="string", format="objectid")
 
 
 # Add PyObjectId to the module's __all__ for better import handling
 __all__ = ["PyObjectId"]
 
 from ..core.config import get_settings
-from .mongodb_models import ARTICLE_INDEXES, ALERT_INDEXES, PRICE_HISTORY_INDEXES
+
+
+# Index definitions
+ARTICLE_INDEXES = [
+    {
+        "keys": [("url", 1)],
+        "name": "url_unique",
+        "unique": True
+    },
+    {
+        "keys": [("title", "text"), ("content", "text"), ("description", "text")],
+        "name": "full_text_search",
+        "default_language": "english",
+        "weights": {
+            "title": 10,
+            "description": 5,
+            "content": 1
+        }
+    },
+    {
+        "keys": [("published_at", -1)],
+        "name": "published_at_desc"
+    },
+    {
+        "keys": [("source.id", 1)],
+        "name": "source_id"
+    },
+    {
+        "keys": [("sentiment.score", 1)],
+        "name": "sentiment_score"
+    },
+    {
+        "keys": [("keywords", 1)],
+        "name": "keywords_idx"
+    },
+    {
+        "keys": [("is_duplicate", 1)],
+        "name": "is_duplicate"
+    },
+    {
+        "keys": [("processed", 1)],
+        "name": "processed_flag"
+    }
+]
+
+ALERT_INDEXES = [
+    {
+        "keys": [("user_id", 1), ("is_active", 1)],
+        "name": "user_active_alerts",
+        "background": True
+    },
+    {
+        "keys": [("crypto_id", 1), ("is_active", 1), ("last_triggered", -1)],
+        "name": "crypto_active_alerts",
+        "background": True
+    },
+    {
+        "keys": [("created_at", 1)],
+        "name": "alert_expiration",
+        "expireAfterSeconds": 90 * 24 * 60 * 60,  # 90 days
+        "background": True
+    }
+]
+
+PRICE_HISTORY_INDEXES = [
+    {
+        "keys": [("cryptocurrency", 1), ("timestamp", -1)],
+        "name": "crypto_timestamp_compound",
+        "background": True
+    },
+    {
+        "keys": [("timestamp", 1)],
+        "name": "price_history_ttl",
+        "expireAfterSeconds": 2592000,  # 30 days
+        "background": True
+    }
+]
+
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +238,7 @@ class MongoManager:
                     self.settings.MONGODB_URI,
                     maxPoolSize=self.settings.MONGODB_MAX_POOL_SIZE,
                     minPoolSize=self.settings.MONGODB_MIN_POOL_SIZE,
+                    tlsCAFile=certifi.where(),
                 )
                 
                 await self._async_client.admin.command('ping')
@@ -188,7 +285,8 @@ class MongoManager:
                         waitQueueTimeoutMS=10000,
                         waitQueueMultiple=10,
                         connect=False,
-                        appname="crypto-news-aggregator"
+                        appname="crypto-news-aggregator",
+                        tlsCAFile=certifi.where(),
                     )
                     logger.info("Created new synchronous MongoDB client")
         return self._sync_client
@@ -347,6 +445,7 @@ class MongoManager:
                 return False
                 
             await client.admin.command('ping')
+            logger.info("MongoDB ping successful.")
             return True
             
         except Exception as e:

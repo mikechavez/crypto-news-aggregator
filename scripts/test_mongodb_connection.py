@@ -97,6 +97,9 @@ if __name__ == "__main__":
     else:
         logger.error("❌ MongoDB tests failed. See logs above for details.")
     
-    # Clean up the MongoDB client
-    mongo_manager.close()
-    logger.info("MongoDB client closed")
+    # Clean up the MongoDB client (async)
+    try:
+        asyncio.run(mongo_manager.aclose())
+        logger.info("MongoDB client closed")
+    except Exception as e:
+        logger.warning(f"Error closing MongoDB client: {e}")

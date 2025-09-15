@@ -2,8 +2,9 @@
 from datetime import datetime
 from typing import Optional, List, Dict
 from enum import Enum
-from pydantic import BaseModel, EmailStr, Field, HttpUrl, validator
+from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator, ConfigDict
 from bson import ObjectId
+from ..db.mongodb import PyObjectId
 
 
 class UserSubscriptionPreferences(BaseModel):
@@ -50,14 +51,15 @@ class UserBase(BaseModel):
     )
     last_login_at: Optional[datetime] = None
     last_login_ip: Optional[str] = None
-    
-    @validator('username')
-    def username_to_lower(cls, v):
-        """Convert username to lowercase for case-insensitive uniqueness."""
-        return v.lower()
     login_count: int = 0
     timezone: Optional[str] = "UTC"
     locale: Optional[str] = "en-US"
+
+    @field_validator('username')
+    @classmethod
+    def username_to_lower(cls, v: str) -> str:
+        """Convert username to lowercase for case-insensitive uniqueness."""
+        return v.lower()
 
 
 class UserCreate(BaseModel):
@@ -71,39 +73,33 @@ class UserCreate(BaseModel):
     last_name: Optional[str] = Field(None, max_length=100)
     timezone: Optional[str] = "UTC"
     locale: Optional[str] = "en-US"
-    
-    @validator('username')
-    def username_to_lower(cls, v):
+
+    @field_validator('username')
+    @classmethod
+    def username_to_lower(cls, v: str) -> str:
         """Convert username to lowercase for case-insensitive uniqueness."""
         return v.lower()
 
 
 class UserInDB(UserBase):
     """User model for database operations."""
-    id: str = Field(..., alias="_id")
+    id: PyObjectId = Field(..., alias="_id")
     hashed_password: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    class Config:
-        """Pydantic config."""
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-        
-    @validator('id', pre=True)
-    def validate_id(cls, v):
-        if isinstance(v, ObjectId):
-            return str(v)
-        return v
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+    )
 
 
 class UserUpdate(BaseModel):
     """Model for updating user profile."""
     username: Optional[str] = Field(
-        None, 
-        min_length=3, 
-        max_length=50, 
+        None,
+        min_length=3,
+        max_length=50,
         pattern=r'^[a-zA-Z0-9_]+$',
         description="Username must be 3-50 characters long and can only contain letters, numbers, and underscores"
     )
@@ -113,9 +109,10 @@ class UserUpdate(BaseModel):
     locale: Optional[str] = None
     subscription_preferences: Optional[UserSubscriptionPreferences] = None
     tracking_settings: Optional[UserTrackingSettings] = None
-    
-    @validator('username')
-    def username_to_lower(cls, v):
+
+    @field_validator('username')
+    @classmethod
+    def username_to_lower(cls, v: Optional[str]) -> Optional[str]:
         """Convert username to lowercase for case-insensitive uniqueness."""
         return v.lower() if v else v
 
@@ -125,11 +122,10 @@ class User(UserBase):
     id: str = Field(..., alias="_id")
     created_at: datetime
     updated_at: datetime
-    
-    class Config:
-        """Pydantic config."""
-        allow_population_by_field_name = True
-        json_encoders = {ObjectId: str}
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
 
 
 class UserResponse(BaseModel):
@@ -143,11 +139,10 @@ class UserResponse(BaseModel):
     email_verified: bool
     subscription_preferences: UserSubscriptionPreferences
     created_at: datetime
-    
-    class Config:
-        """Pydantic config."""
-        allow_population_by_field_name = True
-        json_encoders = {ObjectId: str}
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
 
 
 class EmailVerificationRequest(BaseModel):

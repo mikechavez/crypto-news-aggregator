@@ -3,31 +3,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional, ClassVar, Any, Dict
 from bson import ObjectId
-from pydantic import BaseModel, Field, field_validator, ConfigDict, GetCoreSchemaHandler
-from pydantic_core import core_schema
-
-
-class PyObjectId(str):
-    """Custom type for MongoDB ObjectId."""
-    @classmethod
-    def __get_pydantic_core_schema__(
-        cls, _source_type: Any, _handler: GetCoreSchemaHandler
-    ) -> core_schema.CoreSchema:
-        return core_schema.chain_schema(
-            [
-                core_schema.str_schema(),
-                core_schema.no_info_plain_validator_function(cls.validate),
-            ]
-        )
-
-    @classmethod
-    def validate(cls, v: Any) -> str:
-        """Validate and convert input to string representation of ObjectId."""
-        if isinstance(v, ObjectId):
-            return str(v)
-        if isinstance(v, str) and ObjectId.is_valid(v):
-            return v
-        raise ValueError("Invalid ObjectId")
+from pydantic import BaseModel, Field, field_validator, ConfigDict, field_serializer
+from ..db.mongodb import PyObjectId
 
 
 class AlertCondition(str, Enum):
@@ -40,7 +17,7 @@ class AlertCondition(str, Enum):
 
 class AlertBase(BaseModel):
     """Base alert model with common fields."""
-    user_id: int = Field(..., description="ID of the user who created the alert")
+    user_id: PyObjectId = Field(..., description="ID of the user who created the alert (ObjectId string)")
     crypto_id: str = Field(..., description="Cryptocurrency symbol (e.g., 'bitcoin')")
     condition: AlertCondition = Field(..., description="Alert condition type")
     threshold: float = Field(..., description="Price or percentage threshold for the alert")
@@ -110,18 +87,25 @@ class AlertInDB(AlertBase):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
+    @field_serializer('created_at', 'updated_at', 'last_triggered')
+    def serialize_dt(self, dt: Optional[datetime]) -> Optional[str]:
+        """Serialize datetime objects to ISO format."""
+        if dt:
+            return dt.isoformat()
+        return None
+
+    @field_serializer('status')
+    def serialize_status(self, status: AlertStatus) -> str:
+        """Serialize AlertStatus enum to its value."""
+        return status.value
+
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True,
-        json_encoders={
-            datetime: lambda v: v.isoformat(),
-            AlertStatus: lambda v: v.value,
-            ObjectId: str,
-        },
         json_schema_extra={
             "example": {
-                "id": "507f1f77bcf86cd799439011",
-                "user_id": "user_123",
+                "id": "615f7b3b3e3e3e3e3e3e3e3e",
+                "user_id": "615f7b3b3e3e3e3e3e3e3e3f",
                 "user_email": "user@example.com",
                 "user_name": "John Doe",
                 "crypto_id": "bitcoin",

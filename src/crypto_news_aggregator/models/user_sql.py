@@ -6,17 +6,17 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 class UserBaseSQL(BaseModel):
     """Base Pydantic model for a user, matching the SQL schema."""
-    email: EmailStr = Field(..., example="user@example.com")
+    email: EmailStr = Field(..., examples=["user@example.com"])
     is_active: bool = True
     is_superuser: bool = False
-    first_name: Optional[str] = Field(None, example="John")
-    last_name: Optional[str] = Field(None, example="Doe")
+    first_name: Optional[str] = Field(None, examples=["John"])
+    last_name: Optional[str] = Field(None, examples=["Doe"])
 
 
 class UserCreateSQL(UserBaseSQL):
     """Pydantic model for creating a user in SQL."""
-    username: str = Field(..., example="johndoe")
-    password: str = Field(..., min_length=8, example="aSecurePassword123!")
+    username: str = Field(..., examples=["johndoe"])
+    password: str = Field(..., min_length=8, examples=["aSecurePassword123!"])
 
 
 class UserUpdateSQL(UserBaseSQL):
@@ -27,8 +27,8 @@ class UserUpdateSQL(UserBaseSQL):
 
 class UserInDBBase(UserBaseSQL):
     """Base model for user data stored in the DB."""
-    id: int = Field(..., example=1)
-    username: str = Field(..., example="johndoe")
+    id: int = Field(..., examples=[1])
+    username: str = Field(..., examples=["johndoe"])
     created_at: datetime
     updated_at: datetime
 

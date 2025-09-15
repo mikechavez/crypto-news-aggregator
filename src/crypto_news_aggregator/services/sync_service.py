@@ -11,7 +11,7 @@ from bson import ObjectId
 
 from ..db.session import get_session
 from ..db.models import Article as PGArticle, Source as PGSource
-from ..db.mongodb_models import ArticleInDB, ArticleCreate, ArticleUpdate
+from ..models.article import ArticleInDB, ArticleCreate, ArticleUpdate
 from .article_service import article_service
 from ..core.config import get_settings
 
