@@ -18,15 +18,24 @@ class RedisRESTClient:
             token: The authentication token for the Upstash Redis instance
         """
         settings = get_settings()
-        self.base_url = base_url or settings.UPSTASH_REDIS_REST_URL.rstrip('/')
+        self.base_url = (base_url or settings.UPSTASH_REDIS_REST_URL).rstrip('/')
         self.token = token or settings.UPSTASH_REDIS_TOKEN
-        self.headers = {
-            'Authorization': f'Bearer {self.token}',
-            'Content-Type': 'application/json'
-        }
+        
+        self.enabled = bool(self.base_url and self.token)
+
+        if self.enabled:
+            self.headers = {
+                'Authorization': f'Bearer {self.token}',
+                'Content-Type': 'application/json'
+            }
+        else:
+            self.headers = {}
     
     def _make_request(self, method: str, endpoint: str, **kwargs) -> Any:
         """Make a request to the Upstash Redis REST API."""
+        if not self.enabled:
+            return {'result': None}  # Return a default response if not enabled
+
         url = f"{self.base_url}/{endpoint}"
         response = requests.request(method, url, headers=self.headers, **kwargs)
         response.raise_for_status()
@@ -84,8 +93,4 @@ class RedisRESTClient:
             return False
 
 # Create a singleton instance
-# settings = get_settings()  # Removed top-level settings; use lazy initialization below
-redis_client = RedisRESTClient(
-    base_url=get_settings().UPSTASH_REDIS_REST_URL,
-    token=get_settings().UPSTASH_REDIS_TOKEN
-)
+redis_client = RedisRESTClient()
