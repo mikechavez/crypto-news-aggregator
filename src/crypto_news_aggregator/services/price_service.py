@@ -5,7 +5,63 @@ import logging
 import aiohttp
 from typing import Dict, Optional, List, Any, Tuple
 from datetime import datetime, timezone, timedelta
+from aiocache import caches, cached
 from ..core.config import get_settings
+import random
+
+# Configure a simple in-memory cache
+# In a production environment, you might want to use RedisCache or MemcachedCache
+caches.set_config({
+    'default': {
+        'cache': "aiocache.SimpleMemoryCache",
+        'serializer': {
+            'class': "aiocache.serializers.StringSerializer"
+        }
+    }
+})
+
+# --- MOCK DATA --- #
+def _generate_mock_price(coin_id: str) -> Dict[str, Any]:
+    """Generates mock price data for a given coin ID."""
+    base_price = {
+        'bitcoin': 60000,
+        'ethereum': 2000,
+    }.get(coin_id.lower(), 100)
+    
+    price = base_price * (1 + random.uniform(-0.05, 0.05))
+    change_24h = random.uniform(-5, 5)
+    
+    return {
+        'price': price,
+        'change_24h': change_24h,
+        'timestamp': datetime.now(timezone.utc)
+    }
+
+# --- API Usage Counter ---
+API_CALL_COUNTER = {
+    'count': 0,
+    'last_reset': datetime.now(timezone.utc)
+}
+MONTHLY_API_LIMIT = 10000
+WARNING_THRESHOLD = 0.8  # 80% of the limit
+
+def increment_api_call_counter():
+    """Increments the API call counter and logs a warning if the usage is high."""
+    now = datetime.now(timezone.utc)
+    # Reset counter monthly
+    if (now - API_CALL_COUNTER['last_reset']).days > 30:
+        API_CALL_COUNTER['count'] = 0
+        API_CALL_COUNTER['last_reset'] = now
+
+    API_CALL_COUNTER['count'] += 1
+    usage_percent = (API_CALL_COUNTER['count'] / MONTHLY_API_LIMIT) * 100
+
+    if usage_percent >= WARNING_THRESHOLD * 100:
+        logger.warning(
+            f"CoinGecko API usage is at {usage_percent:.2f}% of the monthly limit. "
+            f"({API_CALL_COUNTER['count']}/{MONTHLY_API_LIMIT})"
+        )
+    logger.debug(f"CoinGecko API calls: {API_CALL_COUNTER['count']}")
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +74,7 @@ class CoinGeckoPriceService:
         self.session = None
         self.price_history: Dict[str, List[Dict]] = {}
         self.market_data: Dict[str, Any] = {}
+        self.settings = get_settings()
         
     async def get_session(self) -> aiohttp.ClientSession:
         """Get or create an aiohttp client session."""
@@ -35,6 +92,7 @@ class CoinGeckoPriceService:
         if self.session and not self.session.closed:
             await self.session.close()
     
+    @cached(ttl=300) # Cache for 5 minutes
     async def get_bitcoin_price(self) -> Dict[str, float]:
         """
         Get current Bitcoin price and 24h change from CoinGecko.
@@ -42,6 +100,11 @@ class CoinGeckoPriceService:
         Returns:
             Dict containing 'price' (float), 'change_24h' (float), and 'timestamp' (datetime)
         """
+        if self.settings.TESTING_MODE:
+            logger.info("TESTING_MODE enabled. Returning mock Bitcoin price.")
+            return _generate_mock_price('bitcoin')
+
+        increment_api_call_counter()
         session = await self.get_session()
         url = f"{self.BASE_URL}/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true"
         
@@ -67,6 +130,7 @@ class CoinGeckoPriceService:
             logger.error(f"Unexpected error in get_bitcoin_price: {e}")
             raise
 
+    @cached(ttl=300) # Cache for 5 minutes
     async def get_prices(self, coin_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         """
         Get current prices and 24h change for a list of cryptocurrencies.
@@ -80,6 +144,11 @@ class CoinGeckoPriceService:
         if not coin_ids:
             return {}
 
+        if self.settings.TESTING_MODE:
+            logger.info(f"TESTING_MODE enabled. Returning mock prices for: {coin_ids}")
+            return {coin_id: _generate_mock_price(coin_id) for coin_id in coin_ids}
+
+        increment_api_call_counter()
         session = await self.get_session()
         ids_str = ",".join(coin_ids)
         url = f"{self.BASE_URL}/simple/price?ids={ids_str}&vs_currencies=usd&include_24hr_change=true"
@@ -107,6 +176,7 @@ class CoinGeckoPriceService:
             logger.error(f"Unexpected error in get_prices: {e}")
             return {coin_id: {} for coin_id in coin_ids}
 
+    @cached(ttl=300) # Cache for 5 minutes
     async def get_historical_prices(self, coin_id: str, days: int) -> Optional[List[Tuple[datetime, float]]]:
         """
         Get historical price data for a specific coin.
@@ -118,6 +188,16 @@ class CoinGeckoPriceService:
         Returns:
             A list of (timestamp, price) tuples, or None if an error occurs.
         """
+        if self.settings.TESTING_MODE:
+            logger.info(f"TESTING_MODE enabled. Returning mock historical prices for: {coin_id}")
+            mock_prices = []
+            for i in range(days):
+                date = datetime.now(timezone.utc) - timedelta(days=i)
+                mock_data = _generate_mock_price(coin_id)
+                mock_prices.append((date, mock_data['price']))
+            return list(reversed(mock_prices)) # Return in chronological order
+
+        increment_api_call_counter()
         session = await self.get_session()
         url = f"{self.BASE_URL}/coins/{coin_id}/market_chart?vs_currency=usd&days={days}&interval=daily"
 
@@ -182,6 +262,7 @@ class CoinGeckoPriceService:
         
         return abs(change_percent) >= threshold, change_percent
     
+    @cached(ttl=300) # Cache for 5 minutes
     async def get_market_data(self) -> Dict[str, Any]:
         """
         Get current market data for Bitcoin.
@@ -189,17 +270,27 @@ class CoinGeckoPriceService:
         Returns:
             Dict containing market data including price, market cap, volume, etc.
         """
+        if self.settings.TESTING_MODE:
+            logger.info("TESTING_MODE enabled. Returning mock market data.")
+            mock_price_data = _generate_mock_price('bitcoin')
+            return {
+                'current_price': mock_price_data['price'],
+                'price_change_percentage_24h': mock_price_data['change_24h'],
+                'market_cap': 1.2e12, # Mock value
+                'total_volume': 5e10, # Mock value
+                'high_24h': mock_price_data['price'] * 1.05,
+                'low_24h': mock_price_data['price'] * 0.95,
+                'last_updated': datetime.now(timezone.utc).isoformat()
+            }
+        
+        increment_api_call_counter()
+        session = await self.get_session()
+        url = f"{self.BASE_URL}/coins/bitcoin?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false"
+
         try:
-            # Get detailed market data for Bitcoin
-            data = self.cg.get_coin_by_id(
-                id='bitcoin',
-                localization=False,
-                tickers=False,
-                market_data=True,
-                community_data=False,
-                developer_data=False,
-                sparkline=False
-            )
+            async with session.get(url) as response:
+                response.raise_for_status()
+                data = await response.json()
             
             if not data or 'market_data' not in data:
                 logger.warning("No market data available in API response")
