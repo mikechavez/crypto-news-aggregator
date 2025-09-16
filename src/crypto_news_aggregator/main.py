@@ -53,14 +53,18 @@ def setup_logging():
 
 logger = setup_logging()
 
+try:
+    settings = get_settings()
+except Exception as e:
+    logger.critical(f"Failed to load settings: {e}", exc_info=True)
+    # Exit if settings fail to load, as the app cannot run.
+    sys.exit(1)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown events."""
     logger.info("--- Application Lifespan Startup --- ")
     try:
-        logger.info("Loading settings...")
-        settings = get_settings()
-        logger.info("Settings loaded successfully.")
 
         logger.info("Initializing MongoDB connection...")
         mongo_ok = await initialize_mongodb()
