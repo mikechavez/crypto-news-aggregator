@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     
     # MongoDB settings
     # Default to local MongoDB instance if env var is not provided
-    MONGODB_URI: str = "mongodb://localhost:27017"  # override with env var MONGODB_URI
+    MONGODB_URI: str  # override with env var MONGODB_URI
     MONGODB_NAME: str = "crypto_news"
     MONGODB_MAX_POOL_SIZE: int = 10  # Default pool size for MongoDB connections
     MONGODB_MIN_POOL_SIZE: int = 1   # Default min pool size for MongoDB connections  # Default database name
@@ -58,10 +58,11 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
     # Security settings
-    SECRET_KEY: str = "your-secret-key-here"  # Change this to a secure secret key
+    SECRET_KEY: str  # Change this to a secure secret key
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutes
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7  # 7 days
+    API_KEY: str = "test-api-key"  # For testing purposes
     
     # CORS settings
     CORS_ORIGINS: str = "*"  # In production, replace with specific origins
@@ -117,11 +118,6 @@ class Settings(BaseSettings):
     MIN_ARTICLE_LENGTH: int = 100  # Minimum characters for an article to be processed
     MAX_ARTICLE_AGE_DAYS: int = 7  # Ignore articles older than this
     
-    # Security settings
-    SECRET_KEY: str = "your-secret-key-here"  # Change this to a secure secret key
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    API_KEY: str = "test-api-key"  # For testing purposes
 
     # Cache settings
     CACHE_EXPIRE: int = 3600  # 1 hour
