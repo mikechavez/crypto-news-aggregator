@@ -56,13 +56,17 @@ logger = setup_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown events."""
-    logger.info("Starting application...")
+    logger.info("--- Application Lifespan Startup --- ")
     try:
+        logger.info("Loading settings...")
         settings = get_settings()
-        # Initialize MongoDB connection and indexes early so services can use it
+        logger.info("Settings loaded successfully.")
+
         logger.info("Initializing MongoDB connection...")
         mongo_ok = await initialize_mongodb()
-        if not mongo_ok:
+        if mongo_ok:
+            logger.info("MongoDB initialization successful.")
+        else:
             logger.error("MongoDB initialization failed. The service will run but DB features may be degraded.")
         if settings.TESTING:
             logger.info("TESTING mode detected: Skipping background tasks startup.")
@@ -146,4 +150,9 @@ app.include_router(api_router)
 app.include_router(openai_api.router, prefix="/v1/chat", tags=["OpenAI Compatibility"])
 
 # Health check endpoint is now in api/v1/health.py
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
