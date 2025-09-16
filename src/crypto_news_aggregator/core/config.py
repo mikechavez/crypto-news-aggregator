@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     # Core settings
     DEBUG: bool = False
     TESTING: bool = False
+    TESTING_MODE: bool = False  # New flag for mock data
     PROJECT_NAME: str = "Crypto News Aggregator"
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
