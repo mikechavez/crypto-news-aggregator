@@ -15,7 +15,7 @@ def get_router():
 router = get_router()
 
 # Import all the v1 routes
-from . import articles, sources, health, tasks
+from . import articles, sources, health #, tasks
 from .endpoints import price, emails, auth
 
 # Import test endpoints only when explicitly enabled
@@ -35,7 +35,7 @@ router.include_router(auth.router, prefix="/auth", tags=["authentication"])
 
 # API key protected routes (no JWT required)
 # The tasks router itself applies API key security via Security(get_api_key)
-router.include_router(tasks.router, prefix="", tags=["tasks"])
+# router.include_router(tasks.router, prefix="", tags=["tasks"]) # Temporarily commented out for debugging
 
 # Protected routes (require authentication)
 protected_router = APIRouter()
