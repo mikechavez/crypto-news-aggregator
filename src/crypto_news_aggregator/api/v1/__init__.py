@@ -16,7 +16,7 @@ router = get_router()
 
 # Import all the v1 routes
 from . import articles, sources, health, tasks
-from .endpoints import emails, auth #, price
+from .endpoints import price, auth #, emails
 
 # Import test endpoints only when explicitly enabled
 def _enable_test_endpoints() -> bool:
@@ -41,14 +41,14 @@ router.include_router(tasks.router, prefix="", tags=["tasks"])
 protected_router = APIRouter()
 protected_router.include_router(articles.router, prefix="/articles", tags=["articles"]) 
 protected_router.include_router(sources.router, prefix="/sources", tags=["sources"])
-# protected_router.include_router(price.router, prefix="/price", tags=["price"]) # Temporarily commented out for debugging
+protected_router.include_router(price.router, prefix="/price", tags=["price"])
 
 # Include test endpoints only when explicitly enabled
 if _enable_test_endpoints():
     protected_router.include_router(test_alerts.router, prefix="/test", tags=["test"])
 
 # Email tracking endpoints (partially public - some endpoints don't require auth)
-router.include_router(emails.router, prefix="/emails", tags=["emails"])
+# router.include_router(emails.router, prefix="/emails", tags=["emails"]) # Temporarily commented out for debugging
 
 # Include the protected router with dependencies
 router.include_router(
