@@ -5,9 +5,10 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
+from functools import lru_cache
 
 from ..services.price_service import price_service
-from ..services.notification_service import notification_service
+from ..services.notification_service import get_notification_service
 from ..services.news_correlator import NewsCorrelator
 from ..core.config import get_settings
 from ..db.session import get_sessionmaker
@@ -128,6 +129,7 @@ class PriceMonitor:
             # Create a new database session for this task
             SessionLocal = get_sessionmaker()
             async with SessionLocal() as db:
+                notification_service = get_notification_service()
                 stats = await notification_service.process_price_alert(
                     db=db,
                     crypto_id=crypto_id,
@@ -148,13 +150,15 @@ class PriceMonitor:
         except Exception as e:
             logger.error(f"Error processing price movement for {symbol}: {e}", exc_info=True)
 
-# Global instance
-price_monitor = PriceMonitor()
+# Factory function for dependency injection
+@lru_cache()
+def get_price_monitor() -> PriceMonitor:
+    return PriceMonitor()
 
-async def start_price_monitor():
+async def start_price_monitor(price_monitor: PriceMonitor):
     """Start the price monitoring service."""
     await price_monitor.start()
 
-async def stop_price_monitor():
+async def stop_price_monitor(price_monitor: PriceMonitor):
     """Stop the price monitoring service."""
     await price_monitor.stop()

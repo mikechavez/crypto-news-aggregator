@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from .api.v1 import router as api_router
 from .api import openai_compatibility as openai_api
 from .tasks.sync_tasks import sync_scheduler
-from .tasks.price_monitor import price_monitor
+from .tasks.price_monitor import get_price_monitor
 from .core.config import get_settings
 from .core.auth import get_api_key, API_KEY_NAME
 from .db.mongodb import initialize_mongodb, mongo_manager
@@ -82,6 +82,7 @@ async def lifespan(app: FastAPI):
                 await sync_scheduler.start()
                 logger.info("Database synchronization task started.")
             
+            price_monitor = get_price_monitor()
             logger.info("Starting price monitor...")
             price_monitor.task = asyncio.create_task(price_monitor.start())
             logger.info("Price monitor task created.")
@@ -96,6 +97,7 @@ async def lifespan(app: FastAPI):
 
     logger.info("Shutting down application...")
     try:
+        price_monitor = get_price_monitor()
         if price_monitor.is_running:
             logger.info("Stopping price monitor...")
             await price_monitor.stop()

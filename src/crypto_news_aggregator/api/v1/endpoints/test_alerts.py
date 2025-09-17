@@ -13,7 +13,7 @@ from ....db.session import get_db
 from ....models.alert import Alert, AlertCreate, AlertDirection
 from ....models.user import User as UserModel
 from ....core.security import get_current_active_user
-from ....services.notification_service import notification_service
+from ....services.notification_service import NotificationService, get_notification_service
 from ....services.price_monitor import PriceMonitor
 from ....services.email_service import EmailService, get_email_service
 from ....utils.template_renderer import get_template_renderer
@@ -36,6 +36,7 @@ router = APIRouter(
     """
 )
 async def trigger_manual_alert(
+    notification_service: NotificationService = Depends(get_notification_service),
     symbol: str = Query(..., description="Cryptocurrency symbol (e.g., 'BTC')"),
     price: float = Query(..., gt=0, description="Current price"),
     price_change_24h: float = Query(..., description="24h price change percentage"),

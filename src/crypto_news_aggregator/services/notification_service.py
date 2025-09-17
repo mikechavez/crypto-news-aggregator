@@ -4,6 +4,7 @@ Notification service for handling different types of alerts and notifications.
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
+from functools import lru_cache
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -181,5 +182,7 @@ class NotificationService:
         
         logger.info(f"Sent price alert email to {alert.user.email} for {crypto_symbol} {change_text}")
 
-# Singleton instance
-notification_service = NotificationService()
+# Factory function for dependency injection
+@lru_cache()
+def get_notification_service() -> NotificationService:
+    return NotificationService()

@@ -4,6 +4,7 @@ Alert service for handling alert-related operations.
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional, Union
+from functools import lru_cache
 from bson import ObjectId
 
 from ..models.alert import AlertInDB, AlertCreate, AlertUpdate, AlertStatus
@@ -296,8 +297,10 @@ class AlertService:
         )
 
 
-# Create a single instance of the service
-alert_service = AlertService()
+# Factory function for dependency injection
+@lru_cache()
+def get_alert_service() -> AlertService:
+    return AlertService()
 
 
 

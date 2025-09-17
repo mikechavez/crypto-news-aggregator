@@ -4,10 +4,11 @@ Service for sending price alert notifications with relevant news context.
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Any, Tuple
+from functools import lru_cache
 
 from ..models.alert import AlertInDB, AlertStatus, AlertUpdate
 from ..services.price_service import price_service
-from ..services.alert_service import AlertService, alert_service
+from ..services.alert_service import AlertService, get_alert_service
 from ..services.email_service import get_email_service
 from ..core.config import get_settings
 
@@ -269,8 +270,11 @@ class AlertNotificationService:
             logger.error(f"Error updating alert {alert.id}: {e}", exc_info=True)
 
 
-# Create a single instance of the service
-alert_notification_service = AlertNotificationService(alert_service=alert_service)
+# Factory function for dependency injection
+@lru_cache()
+def get_alert_notification_service() -> AlertNotificationService:
+    alert_service = get_alert_service()
+    return AlertNotificationService(alert_service=alert_service)
 
 
 

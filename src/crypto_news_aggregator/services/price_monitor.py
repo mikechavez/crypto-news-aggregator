@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.session import get_db
 from .price_service import price_service
-from .notification_service import notification_service
+from .notification_service import get_notification_service
 from .article_service import article_service
 
 logger = logging.getLogger(__name__)
@@ -79,6 +79,7 @@ class PriceMonitor:
                 context_articles = await self._get_price_context(price_change_24h)
             
             # Process alerts for Bitcoin
+            notification_service = get_notification_service()
             result = await notification_service.process_price_alert(
                 crypto_id='bitcoin',
                 crypto_name='Bitcoin',

@@ -8,7 +8,7 @@ from typing import Tuple
 from celery import shared_task
 from celery.schedules import crontab
 
-from ..services.alert_notification_service import AlertNotificationService
+from ..services.notification_service import get_notification_service
 from ..services.alert_service import AlertService
 from ..core.config import get_settings
 
@@ -29,10 +29,10 @@ async def check_price_alerts() -> Tuple[int, int]:
     try:
         # Instantiate services
         alert_service = AlertService()
-        alert_notification_service = AlertNotificationService(alert_service=alert_service)
+        notification_service = get_notification_service()
         
         # Process alerts and get stats
-        processed, sent = await alert_notification_service.check_and_send_alerts()
+        processed, sent = await notification_service.process_price_alert(alert_service)
         logger.info(f"Price alert check completed. Processed: {processed}, Sent: {sent}")
         return processed, sent
         
