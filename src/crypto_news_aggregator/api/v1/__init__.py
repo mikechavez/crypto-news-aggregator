@@ -28,15 +28,6 @@ def _enable_test_endpoints() -> bool:
 if _enable_test_endpoints():
     from .endpoints import test_alerts
 
-# OAuth2 scheme for token authentication
-def get_oauth2_scheme():
-    settings = get_settings()
-    return OAuth2PasswordBearer(
-        tokenUrl=f"{settings.API_V1_STR}/auth/login",
-        auto_error=False
-    )
-
-oauth2_scheme = get_oauth2_scheme()
 
 # Public routes (no authentication required)
 router.include_router(health.router, tags=["health"])

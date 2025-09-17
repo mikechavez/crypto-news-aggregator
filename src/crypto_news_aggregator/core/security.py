@@ -9,22 +9,12 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, ValidationError
 
-from ..core.config import get_settings  # Use lazy initialization for settings
+from ..core.config import get_settings
 from ..models.user import User as UserModel
+from .dependencies import get_oauth2_scheme
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# OAuth2 scheme for token authentication
-def get_oauth2_scheme():
-    settings = get_settings()
-    return OAuth2PasswordBearer(
-        tokenUrl=f"{settings.API_V1_STR}/auth/login",
-        auto_error=False
-    )
-
-# Use this in dependencies:
-oauth2_scheme = get_oauth2_scheme()
 
 class TokenData(BaseModel):
     """Token data model."""
@@ -149,7 +139,7 @@ def create_refresh_token(
     )
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme)
+    token: str = Depends(get_oauth2_scheme())
 ) -> UserModel:
     """
     Get the current user from the JWT token.
