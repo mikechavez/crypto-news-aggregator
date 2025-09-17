@@ -53,10 +53,12 @@ def setup_logging():
 
 logger = setup_logging()
 
+logger.info("Attempting to load application settings...")
 try:
     settings = get_settings()
+    logger.info("Application settings loaded successfully.")
 except Exception as e:
-    logger.critical(f"Failed to load settings: {e}", exc_info=True)
+    logger.critical(f"CRITICAL: Failed to load settings: {e}", exc_info=True)
     # Exit if settings fail to load, as the app cannot run.
     sys.exit(1)
 
@@ -65,26 +67,30 @@ async def lifespan(app: FastAPI):
     """Manage application startup and shutdown events."""
     logger.info("--- Application Lifespan Startup --- ")
     try:
-
         logger.info("Initializing MongoDB connection...")
         mongo_ok = await initialize_mongodb()
         if mongo_ok:
             logger.info("MongoDB initialization successful.")
         else:
             logger.error("MongoDB initialization failed. The service will run but DB features may be degraded.")
+
         if settings.TESTING:
             logger.info("TESTING mode detected: Skipping background tasks startup.")
         else:
             if settings.ENABLE_DB_SYNC:
                 logger.info("Starting database synchronization task...")
                 await sync_scheduler.start()
+                logger.info("Database synchronization task started.")
             
             logger.info("Starting price monitor...")
             price_monitor.task = asyncio.create_task(price_monitor.start())
-        logger.info("Application startup tasks completed successfully.")
+            logger.info("Price monitor task created.")
+
+        logger.info("--- Application startup tasks completed successfully ---")
     except Exception as e:
-        logger.critical(f"Application startup failed: {e}", exc_info=True)
-        # Optionally, re-raise or handle as needed, for now, we log and continue
+        logger.critical(f"CRITICAL: Application startup failed within lifespan: {e}", exc_info=True)
+        # Re-raising the exception to ensure FastAPI's error handling catches it
+        raise
 
     yield
 
