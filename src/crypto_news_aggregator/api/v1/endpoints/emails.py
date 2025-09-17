@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from ....core.config import get_settings
 from ....db.mongodb import mongo_manager, get_mongodb
 from ....models.user import User, UserInDB, UserUpdate
-from ....services.email_service import email_service
+from ....services.email_service import EmailService, get_email_service
 from ....models.email import EmailTracking, EmailEvent, EmailEventType
 from ....core.security import get_current_active_user
 from ....utils.template_renderer import TemplateRenderer, get_template_renderer

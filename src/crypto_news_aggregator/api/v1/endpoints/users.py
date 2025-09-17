@@ -24,7 +24,7 @@ from ....models.user import (
     UserSubscriptionPreferences,
 )
 from ....services.user_service import UserService
-from ....services.email_service import email_service
+from ....services.email_service import EmailService, get_email_service
 from ....core.templates import templates
 
 router = APIRouter()
@@ -40,7 +40,8 @@ async def register_user(
     user_in: UserCreate,
     background_tasks: BackgroundTasks,
     request: Request,
-    user_service: UserService = Depends(UserService)
+    user_service: UserService = Depends(UserService),
+    email_service: EmailService = Depends(get_email_service)
 ) -> Any:
     """
     Register a new user.
@@ -135,7 +136,8 @@ async def request_password_reset(
     email: EmailStr,
     background_tasks: BackgroundTasks,
     request: Request,
-    user_service: UserService = Depends(UserService)
+    user_service: UserService = Depends(UserService),
+    email_service: EmailService = Depends(get_email_service)
 ) -> Dict[str, str]:
     """
     Request a password reset email.
@@ -196,7 +198,8 @@ async def resend_verification(
     email: EmailStr,
     background_tasks: BackgroundTasks,
     request: Request,
-    user_service: UserService = Depends(UserService)
+    user_service: UserService = Depends(UserService),
+    email_service: EmailService = Depends(get_email_service)
 ) -> Dict[str, str]:
     """
     Resend email verification.

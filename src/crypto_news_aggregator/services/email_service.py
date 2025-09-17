@@ -13,13 +13,14 @@ from email.header import Header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any, Dict, List, Optional, Tuple
+from functools import lru_cache
 
 from bson import ObjectId
 
 from ..core.config import get_settings
 from ..db.mongodb import get_mongodb
 from ..models.email import EmailEvent, EmailEventType, EmailTracking
-from ..utils.template_renderer import template_renderer
+from ..utils.template_renderer import get_template_renderer
 
 logger = logging.getLogger(__name__)
 
@@ -259,6 +260,9 @@ class EmailService:
             for article in news_articles[:3]:  # Limit to 3 most recent articles
                 news_context.append(f"- {article.get('title', 'No title')}: {article.get('url', '#')}")
 
+        # Get the template renderer
+        template_renderer = get_template_renderer()
+
         # Render the email template
         html_content = await template_renderer.render_template(
             "emails/price_alert.html",
@@ -291,8 +295,10 @@ class EmailService:
         return success
 
 
-# Global instance
-email_service = EmailService()
+# Factory function for dependency injection
+@lru_cache()
+def get_email_service() -> EmailService:
+    return EmailService()
 
 
 

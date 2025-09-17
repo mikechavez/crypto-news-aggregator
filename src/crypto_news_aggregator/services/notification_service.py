@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Alert
 from ..db.operations.alert import get_active_alerts, update_alert_last_triggered
-from ..services.email_service import email_service
+from .email_service import get_email_service
 from ..core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -163,7 +163,8 @@ class NotificationService:
         
         settings = get_settings()
         # Send the email using the email_service instance
-        await email_service.send_price_alert(
+        email_service = get_email_service()
+        await email_service.send_email(
             to=alert.user.email,
             user_id=str(alert.user_id),
             user_name=alert.user.username or 'User',

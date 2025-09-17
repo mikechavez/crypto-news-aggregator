@@ -15,6 +15,8 @@ from ....models.user import User as UserModel
 from ....core.security import get_current_active_user
 from ....services.notification_service import notification_service
 from ....services.price_monitor import PriceMonitor
+from ....services.email_service import EmailService, get_email_service
+from ....utils.template_renderer import get_template_renderer
 from ....core.config import settings
 
 router = APIRouter(
@@ -133,7 +135,8 @@ async def trigger_manual_alert(
         500: {"description": "Failed to send test email"}
     }
 )
-async def send_test_email(
+async def send_test_price_alert_email(
+    email_service: EmailService = Depends(get_email_service),
     email: str = Query(
         ...,
         description="Email address to send the test to",
@@ -165,9 +168,7 @@ async def send_test_email(
             detail="Test email is disabled in production"
         )
     
-    from ....services.email_service import send_email_alert
-    from ....utils.template_renderer import template_renderer
-    
+        
     try:
         # Render test email template
         context = {
@@ -177,6 +178,7 @@ async def send_test_email(
             "test_timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
         }
         
+        template_renderer = get_template_renderer()
         # Render both HTML and plain text versions
         html_content = await template_renderer.render_template(
             "emails/test_email.html",
@@ -184,7 +186,7 @@ async def send_test_email(
         )
         
         # Send the test email
-        success, message_id = await send_email_alert(
+        success, message_id = await email_service.send_email(
             to=email,
             subject="✅ Test Email from Crypto News Aggregator",
             html_content=html_content,

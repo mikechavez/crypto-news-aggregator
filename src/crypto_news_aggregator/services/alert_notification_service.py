@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from ..models.alert import AlertInDB, AlertStatus, AlertUpdate
 from ..services.price_service import price_service
 from ..services.alert_service import AlertService, alert_service
-from ..services.email_service import email_service
+from ..services.email_service import get_email_service
 from ..core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -74,12 +74,19 @@ class AlertNotificationService:
                     
                         # Send notification with the relevant news
                         logger.info(f"[PIPELINE] Sending notification for alert {alert.id}")
-                        success = await self._send_alert_notification(
-                            alert=alert,
+                        email_service = get_email_service()
+                        success, _ = await email_service.send_price_alert(
+                            to=alert.user_email,
+                            user_name=alert.user_name or 'there',
+                            crypto_name='Bitcoin',
+                            crypto_symbol='BTC',
+                            condition=f"Price moved {'up' if change_percent > 0 else 'down'} by {abs(change_percent):.2f}%",
+                            threshold=alert.threshold_percent,
                             current_price=current_price,
-                            change_percent=change_percent,
-                            change_24h=change_24h,
-                            news_articles=news_articles
+                            price_change_24h=change_24h,
+                            news_articles=news_articles,
+                            dashboard_url=f"{settings.BASE_URL}/dashboard",
+                            settings_url=f"{settings.BASE_URL}/settings/alerts"
                         )
                         logger.info(f"[PIPELINE] Notification send result for alert {alert.id}: {success}")
                     
@@ -217,7 +224,8 @@ class AlertNotificationService:
             }
             
             # Send the email
-            success = await email_service.send_price_alert(
+            email_service = get_email_service()
+            success, _ = await email_service.send_price_alert(
                 to=alert.user_email,
                 user_name=alert.user_name or 'there',
                 crypto_name='Bitcoin',
