@@ -1,5 +1,9 @@
 """API v1 routes."""
+import logging
 from fastapi import APIRouter, Depends, Request, Response
+
+logger = logging.getLogger(__name__)
+logger.info("STARTING import of v1 routes...")
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 
@@ -15,8 +19,23 @@ def get_router():
 router = get_router()
 
 # Import all the v1 routes
-from . import articles, sources, health, tasks
-from .endpoints import price, emails, auth
+logger.info("Importing v1 route modules...")
+from . import articles
+logger.info("✓ Imported articles")
+from . import sources
+logger.info("✓ Imported sources")
+from . import health
+logger.info("✓ Imported health")
+from . import tasks
+logger.info("✓ Imported tasks")
+
+logger.info("Importing v1 endpoint modules...")
+from .endpoints import price
+logger.info("✓ Imported price endpoint")
+from .endpoints import emails
+logger.info("✓ Imported emails endpoint")
+from .endpoints import auth
+logger.info("✓ Imported auth endpoint")
 
 # Import test endpoints only when explicitly enabled
 def _enable_test_endpoints() -> bool:
