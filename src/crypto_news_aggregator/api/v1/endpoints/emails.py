@@ -16,7 +16,7 @@ from ....models.user import User, UserInDB, UserUpdate
 from ....services.email_service import email_service
 from ....models.email import EmailTracking, EmailEvent, EmailEventType
 from ....core.security import get_current_active_user
-from ....utils.template_renderer import template_renderer
+from ....utils.template_renderer import TemplateRenderer, get_template_renderer
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -143,6 +143,7 @@ async def unsubscribe_email(
     token: str,
     request: Request,
     unsubscribe_request: Optional[UnsubscribeRequest] = None,
+    template_renderer: TemplateRenderer = Depends(get_template_renderer),
 ):
     """
     Handle email unsubscription requests.
@@ -178,11 +179,11 @@ async def unsubscribe_email(
     )
     
     # Render the unsubscription confirmation page
-    html_content = template_renderer.render_template(
+    html_content = await template_renderer.render_template(
         "emails/unsubscribe_success.html",
         user=user,
         email_type=unsubscribe_request.email_type if unsubscribe_request else None,
-        support_email=settings.SUPPORT_EMAIL
+        support_email=get_settings().SUPPORT_EMAIL
     )
     
     return HTMLResponse(content=html_content, status_code=200)

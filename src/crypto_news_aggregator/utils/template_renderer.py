@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 from datetime import datetime
+from functools import lru_cache
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from ..core.config import get_settings
@@ -102,5 +103,7 @@ class TemplateRenderer:
         """
         return template_filters['datetimeformat'](value, format_str)
 
-# Create a singleton instance
-template_renderer = TemplateRenderer()
+# Create a singleton instance using a cached factory function
+@lru_cache()
+def get_template_renderer() -> TemplateRenderer:
+    return TemplateRenderer()
