@@ -128,6 +128,7 @@ async def lifespan(app: FastAPI):
     finally:
         logger.info("Application shutdown complete.")
 
+logger.info("Attempting to create FastAPI app instance...")
 # Create FastAPI application
 app = FastAPI(
     title="Crypto News Aggregator API",
@@ -139,6 +140,7 @@ app = FastAPI(
     lifespan=lifespan,
     dependencies=None  # We'll add dependencies to specific routers instead
 )
+logger.info("✓ FastAPI app instance created successfully.")
 
 # CORS middleware configuration
 origins = ["*"]  # In production, replace with specific origins
