@@ -40,19 +40,31 @@ def setup_logging():
 logger = setup_logging()
 
 import asyncio
+logger.info("✓ Imported asyncio")
 from contextlib import asynccontextmanager
+logger.info("✓ Imported asynccontextmanager")
 
 from fastapi import FastAPI, Depends, Request, status
+logger.info("✓ Imported FastAPI, Depends, Request, status")
 from fastapi.middleware.cors import CORSMiddleware
+logger.info("✓ Imported CORSMiddleware")
 from fastapi.responses import JSONResponse
+logger.info("✓ Imported JSONResponse")
 
 from .api.v1 import router as api_router
+logger.info("✓ Imported api_router")
 from .api import openai_compatibility as openai_api
+logger.info("✓ Imported openai_api")
 from .tasks.sync_tasks import sync_scheduler
+logger.info("✓ Imported sync_scheduler")
 from .tasks.price_monitor import get_price_monitor
+logger.info("✓ Imported get_price_monitor")
 from .core.config import get_settings
+logger.info("✓ Imported get_settings")
 from .core.auth import get_api_key, API_KEY_NAME
+logger.info("✓ Imported get_api_key, API_KEY_NAME")
 from .db.mongodb import initialize_mongodb, mongo_manager
+logger.info("✓ Imported initialize_mongodb, mongo_manager")
 
 logger.info("Attempting to load application settings...")
 try:
