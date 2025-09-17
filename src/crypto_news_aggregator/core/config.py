@@ -133,10 +133,15 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings():
-    s = Settings()
     import logging
-    logging.info(f"[DEBUG_SETTINGS] Loaded Settings: {s.model_dump()}")
-    return s
+    import sys
+    try:
+        s = Settings()
+        logging.info(f"[DEBUG_SETTINGS] Loaded Settings: {s.model_dump()}")
+        return s
+    except Exception as e:
+        logging.critical(f"CRITICAL ERROR: Failed to instantiate Settings: {e}", exc_info=True)
+        sys.exit(1)
 
 # Create a settings instance for direct import
 # settings = get_settings()  # Removed top-level settings; use lazy initialization in functions as needed.
