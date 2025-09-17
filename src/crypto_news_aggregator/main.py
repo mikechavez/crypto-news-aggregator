@@ -1,22 +1,8 @@
 """Main FastAPI application module."""
 import logging
-import asyncio
 import os
 import sys
-from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
-
-from fastapi import FastAPI, Depends, Request, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-
-from .api.v1 import router as api_router
-from .api import openai_compatibility as openai_api
-from .tasks.sync_tasks import sync_scheduler
-from .tasks.price_monitor import get_price_monitor
-from .core.config import get_settings
-from .core.auth import get_api_key, API_KEY_NAME
-from .db.mongodb import initialize_mongodb, mongo_manager
 
 def setup_logging():
     """Configure logging for the application."""
@@ -52,6 +38,21 @@ def setup_logging():
     return logger
 
 logger = setup_logging()
+
+import asyncio
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Depends, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from .api.v1 import router as api_router
+from .api import openai_compatibility as openai_api
+from .tasks.sync_tasks import sync_scheduler
+from .tasks.price_monitor import get_price_monitor
+from .core.config import get_settings
+from .core.auth import get_api_key, API_KEY_NAME
+from .db.mongodb import initialize_mongodb, mongo_manager
 
 logger.info("Attempting to load application settings...")
 try:
@@ -167,4 +168,3 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
-
