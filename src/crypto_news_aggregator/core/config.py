@@ -1,12 +1,9 @@
 from pydantic_settings import BaseSettings
+from pydantic import model_validator
 from functools import lru_cache
+from typing import Optional
 
 class Settings(BaseSettings):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        import logging
-        logging.info(f"[DEBUG_SETTINGS_FIELDS] {dir(self)}")
-        logging.info(f"[DEBUG_SETTINGS_DICT] {self.__dict__}")
     # Core settings
     DEBUG: bool = False
     TESTING: bool = False
@@ -22,7 +19,7 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"
     POSTGRES_DB: str = "crypto_news"
-    POSTGRES_URL: str = f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_SERVER}/{POSTGRES_DB}"
+    POSTGRES_URL: Optional[str] = None
     
     # MongoDB settings
     # Default to local MongoDB instance if env var is not provided
@@ -32,7 +29,7 @@ class Settings(BaseSettings):
     MONGODB_MIN_POOL_SIZE: int = 1   # Default min pool size for MongoDB connections  # Default database name
     
     # For backward compatibility
-    DATABASE_URL: str = POSTGRES_URL
+    DATABASE_URL: Optional[str] = None
 
     # API Keys (these will be loaded from environment variables)
     NEWS_API_KEY: str = ""  # Kept for backward compatibility
@@ -125,6 +122,14 @@ class Settings(BaseSettings):
     # Database sync settings
     ENABLE_DB_SYNC: bool = False  # Enable/disable database synchronization
 
+    @model_validator(mode='after')
+    def build_postgres_url(self) -> 'Settings':
+        if self.POSTGRES_URL is None:
+            self.POSTGRES_URL = f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}/{self.POSTGRES_DB}"
+        if self.DATABASE_URL is None:
+            self.DATABASE_URL = self.POSTGRES_URL
+        return self
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
@@ -132,16 +137,8 @@ class Settings(BaseSettings):
     }
 
 @lru_cache()
-def get_settings():
-    import logging
-    import sys
-    try:
-        s = Settings()
-        logging.info(f"[DEBUG_SETTINGS] Loaded Settings: {s.model_dump()}")
-        return s
-    except Exception as e:
-        logging.critical(f"CRITICAL ERROR: Failed to instantiate Settings: {e}", exc_info=True)
-        sys.exit(1)
+def get_settings() -> Settings:
+    return Settings()
 
 # Create a settings instance for direct import
-# settings = get_settings()  # Removed top-level settings; use lazy initialization in functions as needed.
+settings = get_settings()
