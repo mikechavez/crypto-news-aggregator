@@ -21,7 +21,6 @@ click-didyoumean==0.3.1
 click-plugins==1.1.1.2
 click-repl==0.3.0
 coverage==7.10.5
--e git+ssh://git@github.com/mikechavez/crypto-news-aggregator.git@888b1ebb294b92503fb3fb1c7385fd2af2efe722#egg=crypto_news_aggregator
 cryptography==45.0.6
 dnspython==2.7.0
 ecdsa==0.19.1
