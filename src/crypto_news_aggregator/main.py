@@ -40,31 +40,19 @@ def setup_logging():
 logger = setup_logging()
 
 import asyncio
-logger.info("✓ Imported asyncio")
 from contextlib import asynccontextmanager
-logger.info("✓ Imported asynccontextmanager")
 
 from fastapi import FastAPI, Depends, Request, status
-logger.info("✓ Imported FastAPI, Depends, Request, status")
 from fastapi.middleware.cors import CORSMiddleware
-logger.info("✓ Imported CORSMiddleware")
 from fastapi.responses import JSONResponse
-logger.info("✓ Imported JSONResponse")
 
 from .api.v1 import router as api_router
-logger.info("✓ Imported api_router")
 from .api import openai_compatibility as openai_api
-logger.info("✓ Imported openai_api")
 from .tasks.sync_tasks import sync_scheduler
-logger.info("✓ Imported sync_scheduler")
 from .tasks.price_monitor import get_price_monitor
-logger.info("✓ Imported get_price_monitor")
 from .core.config import get_settings
-logger.info("✓ Imported get_settings")
 from .core.auth import get_api_key, API_KEY_NAME
-logger.info("✓ Imported get_api_key, API_KEY_NAME")
 from .db.mongodb import initialize_mongodb, mongo_manager
-logger.info("✓ Imported initialize_mongodb, mongo_manager")
 
 logger.info("Attempting to load application settings...")
 try:
@@ -128,7 +116,6 @@ async def lifespan(app: FastAPI):
     finally:
         logger.info("Application shutdown complete.")
 
-logger.info("Attempting to create FastAPI app instance...")
 # Create FastAPI application
 app = FastAPI(
     title="Crypto News Aggregator API",
@@ -140,9 +127,7 @@ app = FastAPI(
     lifespan=lifespan,
     dependencies=None  # We'll add dependencies to specific routers instead
 )
-logger.info("✓ FastAPI app instance created successfully.")
 
-logger.info("Attempting to add CORS middleware...")
 # CORS middleware configuration
 origins = ["*"]  # In production, replace with specific origins
 
@@ -154,7 +139,6 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=[API_KEY_NAME],
 )
-logger.info("✓ CORS middleware added successfully.")
 
 # Add exception handler for 401 Unauthorized
 @app.exception_handler(status.HTTP_401_UNAUTHORIZED)
@@ -175,13 +159,9 @@ async def forbidden_exception_handler(request: Request, exc: Exception):
     )
 
 # Include API routers
-logger.info("Attempting to include api_router...")
 app.include_router(api_router)
-logger.info("✓ api_router included successfully.")
 
-logger.info("Attempting to include openai_api.router...")
 app.include_router(openai_api.router, prefix="/v1/chat", tags=["OpenAI Compatibility"])
-logger.info("✓ openai_api.router included successfully.")
 
 # Health check endpoint is now in api/v1/health.py
 
