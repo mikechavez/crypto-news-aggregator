@@ -100,7 +100,7 @@ class Settings(BaseSettings):
     
     # CoinGecko API settings
     COINGECKO_API_URL: str = "https://api.coingecko.com/api/v3"
-    COINGECKO_API_KEY: str = ""  # Optional API key for higher rate limits
+    coingecko_api_key: str = ""  # Optional API key for higher rate limits
     
     # News source settings
     ENABLED_NEWS_SOURCES: list[str] = ["coindesk", "bloomberg"]
