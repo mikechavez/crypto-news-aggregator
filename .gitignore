@@ -25,7 +25,6 @@ var/
 *.egg
 
 # Poetry
-poetry.lock
 
 # Virtual environments
 .venv/
