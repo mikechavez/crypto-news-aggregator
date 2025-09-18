@@ -3,6 +3,7 @@ Service for handling cryptocurrency price data and monitoring with alerting capa
 """
 import logging
 import aiohttp
+import asyncio
 from typing import Dict, Optional, List, Any, Tuple
 from datetime import datetime, timezone, timedelta
 from aiocache import caches, cached
@@ -174,6 +175,48 @@ class CoinGeckoPriceService:
             return {coin_id: {} for coin_id in coin_ids} # Return empty dicts for failed coins
         except Exception as e:
             logger.error(f"Unexpected error in get_prices: {e}")
+            return {coin_id: {} for coin_id in coin_ids}
+
+    @cached(ttl=300) # Cache for 5 minutes
+    async def get_markets_data(self, coin_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """
+        Get detailed market data for a list of cryptocurrencies.
+
+        Args:
+            coin_ids: A list of CoinGecko coin IDs (e.g., ['bitcoin', 'ethereum']).
+
+        Returns:
+            A dictionary mapping each coin ID to its market data.
+        """
+        if not coin_ids:
+            return {}
+
+        if self.settings.TESTING_MODE:
+            logger.info(f"TESTING_MODE enabled. Returning mock market data for: {coin_ids}")
+            # In testing mode, get_market_data is hardcoded for bitcoin, so we'll just use it
+            # to generate mock data for each requested coin.
+            tasks = [self.get_market_data() for _ in coin_ids]
+            results = await asyncio.gather(*tasks)
+            return {coin_id: result for coin_id, result in zip(coin_ids, results)}
+
+        increment_api_call_counter()
+        session = await self.get_session()
+        ids_str = ",".join(coin_ids)
+        url = f"{self.BASE_URL}/coins/markets?vs_currency=usd&ids={ids_str}"
+
+        try:
+            async with session.get(url) as response:
+                response.raise_for_status()
+                data = await response.json()
+
+                result = {item['id']: item for item in data}
+                return result
+
+        except aiohttp.ClientError as e:
+            logger.error(f"Error fetching market data from CoinGecko: {e}")
+            return {coin_id: {} for coin_id in coin_ids}
+        except Exception as e:
+            logger.error(f"Unexpected error in get_markets_data: {e}")
             return {coin_id: {} for coin_id in coin_ids}
 
     @cached(ttl=300) # Cache for 5 minutes
