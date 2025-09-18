@@ -142,6 +142,7 @@ app = FastAPI(
 )
 logger.info("✓ FastAPI app instance created successfully.")
 
+logger.info("Attempting to add CORS middleware...")
 # CORS middleware configuration
 origins = ["*"]  # In production, replace with specific origins
 
@@ -153,6 +154,7 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=[API_KEY_NAME],
 )
+logger.info("✓ CORS middleware added successfully.")
 
 # Add exception handler for 401 Unauthorized
 @app.exception_handler(status.HTTP_401_UNAUTHORIZED)
@@ -173,8 +175,13 @@ async def forbidden_exception_handler(request: Request, exc: Exception):
     )
 
 # Include API routers
+logger.info("Attempting to include api_router...")
 app.include_router(api_router)
+logger.info("✓ api_router included successfully.")
+
+logger.info("Attempting to include openai_api.router...")
 app.include_router(openai_api.router, prefix="/v1/chat", tags=["OpenAI Compatibility"])
+logger.info("✓ openai_api.router included successfully.")
 
 # Health check endpoint is now in api/v1/health.py
 
