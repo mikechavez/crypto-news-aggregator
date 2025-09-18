@@ -49,23 +49,6 @@ class OpenAIChatRequest(BaseModel):
     stream: Optional[bool] = False
 
 # 2. Service-Connected & Placeholder Functions
-async def get_current_prices(symbols: List[str]) -> Dict:
-    """Gets current prices from the price service."""
-    coin_ids = [SYMBOL_TO_ID_MAP.get(s.upper()) for s in symbols if s.upper() in SYMBOL_TO_ID_MAP]
-    if not coin_ids:
-        return {"prices": {}}
-
-    price_data = await price_service.get_prices(coin_ids)
-
-    id_to_symbol_map = {v: k for k, v in SYMBOL_TO_ID_MAP.items()}
-
-    prices = {}
-    for coin_id, data in price_data.items():
-        symbol = id_to_symbol_map.get(coin_id)
-        if symbol and data.get('price') is not None:
-            prices[symbol] = data['price']
-
-    return {"prices": prices}
 
 def _get_sentiment_label(score: Optional[float]) -> str:
     if score is None:
@@ -156,15 +139,58 @@ async def stream_response(response_generator: AsyncGenerator[str, None]) -> Asyn
         yield f"data: {json.dumps(chunk)}\n\n"
     yield "data: [DONE]\n\n"
 
+def _generate_market_analysis_commentary(symbol: str, data: Dict) -> str:
+    """Generates a human-readable analysis from market data."""
+    price = data.get('current_price', 0)
+    change_24h = data.get('price_change_percentage_24h', 0)
+    volume = data.get('total_volume', 0)
+
+    if price is None or change_24h is None:
+        return f"Price data for {symbol.upper()} is currently unavailable."
+
+    # Basic commentary
+    commentary = f"{data.get('name', symbol.upper())} is currently trading at ${price:,.2f}."
+
+    # Add trend analysis
+    if change_24h > 1:
+        trend = f"showing bullish momentum with a {change_24h:.2f}% gain in the last 24 hours."
+    elif change_24h < -1:
+        trend = f"facing downward pressure, with a {abs(change_24h):.2f}% loss in the last 24 hours."
+    else:
+        trend = "maintaining a relatively stable price."
+    commentary += f" It is {trend}"
+
+    # Add volume analysis
+    if volume > 1_000_000_000:
+        volume_desc = f"significant trading volume of ${volume:,.0f}."
+    else:
+        volume_desc = f"a moderate trading volume."
+    commentary += f" This is accompanied by {volume_desc}"
+
+    return commentary
+
 async def generate_response_content(intent: str, symbols: List[str]) -> str:
     """Generates a response based on intent and symbols."""
     if not symbols:
         return "I can provide information about cryptocurrencies. Please specify a symbol like BTC or ETH."
 
     if intent == "price_inquiry":
-        data = await get_current_prices(symbols)
-        prices = data.get("prices", {})
-        return ", ".join([f"The current price of {s} is ${p:,.2f}" for s, p in prices.items()])
+        coin_ids = [SYMBOL_TO_ID_MAP.get(s.upper()) for s in symbols if s.upper() in SYMBOL_TO_ID_MAP]
+        if not coin_ids:
+            return "Could not find the specified cryptocurrencies."
+
+        market_data = await price_service.get_markets_data(coin_ids)
+        
+        responses = []
+        for symbol in symbols:
+            coin_id = SYMBOL_TO_ID_MAP.get(symbol.upper())
+            if coin_id and coin_id in market_data:
+                analysis = _generate_market_analysis_commentary(symbol, market_data[coin_id])
+                responses.append(analysis)
+            else:
+                responses.append(f"I could not retrieve market data for {symbol.upper()}.")
+        
+        return " ".join(responses)
 
     elif intent == "sentiment_analysis":
         try:
@@ -229,13 +255,9 @@ async def chat_completions(request: OpenAIChatRequest):
             }
             return response
         except HTTPException as e:
-            logger.error(f"HTTPException in chat_completions: {e.detail}")
-            return {
-                "choices": [
-                    {
-                        "message": {"role": "assistant", "content": f"An error occurred: {e.detail}"},
-                        "finish_reason": "stop"
-                    }
-                ]
-            }
+            logger.error(f"HTTPException in chat_completions: {e.detail}", exc_info=True)
+            raise
+        except Exception as e:
+            logger.error(f"An unexpected error occurred in chat_completions: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="An internal server error occurred.")
 
