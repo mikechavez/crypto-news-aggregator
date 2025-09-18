@@ -7,8 +7,7 @@ from logging.handlers import RotatingFileHandler
 def setup_logging():
     """Configure logging for the application."""
     log_dir = "logs"
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    os.makedirs(log_dir, exist_ok=True)
 
     log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     log_file = os.path.join(log_dir, "app.log")
