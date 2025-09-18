@@ -41,7 +41,7 @@ async def wait_for_server(proc: subprocess.Popen, timeout: float = 45.0) -> None
                 remainder = proc.stdout.read() if proc.stdout else ""
                 print("[ERROR] Server exited early with code:", proc.returncode)
                 if remainder:
-                    print("[SERVER STDOUT TAIL]:\n" + remainder[-2000:])
+                    print("[SERVER STDOUT]:\n" + remainder)
                 raise TimeoutError("Server process exited before becoming healthy")
             try:
                 r = await client.get(HEALTH_URL, timeout=3)
@@ -74,6 +74,7 @@ def start_server() -> subprocess.Popen:
     # Ensure TESTING mode so background tasks are skipped
     env["TESTING"] = "true"
     env["ENABLE_DB_SYNC"] = "false"
+    env["SECRET_KEY"] = "testsecretkey"
 
     # Start uvicorn serving crypto_news_aggregator.main:app on a test port
     cmd = [
