@@ -9,6 +9,7 @@ from datetime import datetime, timezone, timedelta
 from aiocache import caches, cached
 from ..core.config import get_settings
 import random
+import numpy as np
 
 # Configure a simple in-memory cache
 # In a production environment, you might want to use RedisCache or MemcachedCache
@@ -22,6 +23,23 @@ caches.set_config({
 })
 
 # --- MOCK DATA --- #
+def _generate_mock_market_data(coin_id: str) -> Dict[str, Any]:
+    """Generates detailed mock market data for a given coin ID."""
+    base_prices = {'bitcoin': 60000, 'ethereum': 2000}
+    base_price = base_prices.get(coin_id, 100)
+
+    return {
+        'id': coin_id,
+        'name': coin_id.capitalize(),
+        'current_price': base_price * (1 + random.uniform(-0.05, 0.05)),
+        'market_cap_rank': 1 if coin_id == 'bitcoin' else 2 if coin_id == 'ethereum' else 100,
+        'price_change_percentage_1h_in_currency': random.uniform(-1, 1),
+        'price_change_percentage_24h_in_currency': random.uniform(-5, 5),
+        'price_change_percentage_7d_in_currency': random.uniform(-10, 10),
+        'total_volume': random.uniform(1e9, 5e10),
+        'market_cap': base_price * 21000000 if coin_id == 'bitcoin' else base_price * 120000000,
+    }
+
 def _generate_mock_price(coin_id: str) -> Dict[str, Any]:
     """Generates mock price data for a given coin ID."""
     base_price = {
@@ -68,26 +86,47 @@ logger = logging.getLogger(__name__)
 
 class CoinGeckoPriceService:
     """Service for handling cryptocurrency price data and monitoring using CoinGecko API."""
-    
-    BASE_URL = "https://api.coingecko.com/api/v3"
-    
+
     def __init__(self):
+        self.settings = get_settings()
+        self._configure_endpoints()
         self.session = None
         self.price_history: Dict[str, List[Dict]] = {}
         self.market_data: Dict[str, Any] = {}
+
+    def _configure_endpoints(self):
+        """Sets the base URL based on the presence of an API key."""
+        # Forcing public endpoint as the key is a demo key.
+        self.BASE_URL = "https://api.coingecko.com/api/v3"
+        if self.settings.coingecko_api_key:
+            logger.info("CoinGecko API key found. Using Public endpoint for Demo key.")
+        else:
+            logger.info("No CoinGecko API key found. Using Public endpoint.")
+
+    def reinitialize(self):
+        """Re-initializes the service with the latest settings."""
+        logger.info("Re-initializing CoinGeckoPriceService with latest settings.")
+        get_settings.cache_clear()  # Clear the cache for the settings function
         self.settings = get_settings()
+        self._configure_endpoints()
+        # The session will be recreated automatically on the next API call
         
     async def get_session(self) -> aiohttp.ClientSession:
         """Get or create an aiohttp client session."""
         if self.session is None or self.session.closed:
-            settings = get_settings()
-            headers = {}
-            if settings.COINGECKO_API_KEY:
-                # For Pro API plans, the header is x-cg-pro-api-key
-                headers['x-cg-pro-api-key'] = settings.COINGECKO_API_KEY
-            self.session = aiohttp.ClientSession(headers=headers)
+            # Demo API key does not require a header. The key is identified by the account.
+            # For a real Pro plan, the header logic would need to be restored.
+            self.session = aiohttp.ClientSession()
         return self.session
         
+    def _get_url_with_api_key(self, url: str) -> str:
+        """Appends the CoinGecko API key as a query parameter if it exists."""
+        if self.settings.coingecko_api_key:
+            # For Demo plan, key is sent as a query param to the public endpoint
+            separator = '&' if '?' in url else '?'
+            return f"{url}{separator}x_cg_demo_api_key={self.settings.coingecko_api_key}"
+        return url
+
     async def close(self):
         """Close the aiohttp client session."""
         if self.session and not self.session.closed:
@@ -107,8 +146,9 @@ class CoinGeckoPriceService:
 
         increment_api_call_counter()
         session = await self.get_session()
-        url = f"{self.BASE_URL}/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true"
-        
+        base_url = f"{self.BASE_URL}/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true"
+        url = self._get_url_with_api_key(base_url)
+
         try:
             async with session.get(url) as response:
                 response.raise_for_status()
@@ -152,7 +192,8 @@ class CoinGeckoPriceService:
         increment_api_call_counter()
         session = await self.get_session()
         ids_str = ",".join(coin_ids)
-        url = f"{self.BASE_URL}/simple/price?ids={ids_str}&vs_currencies=usd&include_24hr_change=true"
+        base_url = f"{self.BASE_URL}/simple/price?ids={ids_str}&vs_currencies=usd&include_24hr_change=true"
+        url = self._get_url_with_api_key(base_url)
 
         try:
             async with session.get(url) as response:
@@ -193,16 +234,14 @@ class CoinGeckoPriceService:
 
         if self.settings.TESTING_MODE:
             logger.info(f"TESTING_MODE enabled. Returning mock market data for: {coin_ids}")
-            # In testing mode, get_market_data is hardcoded for bitcoin, so we'll just use it
-            # to generate mock data for each requested coin.
-            tasks = [self.get_market_data() for _ in coin_ids]
-            results = await asyncio.gather(*tasks)
-            return {coin_id: result for coin_id, result in zip(coin_ids, results)}
+            return {coin_id: _generate_mock_market_data(coin_id) for coin_id in coin_ids}
 
         increment_api_call_counter()
         session = await self.get_session()
         ids_str = ",".join(coin_ids)
-        url = f"{self.BASE_URL}/coins/markets?vs_currency=usd&ids={ids_str}"
+        price_change_params = "1h,24h,7d"
+        base_url = f"{self.BASE_URL}/coins/markets?vs_currency=usd&ids={ids_str}&price_change_percentage={price_change_params}"
+        url = self._get_url_with_api_key(base_url)
 
         try:
             async with session.get(url) as response:
@@ -242,7 +281,8 @@ class CoinGeckoPriceService:
 
         increment_api_call_counter()
         session = await self.get_session()
-        url = f"{self.BASE_URL}/coins/{coin_id}/market_chart?vs_currency=usd&days={days}&interval=daily"
+        base_url = f"{self.BASE_URL}/coins/{coin_id}/market_chart?vs_currency=usd&days={days}&interval=daily"
+        url = self._get_url_with_api_key(base_url)
 
         try:
             async with session.get(url) as response:
@@ -328,7 +368,8 @@ class CoinGeckoPriceService:
         
         increment_api_call_counter()
         session = await self.get_session()
-        url = f"{self.BASE_URL}/coins/bitcoin?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false"
+        base_url = f"{self.BASE_URL}/coins/bitcoin?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false"
+        url = self._get_url_with_api_key(base_url)
 
         try:
             async with session.get(url) as response:
@@ -402,6 +443,106 @@ class CoinGeckoPriceService:
             p for p in self.price_history['bitcoin']
             if p['timestamp'] > cutoff
         ]
+
+    @cached(ttl=600) # Cache for 10 minutes
+    async def get_global_market_data(self) -> Dict[str, Any]:
+        """
+        Get global cryptocurrency market data, including market cap, volume, and BTC dominance.
+        
+        Returns:
+            Dict containing global market data.
+        """
+        if self.settings.TESTING_MODE:
+            logger.info("TESTING_MODE enabled. Returning mock global market data.")
+            return {
+                'total_market_cap': {'usd': 2.5e12},
+                'total_volume': {'usd': 1.5e11},
+                'market_cap_percentage': {'btc': 45.0, 'eth': 18.0}
+            }
+
+        increment_api_call_counter()
+        session = await self.get_session()
+        base_url = f"{self.BASE_URL}/global"
+        url = self._get_url_with_api_key(base_url)
+
+        try:
+            async with session.get(url) as response:
+                response.raise_for_status()
+                data = await response.json()
+                return data.get('data', {})
+        except aiohttp.ClientError as e:
+            logger.error(f"Error fetching global market data from CoinGecko: {e}")
+            return {}
+        except Exception as e:
+            logger.error(f"Unexpected error in get_global_market_data: {e}")
+            return {}
+
+    async def generate_market_analysis_commentary(self, coin_id: str = 'bitcoin') -> str:
+        """
+        Generates sophisticated market analysis commentary for a given cryptocurrency.
+
+        Args:
+            coin_id: The CoinGecko ID of the coin (e.g., 'bitcoin').
+
+        Returns:
+            A string containing detailed market analysis.
+        """
+        # 1. Fetch detailed market data for the specified coin and top competitor (ETH)
+        target_coin_id = coin_id.lower()
+        competitor_coin_id = 'ethereum' if target_coin_id == 'bitcoin' else 'bitcoin'
+        
+        market_data_list = await self.get_markets_data([target_coin_id, competitor_coin_id])
+        target_data = market_data_list.get(target_coin_id)
+        competitor_data = market_data_list.get(competitor_coin_id)
+
+        if not target_data:
+            return f"Could not retrieve market data for {coin_id.capitalize()}."
+
+        # 2. Fetch global market data for context
+        global_data = await self.get_global_market_data()
+        btc_dominance = global_data.get('market_cap_percentage', {}).get('btc', 0)
+
+        # 3. Extract key metrics
+        coin_name = target_data.get('name', coin_id.capitalize())
+        market_cap_rank = target_data.get('market_cap_rank', 'N/A')
+        price_1h = target_data.get('price_change_percentage_1h_in_currency', 0) or 0
+        price_24h = target_data.get('price_change_percentage_24h_in_currency', 0) or 0
+        price_7d = target_data.get('price_change_percentage_7d_in_currency', 0) or 0
+
+        # 4. Calculate volatility
+        prices_7d = await self.get_historical_prices(target_coin_id, days=7)
+        volatility = 'N/A'
+        if prices_7d and len(prices_7d) > 1:
+            daily_returns = np.diff([p[1] for p in prices_7d]) / [p[1] for p in prices_7d][:-1]
+            # Annualized volatility from daily data
+            daily_volatility = np.std(daily_returns)
+            volatility = f"{daily_volatility * np.sqrt(365) * 100:.2f}% (annualized)"
+
+        # 5. Comparative Analysis
+        comparison = ""
+        if competitor_data:
+            competitor_name = competitor_data.get('name', competitor_coin_id.capitalize())
+            competitor_price_24h = competitor_data.get('price_change_percentage_24h_in_currency', 0) or 0
+            if price_24h > competitor_price_24h:
+                comparison = f"outperforming {competitor_name} ({competitor_price_24h:+.2f}%)."
+            else:
+                comparison = f"underperforming {competitor_name} ({competitor_price_24h:+.2f}%)."
+
+        # 6. Generate Commentary
+        commentary = f"{coin_name} is currently trading with a 24-hour change of {price_24h:+.2f}%. "
+        commentary += f"It holds the #{market_cap_rank} rank by market capitalization. "
+        
+        if comparison:
+            commentary += f"In the last 24 hours, it has been {comparison} "
+
+        commentary += f"Price changes over other timeframes: 1h: {price_1h:+.2f}%, 7d: {price_7d:+.2f}%. "
+        commentary += f"Estimated 7-day volatility is {volatility}. "
+
+        if target_coin_id == 'bitcoin':
+            commentary += f"Bitcoin dominance is currently {btc_dominance:.2f}%. "
+
+        return commentary
+
 
 # Singleton instance
 price_service = CoinGeckoPriceService()
