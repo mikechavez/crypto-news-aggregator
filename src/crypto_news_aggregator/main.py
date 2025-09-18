@@ -103,7 +103,6 @@ async def lifespan(app: FastAPI):
             logger.info("Stopping price monitor...")
             await price_monitor.stop()
 
-        settings = get_settings()
         if settings.ENABLE_DB_SYNC and sync_scheduler._task and not sync_scheduler._task.done():
             logger.info("Stopping database synchronization task...")
             await sync_scheduler.stop()
