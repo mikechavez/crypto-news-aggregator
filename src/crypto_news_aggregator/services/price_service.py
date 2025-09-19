@@ -6,6 +6,7 @@ import aiohttp
 import asyncio
 from typing import Dict, Optional, List, Any, Tuple
 from datetime import datetime, timezone, timedelta
+from functools import lru_cache
 from aiocache import caches, cached
 from ..core.config import get_settings
 import random
