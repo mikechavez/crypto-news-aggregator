@@ -544,5 +544,13 @@ class CoinGeckoPriceService:
         return commentary
 
 
-# Singleton instance
-price_service = CoinGeckoPriceService()
+# Factory function for dependency injection
+@lru_cache()
+def get_price_service() -> CoinGeckoPriceService:
+    """Factory function to get a singleton instance of the price service."""
+    return CoinGeckoPriceService()
+
+
+# Singleton instance for non-FastAPI usage (e.g., worker)
+# This is accessed via get_price_service() to maintain a single entry point
+price_service = get_price_service()

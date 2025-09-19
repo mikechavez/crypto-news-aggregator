@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, AsyncGenerator
@@ -8,7 +8,7 @@ import asyncio
 import logging
 import logging
 
-from ..services.price_service import price_service
+from ..services.price_service import CoinGeckoPriceService, get_price_service
 from ..services.article_service import article_service
 from ..services.correlation_service import correlation_service
 
@@ -169,7 +169,7 @@ def _generate_market_analysis_commentary(symbol: str, data: Dict) -> str:
 
     return commentary
 
-async def generate_response_content(intent: str, symbols: List[str]) -> str:
+async def generate_response_content(intent: str, symbols: List[str], price_service: CoinGeckoPriceService) -> str:
     """Generates a response based on intent and symbols."""
     if not symbols:
         return "I can provide information about cryptocurrencies. Please specify a symbol like BTC or ETH."
@@ -179,7 +179,7 @@ async def generate_response_content(intent: str, symbols: List[str]) -> str:
         if not coin_ids:
             return "Could not find the specified cryptocurrencies."
 
-        market_data = await price_service.get_markets_data(coin_ids)
+                market_data = await price_service.get_markets_data(coin_ids)
         
         responses = []
         for symbol in symbols:
@@ -211,7 +211,10 @@ async def generate_response_content(intent: str, symbols: List[str]) -> str:
     return "I'm not sure how to help with that."
 
 @router.post("/completions")
-async def chat_completions(request: OpenAIChatRequest):
+async def chat_completions(
+    request: OpenAIChatRequest,
+    price_service: CoinGeckoPriceService = Depends(get_price_service)
+):
     """OpenAI-compatible chat completions endpoint."""
     logger.info("Received chat completion request")
     last_message = request.messages[-1].content
@@ -224,7 +227,7 @@ async def chat_completions(request: OpenAIChatRequest):
 
     if request.stream:
         async def response_generator():
-            content = await generate_response_content(intent, symbols)
+            content = await generate_response_content(intent, symbols, price_service)
             response_chunk = {
                 "choices": [
                     {
@@ -244,7 +247,7 @@ async def chat_completions(request: OpenAIChatRequest):
 
     else:
         try:
-            content = await generate_response_content(intent, symbols)
+            content = await generate_response_content(intent, symbols, price_service)
             response = {
                 "choices": [
                     {

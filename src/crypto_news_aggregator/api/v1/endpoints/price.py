@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 
-from ....services.price_service import price_service
+from ....services.price_service import CoinGeckoPriceService, get_price_service
 from ....core.security import get_current_user
 from ....models.user import UserInDB
 
@@ -14,6 +14,7 @@ router = APIRouter()
 
 @router.get("/bitcoin/current")
 async def get_current_bitcoin_price(
+    price_service: CoinGeckoPriceService = Depends(get_price_service),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """Get the current Bitcoin price in USD."""
@@ -32,6 +33,7 @@ async def get_current_bitcoin_price(
 @router.get("/bitcoin/history")
 async def get_bitcoin_price_history(
     hours: int = 24,
+    price_service: CoinGeckoPriceService = Depends(get_price_service),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """Get Bitcoin price history for the specified time window."""
@@ -56,6 +58,7 @@ async def get_bitcoin_price_history(
 
 @router.get("/bitcoin/check-movement")
 async def check_bitcoin_price_movement(
+    price_service: CoinGeckoPriceService = Depends(get_price_service),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """

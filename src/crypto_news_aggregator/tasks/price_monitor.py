@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from functools import lru_cache
 
-from ..services.price_service import price_service
+from ..services.price_service import get_price_service
 from ..services.notification_service import get_notification_service
 from ..services.news_correlator import NewsCorrelator
 from ..core.config import get_settings
@@ -19,6 +19,7 @@ class PriceMonitor:
     """Monitor cryptocurrency prices and trigger alerts on significant movements."""
     
     def __init__(self):
+        self.price_service = get_price_service()
         self.is_running = False
         self.task: Optional[asyncio.Task] = None
         self.last_alert_time: Dict[str, datetime] = {}
@@ -60,7 +61,7 @@ class PriceMonitor:
         settings = get_settings()
         symbol = 'bitcoin'  # Hardcoded for now
         
-        price_data = await price_service.get_bitcoin_price()
+        price_data = await self.price_service.get_bitcoin_price()
         current_price = price_data.get('price')
 
         if current_price is None:
@@ -74,7 +75,7 @@ class PriceMonitor:
             logger.info(f"First price check for {symbol}: {current_price}")
             return
 
-        should_alert, change_pct = await price_service.should_trigger_alert(
+        should_alert, change_pct = await self.price_service.should_trigger_alert(
             current_price=current_price,
             last_alert_price=last_price,
             threshold=settings.PRICE_CHANGE_THRESHOLD
