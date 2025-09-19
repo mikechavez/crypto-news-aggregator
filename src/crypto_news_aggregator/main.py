@@ -47,8 +47,6 @@ from fastapi.responses import JSONResponse
 
 from .api.v1 import router as api_router
 from .api import openai_compatibility as openai_api
-from .tasks.sync_tasks import sync_scheduler
-from .tasks.price_monitor import get_price_monitor
 from .core.config import get_settings
 from .core.auth import get_api_key, API_KEY_NAME
 from .db.mongodb import initialize_mongodb, mongo_manager
