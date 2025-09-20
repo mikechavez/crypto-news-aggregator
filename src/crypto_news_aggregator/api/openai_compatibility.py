@@ -10,7 +10,7 @@ import logging
 
 from ..services.price_service import CoinGeckoPriceService, get_price_service
 from ..services.article_service import article_service
-from ..services.correlation_service import correlation_service
+from ..services.correlation_service import get_correlation_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -74,7 +74,7 @@ async def get_market_sentiment(symbols: List[str]) -> Dict:
         logger.error(f"Error fetching market sentiment: {e}", exc_info=True)
         raise HTTPException(status_code=503, detail="Could not fetch market sentiment due to a service error.")
 
-async def analyze_price_correlation(symbol: str) -> Dict:
+async def analyze_price_correlation(symbol: str, correlation_service) -> Dict:
     """Analyzes price correlation using the correlation service."""
     base_coin_id = SYMBOL_TO_ID_MAP.get(symbol.upper())
     if not base_coin_id:
@@ -169,7 +169,7 @@ def _generate_market_analysis_commentary(symbol: str, data: Dict) -> str:
 
     return commentary
 
-async def generate_response_content(intent: str, symbols: List[str], price_service: CoinGeckoPriceService) -> str:
+async def generate_response_content(intent: str, symbols: List[str], price_service: CoinGeckoPriceService, correlation_service) -> str:
     """Generates a response based on intent and symbols."""
     if not symbols:
         return "I can provide information about cryptocurrencies. Please specify a symbol like BTC or ETH."
@@ -203,7 +203,7 @@ async def generate_response_content(intent: str, symbols: List[str], price_servi
     elif intent == "correlation_analysis":
         if not symbols:
             return "Please specify a symbol for correlation analysis."
-        data = await analyze_price_correlation(symbols[0])
+        data = await analyze_price_correlation(symbols[0], correlation_service)
         correlation = data.get("correlation", {})
         corr_str = ", ".join([f"{key} ({val})" for key, val in correlation.items()])
         return f"{symbols[0]} is correlated with: {corr_str}."
@@ -213,7 +213,8 @@ async def generate_response_content(intent: str, symbols: List[str], price_servi
 @router.post("/completions")
 async def chat_completions(
     request: OpenAIChatRequest,
-    price_service: CoinGeckoPriceService = Depends(get_price_service)
+    price_service: CoinGeckoPriceService = Depends(get_price_service),
+    correlation_service = Depends(get_correlation_service)
 ):
     """OpenAI-compatible chat completions endpoint."""
     logger.info("Received chat completion request")
@@ -227,7 +228,7 @@ async def chat_completions(
 
     if request.stream:
         async def response_generator():
-            content = await generate_response_content(intent, symbols, price_service)
+            content = await generate_response_content(intent, symbols, price_service, correlation_service)
             response_chunk = {
                 "choices": [
                     {
@@ -247,7 +248,7 @@ async def chat_completions(
 
     else:
         try:
-            content = await generate_response_content(intent, symbols, price_service)
+            content = await generate_response_content(intent, symbols, price_service, correlation_service)
             response = {
                 "choices": [
                     {

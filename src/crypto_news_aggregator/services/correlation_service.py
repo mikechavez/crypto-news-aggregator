@@ -3,6 +3,7 @@ Service for calculating price correlations between cryptocurrencies.
 """
 import logging
 from typing import Optional, Dict, List, Tuple
+from functools import lru_cache
 import numpy as np
 import asyncio
 
@@ -81,5 +82,7 @@ class CorrelationService:
 
         return correlations
 
-# Singleton instance
-correlation_service = CorrelationService()
+# Factory function for dependency injection
+@lru_cache()
+def get_correlation_service() -> CorrelationService:
+    return CorrelationService()
