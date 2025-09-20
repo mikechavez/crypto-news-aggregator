@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from functools import lru_cache
 
 from ..models.alert import AlertInDB, AlertStatus, AlertUpdate
-from ..services.price_service import price_service
+from ..services.price_service import get_price_service
 from ..services.alert_service import AlertService, get_alert_service
 from ..services.email_service import get_email_service
 from ..core.config import get_settings
@@ -18,6 +18,7 @@ class AlertNotificationService:
     """Service for managing and sending price alert notifications."""
     
     def __init__(self, alert_service: AlertService):
+        self.price_service = get_price_service()
         self.alert_service = alert_service
         settings = get_settings()
         self.min_alert_interval = timedelta(
@@ -50,7 +51,7 @@ class AlertNotificationService:
                         continue
                 
                     # Get current price data
-                    price_data = await price_service.get_bitcoin_price()
+                    price_data = await self.price_service.get_bitcoin_price()
                     logger.info(f"[PIPELINE] Current price data: {price_data}")
                     if not price_data or 'price' not in price_data:
                         logger.error("[PIPELINE] Failed to get current price data")

@@ -552,6 +552,3 @@ def get_price_service() -> CoinGeckoPriceService:
     return CoinGeckoPriceService()
 
 
-# Singleton instance for non-FastAPI usage (e.g., worker)
-# This is accessed via get_price_service() to maintain a single entry point
-price_service = get_price_service()

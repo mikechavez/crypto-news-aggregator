@@ -6,12 +6,15 @@ from typing import Optional, Dict, List, Tuple
 import numpy as np
 import asyncio
 
-from .price_service import price_service
+from .price_service import get_price_service
 
 logger = logging.getLogger(__name__)
 
 class CorrelationService:
     """Service to calculate price correlations."""
+
+    def __init__(self):
+        self.price_service = get_price_service()
 
     async def calculate_correlation(
         self, 
@@ -32,7 +35,7 @@ class CorrelationService:
         """
         # Fetch all required historical data concurrently
         all_coin_ids = [base_coin_id] + target_coin_ids
-        price_tasks = [price_service.get_historical_prices(coin_id, days) for coin_id in all_coin_ids]
+        price_tasks = [self.price_service.get_historical_prices(coin_id, days) for coin_id in all_coin_ids]
         all_price_data = await asyncio.gather(*price_tasks)
 
         historical_prices = {coin_id: data for coin_id, data in zip(all_coin_ids, all_price_data)}
