@@ -179,7 +179,7 @@ async def generate_response_content(intent: str, symbols: List[str], price_servi
         if not coin_ids:
             return "Could not find the specified cryptocurrencies."
 
-                market_data = await price_service.get_markets_data(coin_ids)
+        market_data = await price_service.get_markets_data(coin_ids)
         
         responses = []
         for symbol in symbols:
