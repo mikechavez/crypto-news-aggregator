@@ -260,16 +260,16 @@ class CoinGeckoPriceService:
             return {coin_id: {} for coin_id in coin_ids}
 
     @cached(ttl=300) # Cache for 5 minutes
-    async def get_historical_prices(self, coin_id: str, days: int) -> Optional[List[Tuple[datetime, float]]]:
+    async def get_historical_prices(self, coin_id: str, days: int) -> Optional[Dict[str, List[Tuple[datetime, float]]]]:
         """
-        Get historical price data for a specific coin.
+        Get historical price and volume data for a specific coin.
 
         Args:
             coin_id: The CoinGecko ID of the coin (e.g., 'bitcoin').
             days: The number of days to fetch historical data for.
 
         Returns:
-            A list of (timestamp, price) tuples, or None if an error occurs.
+            A dictionary with 'prices' and 'volumes', each a list of (timestamp, value) tuples, or None if an error occurs.
         """
         if self.settings.TESTING_MODE:
             logger.info(f"TESTING_MODE enabled. Returning mock historical prices for: {coin_id}")
@@ -278,7 +278,9 @@ class CoinGeckoPriceService:
                 date = datetime.now(timezone.utc) - timedelta(days=i)
                 mock_data = _generate_mock_price(coin_id)
                 mock_prices.append((date, mock_data['price']))
-            return list(reversed(mock_prices)) # Return in chronological order
+            # Mock volume data as well
+            mock_volumes = [(p[0], random.uniform(1e9, 5e10)) for p in mock_prices]
+            return {'prices': list(reversed(mock_prices)), 'volumes': list(reversed(mock_volumes))}
 
         increment_api_call_counter()
         session = await self.get_session()
@@ -291,8 +293,13 @@ class CoinGeckoPriceService:
                 data = await response.json()
                 
                 prices = data.get('prices', [])
+                volumes = data.get('total_volumes', [])
+                
                 # Convert timestamp from ms to datetime object
-                return [(datetime.fromtimestamp(p[0] / 1000, tz=timezone.utc), p[1]) for p in prices]
+                price_data = [(datetime.fromtimestamp(p[0] / 1000, tz=timezone.utc), p[1]) for p in prices]
+                volume_data = [(datetime.fromtimestamp(v[0] / 1000, tz=timezone.utc), v[1]) for v in volumes]
+                
+                return {'prices': price_data, 'volumes': volume_data}
 
         except aiohttp.ClientError as e:
             logger.error(f"Error fetching historical data for {coin_id}: {e}")
@@ -478,6 +485,32 @@ class CoinGeckoPriceService:
             logger.error(f"Unexpected error in get_global_market_data: {e}")
             return {}
 
+    def _get_trend_momentum_commentary(self, price_1h: float, price_24h: float, price_7d: float) -> Tuple[str, str]:
+        """Analyzes multi-timeframe data to identify trend and momentum."""
+        # Trend Analysis
+        if price_1h > 0 and price_24h > 0 and price_7d > 0:
+            trend = "strong bullish momentum"
+        elif price_1h < 0 and price_24h < 0 and price_7d < 0:
+            trend = "strong bearish momentum"
+        elif price_1h > 0 and price_24h > 0 and price_7d < 0:
+            trend = "a potential bullish reversal"
+        elif price_1h < 0 and price_24h < 0 and price_7d > 0:
+            trend = "a potential bearish reversal"
+        elif abs(price_24h) < 1:
+            trend = "a consolidation phase"
+        else:
+            trend = "mixed signals"
+
+        # Momentum Indicator
+        if abs(price_24h) > 5:
+            momentum = "high"
+        elif abs(price_24h) > 2:
+            momentum = "moderate"
+        else:
+            momentum = "low"
+
+        return trend, momentum
+
     async def generate_market_analysis_commentary(self, coin_id: str = 'bitcoin') -> str:
         """
         Generates sophisticated market analysis commentary for a given cryptocurrency.
@@ -510,39 +543,68 @@ class CoinGeckoPriceService:
         price_24h = target_data.get('price_change_percentage_24h_in_currency', 0) or 0
         price_7d = target_data.get('price_change_percentage_7d_in_currency', 0) or 0
 
-        # 4. Calculate volatility
-        prices_7d = await self.get_historical_prices(target_coin_id, days=7)
+        # 4. Fetch and Process Historical Data
+        historical_data = await self.get_historical_prices(target_coin_id, days=7)
         volatility = 'N/A'
-        if prices_7d and len(prices_7d) > 1:
-            daily_returns = np.diff([p[1] for p in prices_7d]) / [p[1] for p in prices_7d][:-1]
-            # Annualized volatility from daily data
-            daily_volatility = np.std(daily_returns)
-            volatility = f"{daily_volatility * np.sqrt(365) * 100:.2f}% (annualized)"
+        avg_7d_volume = 0
 
-        # 5. Comparative Analysis
-        comparison = ""
-        if competitor_data:
-            competitor_name = competitor_data.get('name', competitor_coin_id.capitalize())
-            competitor_price_24h = competitor_data.get('price_change_percentage_24h_in_currency', 0) or 0
-            if price_24h > competitor_price_24h:
-                comparison = f"outperforming {competitor_name} ({competitor_price_24h:+.2f}%)."
+        if historical_data:
+            prices_7d = historical_data.get('prices', [])
+            volumes_7d = historical_data.get('volumes', [])
+
+            if prices_7d and len(prices_7d) > 1:
+                daily_returns = np.diff([p[1] for p in prices_7d]) / [p[1] for p in prices_7d][:-1]
+                daily_volatility = np.std(daily_returns)
+                volatility = f"{daily_volatility * np.sqrt(365) * 100:.2f}%"
+
+            if volumes_7d:
+                avg_7d_volume = np.mean([v[1] for v in volumes_7d])
+
+        # 5. Volatility and Volume Analysis
+        high_24h = target_data.get('high_24h', 0)
+        low_24h = target_data.get('low_24h', 0)
+        intraday_volatility = 0
+        if low_24h and high_24h and low_24h > 0:
+            intraday_volatility = ((high_24h - low_24h) / low_24h) * 100
+
+        total_volume = target_data.get('total_volume', 0)
+        volume_text = ""
+        if total_volume > 0 and avg_7d_volume > 0:
+            volume_diff_percent = ((total_volume - avg_7d_volume) / avg_7d_volume) * 100
+            if volume_diff_percent > 25:
+                volume_desc = f"{volume_diff_percent:.0f}% above its 7-day average"
+            elif volume_diff_percent < -25:
+                volume_desc = f"{abs(volume_diff_percent):.0f}% below its 7-day average"
             else:
-                comparison = f"underperforming {competitor_name} ({competitor_price_24h:+.2f}%)."
+                volume_desc = "in line with its 7-day average"
+            volume_text = f"Current 24h volume (${total_volume:,.0f}) is {volume_desc}. "
 
-        # 6. Generate Commentary
-        commentary = f"{coin_name} is currently trading with a 24-hour change of {price_24h:+.2f}%. "
-        commentary += f"It holds the #{market_cap_rank} rank by market capitalization. "
-        
-        if comparison:
-            commentary += f"In the last 24 hours, it has been {comparison} "
+        # 6. Comparative Analysis
+        market_avg_24h_change = global_data.get('market_cap_change_percentage_24h_usd', 0)
+        market_comparison = ""
+        if market_avg_24h_change:
+            performance_diff = price_24h - market_avg_24h_change
+            if performance_diff > 0.1:
+                market_comparison = f"outperforming the broader market by {performance_diff:.2f}%. "
+            else:
+                market_comparison = f"underperforming the broader market by {abs(performance_diff):.2f}%. "
 
-        commentary += f"Price changes over other timeframes: 1h: {price_1h:+.2f}%, 7d: {price_7d:+.2f}%. "
-        commentary += f"Estimated 7-day volatility is {volatility}. "
+        # 7. Generate Professional Commentary
+        current_price = target_data.get('current_price', 0)
+        trend, _ = self._get_trend_momentum_commentary(price_1h, price_24h, price_7d)
 
-        if target_coin_id == 'bitcoin':
-            commentary += f"Bitcoin dominance is currently {btc_dominance:.2f}%. "
+        commentary = (
+            f"{coin_name} (Rank #{market_cap_rank}) is trading at ${current_price:,.2f}. "
+            f"It shows {trend} with price movements of 1h: {price_1h:+.2f}%, 24h: {price_24h:+.2f}%, and 7d: {price_7d:+.2f}%. "
+            f"{market_comparison}"
+            f"{volume_text}"
+            f"Intraday volatility is {intraday_volatility:.2f}%, with an estimated 7-day annualized volatility of {volatility}. "
+        )
 
-        return commentary
+        if target_coin_id == 'bitcoin' and btc_dominance > 0:
+            commentary += f"Bitcoin's market dominance stands at {btc_dominance:.2f}%. "
+
+        return commentary.strip()
 
 
 # Factory function for dependency injection
@@ -550,5 +612,7 @@ class CoinGeckoPriceService:
 def get_price_service() -> CoinGeckoPriceService:
     """Factory function to get a singleton instance of the price service."""
     return CoinGeckoPriceService()
+
+price_service = get_price_service()
 
 
