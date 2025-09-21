@@ -50,6 +50,7 @@ from .api import openai_compatibility as openai_api
 from .core.config import get_settings
 from .core.auth import get_api_key, API_KEY_NAME
 from .db.mongodb import initialize_mongodb, mongo_manager
+from .services.price_service import price_service
 
 logger.info("Attempting to load application settings...")
 try:
@@ -74,6 +75,8 @@ async def lifespan(app: FastAPI):
     logger.info("--- Web Server Lifespan Shutdown ---")
     await mongo_manager.aclose()
     logger.info("Web server MongoDB connections closed.")
+    await price_service.close()
+    logger.info("Price service client session closed.")
 
 # Create FastAPI application
 app = FastAPI(

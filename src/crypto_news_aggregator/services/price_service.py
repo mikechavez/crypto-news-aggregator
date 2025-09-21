@@ -607,7 +607,7 @@ class CoinGeckoPriceService:
         return commentary.strip()
 
 
-# Factory function for dependency injection
+# Factory function for dependency injection (v2)
 @lru_cache()
 def get_price_service() -> CoinGeckoPriceService:
     """Factory function to get a singleton instance of the price service."""
