@@ -139,35 +139,6 @@ async def stream_response(response_generator: AsyncGenerator[str, None]) -> Asyn
         yield f"data: {json.dumps(chunk)}\n\n"
     yield "data: [DONE]\n\n"
 
-def _generate_market_analysis_commentary(symbol: str, data: Dict) -> str:
-    """Generates a human-readable analysis from market data."""
-    price = data.get('current_price', 0)
-    change_24h = data.get('price_change_percentage_24h', 0)
-    volume = data.get('total_volume', 0)
-
-    if price is None or change_24h is None:
-        return f"Price data for {symbol.upper()} is currently unavailable."
-
-    # Basic commentary
-    commentary = f"{data.get('name', symbol.upper())} is currently trading at ${price:,.2f}."
-
-    # Add trend analysis
-    if change_24h > 1:
-        trend = f"showing bullish momentum with a {change_24h:.2f}% gain in the last 24 hours."
-    elif change_24h < -1:
-        trend = f"facing downward pressure, with a {abs(change_24h):.2f}% loss in the last 24 hours."
-    else:
-        trend = "maintaining a relatively stable price."
-    commentary += f" It is {trend}"
-
-    # Add volume analysis
-    if volume > 1_000_000_000:
-        volume_desc = f"significant trading volume of ${volume:,.0f}."
-    else:
-        volume_desc = f"a moderate trading volume."
-    commentary += f" This is accompanied by {volume_desc}"
-
-    return commentary
 
 async def generate_response_content(intent: str, symbols: List[str], price_service: CoinGeckoPriceService, correlation_service) -> str:
     """Generates a response based on intent and symbols."""
@@ -179,14 +150,16 @@ async def generate_response_content(intent: str, symbols: List[str], price_servi
         if not coin_ids:
             return "Could not find the specified cryptocurrencies."
 
-        market_data = await price_service.get_markets_data(coin_ids)
-        
         responses = []
         for symbol in symbols:
             coin_id = SYMBOL_TO_ID_MAP.get(symbol.upper())
-            if coin_id and coin_id in market_data:
-                analysis = _generate_market_analysis_commentary(symbol, market_data[coin_id])
-                responses.append(analysis)
+            if coin_id:
+                try:
+                    analysis = await price_service.generate_market_analysis_commentary(coin_id)
+                    responses.append(analysis)
+                except Exception as e:
+                    logger.error(f"Error generating analysis for {symbol}: {e}", exc_info=True)
+                    responses.append(f"An error occurred while analyzing {symbol.upper()}.")
             else:
                 responses.append(f"I could not retrieve market data for {symbol.upper()}.")
         
