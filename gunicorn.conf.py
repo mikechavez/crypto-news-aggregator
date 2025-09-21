@@ -6,8 +6,9 @@ import multiprocessing
 # Gunicorn config variables
 loglevel = os.environ.get("LOG_LEVEL", "info")
 
-# Use WEB_CONCURRENCY if set, otherwise calculate based on CPU cores
-workers = int(os.environ.get("WEB_CONCURRENCY", multiprocessing.cpu_count() * 2 + 1))
+# Use WEB_CONCURRENCY if set, otherwise use a sensible default.
+# The dynamic formula can result in too many workers on some platforms.
+workers = int(os.environ.get("WEB_CONCURRENCY", 3))
 
 # The address to bind to
 bind = f"0.0.0.0:{os.environ.get('PORT', '8000')}"
