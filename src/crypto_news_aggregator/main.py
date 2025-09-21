@@ -125,6 +125,11 @@ app.include_router(api_router)
 
 app.include_router(openai_api.router, prefix="/v1/chat", tags=["OpenAI Compatibility"])
 
+# Root health check for deployment platforms
+@app.get("/", tags=["health"])
+async def root_health_check():
+    return {"status": "ok", "service": "crypto-news-aggregator"}
+
 # Health check endpoint is now in api/v1/health.py
 
 if __name__ == "__main__":
