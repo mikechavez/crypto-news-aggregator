@@ -9,15 +9,10 @@ router = APIRouter()
 
 @router.get("/health", response_model=Dict[str, Any])
 async def health_check() -> Dict[str, Any]:
-    """Health check endpoint including MongoDB status."""
-    mongo_ok = await mongo_manager.ping()
-    status = "ok" if mongo_ok else "degraded"
+    """Basic health check endpoint to confirm the service is responsive."""
     return {
-        "status": status,
+        "status": "ok",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "service": "crypto-news-aggregator",
-        "version": "1.0.0",
-        "mongodb": {
-            "connected": mongo_ok
-        }
+        "version": "1.0.0"
     }
