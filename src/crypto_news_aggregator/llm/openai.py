@@ -11,10 +11,10 @@ class OpenAIProvider(LLMProvider):
     LLM provider for OpenAI's GPT-4 model.
     """
 
-    def __init__(self, api_key: str = None, model_name: str = "gpt-4"):
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError("OpenAI API key not provided or found in environment variables.")
+    def __init__(self, api_key: str, model_name: str = "gpt-4"):
+        if not api_key:
+            raise ValueError("OpenAI API key not provided.")
+        self.api_key = api_key
         self.model_name = model_name
         # In a real implementation, you would initialize the client here.
         # from openai import OpenAI
@@ -69,3 +69,16 @@ class OpenAIProvider(LLMProvider):
             insight += "The sentiment is cautiously optimistic, with some reservations."
 
         return insight
+
+    @track_usage
+    def score_relevance(self, text: str) -> float:
+        """
+        Scores the relevance of a given text.
+        This is a mock implementation.
+        """
+        # Mock implementation
+        if "BTC" in text or "ETH" in text or "SOL" in text:
+            return 0.9
+        if "crypto" in text.lower():
+            return 0.7
+        return 0.3

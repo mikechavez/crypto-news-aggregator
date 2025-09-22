@@ -1,10 +1,10 @@
-import os
 from typing import List, Optional
 
 from .base import LLMProvider
 from .sentient import SentientProvider
 from .anthropic import AnthropicProvider
 from .openai import OpenAIProvider
+from ..core.config import get_settings
 
 PROVIDER_MAP = {
     "sentient": SentientProvider,
@@ -12,10 +12,7 @@ PROVIDER_MAP = {
     "openai": OpenAIProvider,
 }
 
-def get_llm_provider(
-    provider_name: Optional[str] = None,
-    fallback_chain: Optional[List[str]] = None
-) -> LLMProvider:
+def get_llm_provider() -> LLMProvider:
     """
     Factory function to get an LLM provider instance.
 
@@ -23,19 +20,22 @@ def get_llm_provider(
     :param fallback_chain: A list of provider names to use as fallbacks.
     :return: An instance of the LLM provider.
     """
-    if provider_name is None:
-        provider_name = os.environ.get("LLM_PROVIDER", "openai").lower()
-
+    settings = get_settings()
+    provider_name = getattr(settings, 'LLM_PROVIDER', 'openai').lower()
     providers_to_try = [provider_name]
-    if fallback_chain:
-        providers_to_try.extend(fallback_chain)
 
     last_exception = None
     for name in providers_to_try:
         provider_class = PROVIDER_MAP.get(name)
         if provider_class:
             try:
-                return provider_class()
+                api_key = None
+                if name == "anthropic":
+                    api_key = settings.ANTHROPIC_API_KEY
+                elif name == "openai":
+                    api_key = settings.OPENAI_API_KEY
+                
+                return provider_class(api_key=api_key)
             except Exception as e:
                 last_exception = e
                 print(f"Failed to initialize provider '{name}': {e}")

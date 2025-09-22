@@ -32,8 +32,10 @@ class Settings(BaseSettings):
     DATABASE_URL: Optional[str] = None
 
     # API Keys (these will be loaded from environment variables)
+    LLM_PROVIDER: str = "openai"  # Default provider, will be overridden by .env
     NEWS_API_KEY: str = ""  # Kept for backward compatibility
     TWITTER_BEARER_TOKEN: str = ""
+    ANTHROPIC_API_KEY: str = ""
     POLYMARKET_API_KEY: str = ""
     
     # Realtime NewsAPI settings
@@ -106,6 +108,7 @@ class Settings(BaseSettings):
     ENABLED_NEWS_SOURCES: list[str] = ["coindesk", "bloomberg"]
     NEWS_FETCH_INTERVAL: int = 300  # 5 minutes in seconds
     MAX_ARTICLES_PER_SOURCE: int = 20
+    TWEET_FETCH_INTERVAL: int = 900  # 15 minutes in seconds
     
     # Source-specific settings
     COINDESK_API_KEY: str = ""  # Optional API key for CoinDesk
@@ -133,7 +136,7 @@ class Settings(BaseSettings):
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
-        "env_prefix": ""
+        "extra": "ignore"
     }
 
 @lru_cache()

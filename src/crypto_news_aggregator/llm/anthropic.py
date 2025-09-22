@@ -11,10 +11,10 @@ class AnthropicProvider(LLMProvider):
     """
     API_URL = "https://api.anthropic.com/v1/messages"
 
-    def __init__(self, api_key: str = None, model_name: str = "claude-3-haiku-20240307"): # Reverted to Haiku as Sonnet is unavailable.
-        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-        if not self.api_key:
-            raise ValueError("Anthropic API key not provided or found in environment variables.")
+    def __init__(self, api_key: str, model_name: str = "claude-3-haiku-20240307"): # Reverted to Haiku as Sonnet is unavailable.
+        if not api_key:
+            raise ValueError("Anthropic API key not provided.")
+        self.api_key = api_key
         self.model_name = model_name
 
     def _get_completion(self, prompt: str) -> str:
@@ -65,3 +65,12 @@ class AnthropicProvider(LLMProvider):
         themes = data.get("themes", [])
         prompt = f"Given a sentiment score of {sentiment_score} and the themes {', '.join(themes)}, generate a concise market insight for cryptocurrency traders. The response must be a maximum of 2-3 sentences."
         return self._get_completion(prompt)
+
+    @track_usage
+    def score_relevance(self, text: str) -> float:
+        prompt = f"On a scale from 0.0 to 1.0, how relevant is this tweet to cryptocurrency market movements? Consider factors like market analysis, price predictions, major project updates, or significant whale movements. Ignore spam, memes, or general news. Respond with only a single floating-point number.\n\nTweet: \"{text}\""
+        response = self._get_completion(prompt)
+        try:
+            return float(response.strip())
+        except (ValueError, TypeError):
+            return 0.0

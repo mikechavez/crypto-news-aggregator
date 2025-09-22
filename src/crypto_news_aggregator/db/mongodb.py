@@ -121,6 +121,30 @@ ALERT_INDEXES = [
     }
 ]
 
+TWEET_INDEXES = [
+    {
+        "keys": [("tweet_id", 1)],
+        "name": "tweet_id_unique",
+        "unique": True
+    },
+    {
+        "keys": [("author.username", 1)],
+        "name": "author_username"
+    },
+    {
+        "keys": [("tweet_created_at", -1)],
+        "name": "tweet_created_at_desc"
+    },
+    {
+        "keys": [("keywords", 1)],
+        "name": "tweet_keywords_idx"
+    },
+    {
+        "keys": [("relevance_score", -1)],
+        "name": "relevance_score_desc"
+    }
+]
+
 PRICE_HISTORY_INDEXES = [
     {
         "keys": [("cryptocurrency", 1), ("timestamp", -1)],
@@ -149,6 +173,7 @@ COLLECTION_SOURCES = "sources"
 COLLECTION_TRENDS = "trends"
 COLLECTION_ALERTS = "alerts"
 COLLECTION_PRICE_HISTORY = "price_history"
+COLLECTION_TWEETS = "tweets"
 
 # Database name
 DB_NAME = "crypto_news"
@@ -356,6 +381,7 @@ class MongoManager:
             await articles_col.drop_indexes()
             await alerts_col.drop_indexes()
             await price_history_col.drop_indexes()
+            await self.get_async_collection(COLLECTION_TWEETS).drop_indexes()
         
         # Create indexes for articles collection
         for index_info in ARTICLE_INDEXES:
@@ -372,11 +398,20 @@ class MongoManager:
                 await alerts_col.create_index(keys, **index_options)
         
         # Create indexes for price history collection
+        price_history_col = await self.get_async_collection(COLLECTION_PRICE_HISTORY)
         for index_info in PRICE_HISTORY_INDEXES:
             index_options = index_info.copy()
             keys = index_options.pop("keys")
             if not await self._has_index(price_history_col, index_options.get("name")):
                 await price_history_col.create_index(keys, **index_options)
+
+        # Create indexes for tweets collection
+        tweets_col = await self.get_async_collection(COLLECTION_TWEETS)
+        for index_info in TWEET_INDEXES:
+            index_options = index_info.copy()
+            keys = index_options.pop("keys")
+            if not await self._has_index(tweets_col, index_options.get("name")):
+                await tweets_col.create_index(keys, **index_options)
         
         logger.info("MongoDB indexes initialized successfully")
         self._indexes_created = True

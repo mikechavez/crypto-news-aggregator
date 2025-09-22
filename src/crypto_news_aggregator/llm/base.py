@@ -34,4 +34,14 @@ class LLMProvider(ABC):
         :param data: A dictionary of data (e.g., sentiment scores, themes).
         :return: A string containing the generated insight.
         """
-        pass
+        raise NotImplementedError
+
+    @abstractmethod
+    def score_relevance(self, text: str) -> float:
+        """
+        Scores the relevance of a given text.
+
+        :param text: The text to score.
+        :return: A relevance score.
+        """
+        raise NotImplementedError
