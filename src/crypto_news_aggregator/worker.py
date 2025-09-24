@@ -7,7 +7,6 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from crypto_news_aggregator.tasks.price_monitor import get_price_monitor
-from crypto_news_aggregator.tasks.twitter_fetcher import get_twitter_fetcher
 from crypto_news_aggregator.core.config import get_settings
 from crypto_news_aggregator.db.mongodb import initialize_mongodb, mongo_manager
 
@@ -27,11 +26,6 @@ async def main():
         logger.info("Starting price monitor task...")
         tasks.append(asyncio.create_task(price_monitor.start()))
         logger.info("Price monitor task created.")
-
-        twitter_fetcher = get_twitter_fetcher()
-        logger.info("Starting Twitter fetcher task...")
-        tasks.append(asyncio.create_task(twitter_fetcher.start()))
-        logger.info("Twitter fetcher task created.")
 
     if not tasks:
         logger.warning("No background tasks to run. Worker will exit.")

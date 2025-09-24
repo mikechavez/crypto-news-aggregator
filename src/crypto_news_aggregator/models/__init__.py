@@ -9,4 +9,4 @@ from .alert import (  # noqa: F401
     AlertUpdate,
     AlertCondition
 )
-from .article import Article, ArticleInDB, ArticleCreate  # noqa: F401
+from .article import ArticleInDB, ArticleCreate  # noqa: F401
