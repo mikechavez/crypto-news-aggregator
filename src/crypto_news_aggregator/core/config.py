@@ -1,7 +1,7 @@
 from pydantic_settings import BaseSettings
 from pydantic import model_validator
 from functools import lru_cache
-from typing import Optional
+from typing import Optional, List
 
 class Settings(BaseSettings):
     # Core settings
@@ -37,6 +37,18 @@ class Settings(BaseSettings):
     TWITTER_BEARER_TOKEN: str = ""
     ANTHROPIC_API_KEY: str = ""
     POLYMARKET_API_KEY: str = ""
+
+    # Reddit settings
+    REDDIT_CLIENT_ID: str = ""
+    REDDIT_CLIENT_SECRET: str = ""
+    REDDIT_USER_AGENT: str = ""
+    REDDIT_SUBREDDITS: List[str] = ["CryptoCurrency", "Bitcoin", "ethereum", "ethtrader"]
+
+    # Telegram settings
+    TELEGRAM_API_ID: Optional[int] = None
+    TELEGRAM_API_HASH: Optional[str] = None
+    TELEGRAM_SESSION_NAME: str = "telegram_session"
+    TELEGRAM_CHANNEL: str = "WatcherGuru"
     
     # Realtime NewsAPI settings
     REALTIME_NEWSAPI_URL: str = "http://localhost:3000"  # URL of the self-hosted realtime-newsapi
@@ -110,6 +122,9 @@ class Settings(BaseSettings):
     MAX_ARTICLES_PER_SOURCE: int = 20
     TWEET_FETCH_INTERVAL: int = 900  # 15 minutes in seconds
     
+    # ChainGPT settings
+    CHAINGPT_RSS_URL: str = "https://api.chaingpt.org/news/rss"
+
     # Source-specific settings
     COINDESK_API_KEY: str = ""  # Optional API key for CoinDesk
     BLOOMBERG_RATE_LIMIT: int = 10  # Max requests per minute

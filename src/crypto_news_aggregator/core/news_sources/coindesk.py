@@ -154,9 +154,14 @@ class CoinDeskSource(NewsSource):
                         try:
                             data = response.json()
                             articles = data.get('data', [])
-                        except json.JSONDecodeError as e:
-                            logger.error(f"Failed to decode JSON response: {e}")
-                            raise
+                        except json.JSONDecodeError:
+                            logger.warning(
+                                f"Could not decode JSON from CoinDesk. The service may be blocking requests. "
+                                f"Status: {response.status_code}. Response: {response.text[:200]}..."
+                            )
+                            # Treat this as a non-retryable error for this attempt, but don't crash.
+                            # The outer loop will continue to the next source.
+                            break  # Exit the retry loop for this source
                         
                         if not articles:
                             logger.info(f"No more articles found at page {page}")
