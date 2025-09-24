@@ -6,6 +6,14 @@ from logging.handlers import RotatingFileHandler
 
 def setup_logging():
     """Configure logging for the application."""
+    # Force basic config to ensure stdout logging even if config is already set up
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        stream=sys.stdout,
+        force=True
+    )
+
     log_dir = "logs"
     os.makedirs(log_dir, exist_ok=True)
 
