@@ -151,6 +151,7 @@ class PerformanceMetrics:
 
 def setup_performance_monitoring(app):
     """Add performance monitoring middleware to the FastAPI app."""
-    # For ASGI apps, we need to wrap the app with our middleware
-    app.user_middleware = [PerformanceMonitoringMiddleware(app)]
+    # For ASGI apps, we need to add middleware properly to the middleware stack
+    # Instead of using user_middleware, we'll add it directly to the app's middleware stack
+    app.add_middleware(PerformanceMonitoringMiddleware)
     logger.info("Performance monitoring middleware added to application")
