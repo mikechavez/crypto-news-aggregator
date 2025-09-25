@@ -565,12 +565,119 @@ class CoinGeckoPriceService:
     
     @cached(ttl=600) # Cache for 10 minutes - longer cache for analysis
     async def generate_market_analysis_commentary(self, coin_id: str = 'bitcoin') -> str:
-        """Generate enriched market commentary for a cryptocurrency with caching."""
+        """Generate enriched market commentary for a cryptocurrency with comprehensive narrative analysis.
 
-        # TODO: Enhanced narrative analysis implementation pending syntax fixes
-        # For now, return a working version with basic functionality
+        This function provides sophisticated crash analysis by correlating price movements
+        with news drivers, mentioning key factors like ETF outflows, whale liquidations,
+        and Fed policy uncertainty.
+        """
+        try:
+            # Fetch related news articles for narrative analysis
+            search_terms = [coin_id.lower(), coin_id.upper()]
+            if coin_id.lower() == 'bitcoin':
+                search_terms.extend(['BTC', 'Bitcoin'])
+            elif coin_id.lower() == 'ethereum':
+                search_terms.extend(['ETH', 'Ethereum'])
 
-        return f"Enhanced commentary system operational for {coin_id}. News integration and advanced analytics ready for deployment."
+            related_news = await self._fetch_related_news(
+                search_terms,
+                hours=24,  # Focus on recent 24 hours for crash analysis
+                limit=10
+            )
+
+            # Use sophisticated narrative analysis
+            narratives_section = await self._analyze_developing_narratives(
+                related_news, coin_id, historical_hours=48  # 2 days for crash context
+            )
+
+            # Get market data for context
+            market_data = await self.get_global_market_data()
+            coin_data = market_data.get(coin_id.lower(), {})
+
+            if not coin_data:
+                return f"Market data unavailable for {coin_id}. {narratives_section}"
+
+            # Extract key metrics
+            current_price = coin_data.get('current_price')
+            price_1h = coin_data.get('price_change_percentage_1h_in_currency', 0)
+            price_24h = coin_data.get('price_change_percentage_24h_in_currency', 0)
+            price_7d = coin_data.get('price_change_percentage_7d_in_currency', 0)
+            market_cap_rank = coin_data.get('market_cap_rank', 'N/A')
+            total_volume = coin_data.get('total_volume', 0)
+            market_cap = coin_data.get('market_cap', 0)
+
+            # Get competitor data for context
+            competitor_data = {}
+            if coin_id.lower() == 'bitcoin':
+                competitor_data = market_data.get('ethereum', {})
+            elif coin_id.lower() == 'ethereum':
+                competitor_data = market_data.get('bitcoin', {})
+
+            # Generate trend and momentum commentary
+            trend, momentum = self._get_trend_momentum_commentary(price_1h, price_24h, price_7d)
+
+            # Format market context
+            market_context = f"Market showing {trend} with {momentum} momentum."
+
+            # Format volume summary
+            if total_volume > 1000000000:  # > $1B
+                volume_summary = f"High trading volume at ${(total_volume / 1000000000):.1f}B."
+            else:
+                volume_summary = f"Trading volume at ${(total_volume / 1000000):.0f}M."
+
+            # Format volatility summary (based on price movements)
+            volatility = "extreme" if abs(price_24h) > 5 else "high" if abs(price_24h) > 2 else "moderate"
+            volatility_summary = f"Market volatility is {volatility}."
+
+            # Format momentum summary
+            momentum_summary = f"Price momentum indicates {trend.lower()}."
+
+            # Competitor context
+            competitor_context = ""
+            if competitor_data:
+                competitor_name = competitor_data.get('name', coin_id.capitalize())
+                competitor_change = competitor_data.get('price_change_percentage_24h_in_currency')
+                if competitor_change is not None:
+                    competitor_context = (
+                        f"Key peer check: {competitor_name} 24h move {self._format_percent(competitor_change)}."
+                    )
+
+            # Bitcoin dominance (only for Bitcoin analysis)
+            btc_dominance_section = ""
+            if coin_id.lower() == 'bitcoin':
+                # Calculate approximate BTC dominance from market cap
+                total_market_cap = sum(coin.get('market_cap', 0) for coin in market_data.values() if coin.get('market_cap'))
+                if total_market_cap > 0:
+                    btc_dominance = (market_cap / total_market_cap) * 100
+                    btc_dominance_section = f"Bitcoin's market dominance stands at {btc_dominance:.2f}%."
+
+            # Build comprehensive response
+            coin_name = coin_id.capitalize()
+            headline_price = (
+                f"{coin_name} (Rank #{market_cap_rank}) is trading at "
+                f"{f'${current_price:,.2f}' if current_price is not None else 'price unavailable'}."
+            )
+
+            move_summary = (
+                f"Timeframe performance — 1h {self._format_percent(price_1h)}, "
+                f"24h {self._format_percent(price_24h)}, 7d {self._format_percent(price_7d)}."
+            )
+
+            commentary_parts = [headline_price, move_summary]
+            if market_context:
+                commentary_parts.append(market_context)
+            commentary_parts.extend([volume_summary, volatility_summary, momentum_summary])
+            if competitor_context:
+                commentary_parts.append(competitor_context)
+            commentary_parts.append(narratives_section)
+            if btc_dominance_section:
+                commentary_parts.append(btc_dominance_section)
+
+            return " ".join(part for part in commentary_parts if part).strip()
+
+        except Exception as e:
+            logger.error(f"Error generating market analysis for {coin_id}: {e}", exc_info=True)
+            return f"Market analysis temporarily unavailable for {coin_id}. Please try again later."
 
     async def _analyze_developing_narratives(
         self,
@@ -643,10 +750,10 @@ class CoinGeckoPriceService:
             title = article.get("title", "").lower()
             keywords = article.get("keywords", [])
 
-            # Extract narrative themes from titles
+            # Extract narrative themes from titles - Enhanced for crash analysis
             if any(word in title for word in ['surge', 'surges', 'rally', 'rallies', 'soar', 'soars']):
                 themes.append("price_surge")
-            if any(word in title for word in ['fall', 'falls', 'drop', 'drops', 'decline', 'declines', 'crash']):
+            if any(word in title for word in ['fall', 'falls', 'drop', 'drops', 'decline', 'declines', 'crash', 'crashing', 'dump', 'dumping']):
                 themes.append("price_decline")
             if any(word in title for word in ['adoption', 'adopts', 'integration', 'mainstream']):
                 themes.append("institutional_adoption")
@@ -658,6 +765,16 @@ class CoinGeckoPriceService:
                 themes.append("technical_development")
             if any(word in title for word in ['million', 'billion', 'funding', 'raise', 'investment']):
                 themes.append("funding_activity")
+
+            # Enhanced crash-specific theme detection
+            if any(word in title for word in ['etf', 'outflows', 'outflow']):
+                themes.append("etf_outflows")
+            if any(word in title for word in ['whale', 'liquidation', 'liquidations', 'cascade']):
+                themes.append("whale_liquidations")
+            if any(word in title for word in ['fed', 'federal', 'policy', 'hawkish', 'dovish']):
+                themes.append("monetary_policy")
+            if any(word in title for word in ['volatility', 'volatile', 'turbulence', 'turmoil']):
+                themes.append("market_volatility")
 
             # Extract sentiment
             sentiment_score = article.get("sentiment_score", 0.0)
@@ -687,32 +804,48 @@ class CoinGeckoPriceService:
         }
 
     def _analyze_sentiment_trend(self, articles: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Analyze sentiment trends in the articles.
+        """Analyze sentiment trends in the articles with user-friendly explanations.
 
         Args:
             articles: List of news articles
 
         Returns:
-            Dictionary with sentiment trend analysis
+            Dictionary with sentiment trend analysis and clear explanations
         """
         if not articles:
-            return {"trend": "neutral", "confidence": 0.0}
+            return {"trend": "neutral", "confidence": 0.0, "user_friendly": "Limited news coverage available"}
 
         sentiment_scores = [article.get("sentiment_score", 0.0) for article in articles]
         avg_sentiment = sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0.0
 
-        # Determine trend strength
-        if avg_sentiment >= 0.15:
+        # Determine trend strength with user-friendly descriptions
+        if avg_sentiment >= 0.3:
             trend = "bullish"
-            confidence = min(avg_sentiment * 3, 1.0)  # Scale to 0-1
-        elif avg_sentiment <= -0.15:
+            confidence = min(avg_sentiment * 2, 1.0)  # Scale to 0-1
+            user_friendly = "Strong positive sentiment suggesting upward price pressure"
+        elif avg_sentiment >= 0.1:
+            trend = "bullish"
+            confidence = min(avg_sentiment * 3, 1.0)
+            user_friendly = "Positive sentiment indicating potential buying interest"
+        elif avg_sentiment <= -0.3:
+            trend = "bearish"
+            confidence = min(abs(avg_sentiment) * 2, 1.0)
+            user_friendly = "Strong negative sentiment suggesting continued downward pressure"
+        elif avg_sentiment <= -0.1:
             trend = "bearish"
             confidence = min(abs(avg_sentiment) * 3, 1.0)
+            user_friendly = "Negative sentiment indicating selling pressure"
         else:
             trend = "neutral"
-            confidence = 1.0 - min(abs(avg_sentiment) * 3, 1.0)
+            confidence = 1.0 - min(abs(avg_sentiment) * 4, 1.0)
+            user_friendly = "Mixed sentiment with no clear directional bias"
 
-        return {"trend": trend, "confidence": confidence, "avg_score": avg_sentiment}
+        return {
+            "trend": trend,
+            "confidence": confidence,
+            "avg_score": avg_sentiment,
+            "user_friendly": user_friendly
+        }
 
     def _analyze_narrative_evolution(self, current_themes: Dict, historical_themes: Dict) -> Dict[str, Any]:
         """Analyze how narratives have evolved over time.
@@ -746,7 +879,7 @@ class CoinGeckoPriceService:
         }
 
     def _generate_narrative_description(self, current_themes: Dict, sentiment_trend: Dict, evolution: Dict, coin_id: str) -> str:
-        """Generate a compelling narrative description.
+        """Generate a compelling narrative description with clear market direction guidance.
 
         Args:
             current_themes: Current themes analysis
@@ -755,133 +888,89 @@ class CoinGeckoPriceService:
             coin_id: The cryptocurrency being analyzed
 
         Returns:
-            Formatted narrative description string
+            Formatted narrative description string with clear market direction
         """
         top_themes = current_themes.get("themes", [])
 
         if not top_themes:
-            return f"Developing narratives: Limited coverage observed. Sentiment outlook leans {sentiment_trend['trend']} (avg score {current_themes.get('avg_sentiment', 0):+.2f})."
+            return f"Market analysis shows {sentiment_trend['user_friendly']}. Overall sentiment {current_themes.get('avg_sentiment', 0):+.2f}."
 
-        # Create meaningful theme descriptions
+        # Create meaningful theme descriptions - Enhanced for crash analysis with clear explanations
         theme_descriptions = []
         for theme, count in top_themes[:3]:
             if theme == "price_surge":
-                theme_descriptions.append("price momentum building")
+                theme_descriptions.append("strong buying momentum")
             elif theme == "price_decline":
-                theme_descriptions.append("market correction concerns")
+                theme_descriptions.append("significant selling pressure")
             elif theme == "institutional_adoption":
-                theme_descriptions.append("mainstream adoption accelerating")
+                theme_descriptions.append("growing mainstream acceptance")
             elif theme == "regulatory_development":
-                theme_descriptions.append("regulatory clarity emerging")
+                theme_descriptions.append("regulatory uncertainty affecting prices")
             elif theme == "institutional_investment":
-                theme_descriptions.append("institutional investment growing")
+                theme_descriptions.append("large investor activity driving prices")
             elif theme == "technical_development":
-                theme_descriptions.append("technical innovation advancing")
+                theme_descriptions.append("positive technical developments")
             elif theme == "funding_activity":
-                theme_descriptions.append("funding and development activity")
+                theme_descriptions.append("increased funding and development")
+            # Enhanced crash-specific theme descriptions with clear market impact
+            elif theme == "etf_outflows":
+                theme_descriptions.append("ETF outflows creating significant selling pressure")
+            elif theme == "whale_liquidations":
+                theme_descriptions.append("large holder sales triggering market decline")
+            elif theme == "monetary_policy":
+                theme_descriptions.append("central bank policy creating market uncertainty")
+            elif theme == "market_volatility":
+                theme_descriptions.append("extreme price swings and uncertainty")
             else:
                 theme_descriptions.append(f"{theme.replace('_', ' ')} trends")
 
-        # Build narrative description
+        # Build narrative description with clear market direction
         narrative_parts = []
 
-        # Main themes
+        # Main themes with market impact explanation
         if theme_descriptions:
-            narrative_parts.append(f"Key themes: {', '.join(theme_descriptions)}")
+            narrative_parts.append(f"Key drivers: {', '.join(theme_descriptions)}")
 
-        # Narrative evolution
+        # Narrative evolution with clear market direction implications
         emerging = evolution.get("emerging_themes", [])
         continuing = evolution.get("continuing_themes", [])
 
         if emerging:
             emerging_desc = [theme.replace('_', ' ') for theme in emerging]
-            narrative_parts.append(f"Emerging narratives: {', '.join(emerging_desc)}")
+            narrative_parts.append(f"New factors emerging: {', '.join(emerging_desc)}")
 
         if continuing:
             continuing_desc = [theme.replace('_', ' ') for theme in continuing]
-            narrative_parts.append(f"Continuing themes: {', '.join(continuing_desc)}")
+            narrative_parts.append(f"Ongoing pressures: {', '.join(continuing_desc)}")
 
-        # Sentiment and trend analysis
+        # Clear sentiment explanation with market direction guidance
         sentiment_trend_desc = sentiment_trend["trend"]
         confidence = sentiment_trend["confidence"]
+        user_friendly_sentiment = sentiment_trend["user_friendly"]
 
-        if confidence > 0.7:
-            sentiment_desc = f"Strong {sentiment_trend_desc} sentiment"
-        elif confidence > 0.4:
-            sentiment_desc = f"Moderate {sentiment_trend_desc} sentiment"
-        else:
-            sentiment_desc = f"Mixed sentiment with {sentiment_trend_desc} lean"
+        narrative_parts.append(user_friendly_sentiment)
 
-        narrative_parts.append(sentiment_desc)
-
-        # Narrative maturity
+        # Narrative maturity with clear implications for market direction
         maturity = evolution.get("narrative_maturity", 0)
         if maturity > 0.6:
-            narrative_parts.append("Well-established narrative foundation")
+            narrative_parts.append("Multiple consistent factors pointing to continued downward movement")
         elif maturity > 0.3:
-            narrative_parts.append("Developing narrative structure")
+            narrative_parts.append("Several factors suggesting potential further decline")
         else:
-            narrative_parts.append("Early-stage narrative formation")
+            narrative_parts.append("Early signs of market stress that could develop")
 
-        return f"Developing narratives: {'; '.join(narrative_parts)}. Overall sentiment {current_themes.get('avg_sentiment', 0):+.2f}."
-        # Fetch related news articles
+        # Add overall sentiment score in context
+        avg_sentiment = current_themes.get('avg_sentiment', 0)
+        if avg_sentiment <= -0.2:
+            narrative_parts.append("Strong negative news flow suggests continued downside risk")
+        elif avg_sentiment <= -0.1:
+            narrative_parts.append("Negative news environment indicates caution warranted")
+        elif avg_sentiment >= 0.2:
+            narrative_parts.append("Positive news flow suggests potential recovery ahead")
+        elif avg_sentiment >= 0.1:
+            narrative_parts.append("Moderately positive news could support price stabilization")
 
-        # Fetch related news articles
-        narratives_section = "Developing narratives: No high-signal news to analyze yet."
-        if related_news:
-            article_snippets = []
-            sentiment_scores: List[float] = []
-            keyword_counter: Counter = Counter()
-            for article in related_news[:8]:
-                source = article.get("source") or "Unknown"
-                sentiment_label = (article.get("sentiment_label") or "neutral").lower()
-                if isinstance(article.get("sentiment_score"), (int, float)):
-                    sentiment_scores.append(float(article["sentiment_score"]))
-                keywords = article.get("keywords") or []
-                if isinstance(keywords, (list, tuple)):
-                    for keyword in keywords:
-                        if isinstance(keyword, str):
-                            keyword_counter[keyword.strip().lower()] += 1
-                elif isinstance(keywords, str):
-                    keyword_counter[keywords.strip().lower()] += 1
-                article_snippets.append(f"{source}: \"{title}\" ({sentiment_label})")
-
-
-            # Use the sophisticated narrative analysis
-            # TODO: Enhanced narrative analysis pending syntax fixes
-            narratives_section = "Developing narratives: Enhanced analysis system ready for deployment."
-        competitor_context = ""
-        if competitor_data:
-            competitor_name = competitor_data.get('name', competitor_coin_id.capitalize())
-            competitor_change = safe_float(competitor_data.get('price_change_percentage_24h_in_currency'))
-            if competitor_change is not None:
-                competitor_context = (
-                    f"Key peer check: {competitor_name} 24h move {self._format_percent(competitor_change)}."
-                )
-
-        headline_price = (
-            f"{coin_name} (Rank #{market_cap_rank}) is trading at "
-            f"{f'${current_price:,.2f}' if current_price is not None else 'price unavailable'}."
-        )
-
-        move_summary = (
-            f"Timeframe performance — 1h {self._format_percent(price_1h)}, "
-            f"24h {self._format_percent(price_24h)}, 7d {self._format_percent(price_7d)}."
-        )
-
-        commentary_parts: List[str] = [headline_price, move_summary]
-        if market_context:
-            commentary_parts.append(market_context)
-        commentary_parts.append(volume_summary)
-        commentary_parts.append(volatility_summary)
-        commentary_parts.append(momentum_summary)
-        if competitor_context:
-            commentary_parts.append(competitor_context)
-        commentary_parts.append(narratives_section)
-        if target_coin_id == 'bitcoin' and btc_dominance > 0:
-            commentary_parts.append(f"Bitcoin's market dominance stands at {btc_dominance:.2f}%.")
-
-        return " ".join(part for part in commentary_parts if part).strip()
+        return f"Market analysis: {'; '.join(narrative_parts)}. Overall sentiment {avg_sentiment:+.2f}."
 
 
         # Factory function for dependency injection (v2)

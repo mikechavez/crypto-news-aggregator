@@ -140,8 +140,18 @@ async def stream_response(response_generator: AsyncGenerator[str, None]) -> Asyn
     yield "data: [DONE]\n\n"
 
 
-async def generate_response_content(intent: str, symbols: List[str], price_service: CoinGeckoPriceService, correlation_service) -> str:
+async def generate_response_content(intent: str, symbols: List[str], price_service: CoinGeckoPriceService, correlation_service, last_message: str = "") -> str:
     """Generates a response based on intent and symbols."""
+    # Handle general market queries (e.g., "Why is crypto crashing?") even without specific symbols
+    if not symbols:
+        # Check if this is a general market analysis query
+        general_market_terms = ["crypto", "cryptocurrency", "market", "crash", "dump", "bear", "bull", "volatility"]
+        message_lower = last_message.lower()
+
+        # If general market terms are found, default to Bitcoin analysis
+        if any(term in message_lower for term in general_market_terms):
+            symbols = ["BTC"]
+
     if not symbols:
         return "I can provide information about cryptocurrencies. Please specify a symbol like BTC or ETH."
 
@@ -162,7 +172,7 @@ async def generate_response_content(intent: str, symbols: List[str], price_servi
                     responses.append(f"An error occurred while analyzing {symbol.upper()}.")
             else:
                 responses.append(f"I could not retrieve market data for {symbol.upper()}.")
-        
+
         return " ".join(responses)
 
     elif intent == "sentiment_analysis":
@@ -210,7 +220,7 @@ async def chat_completions(
 
     if request.stream:
         async def response_generator():
-            content = await generate_response_content(intent, symbols, price_service, correlation_service)
+            content = await generate_response_content(intent, symbols, price_service, correlation_service, last_message)
             response_chunk = {
                 "choices": [
                     {
@@ -230,7 +240,7 @@ async def chat_completions(
 
     else:
         try:
-            content = await generate_response_content(intent, symbols, price_service, correlation_service)
+            content = await generate_response_content(intent, symbols, price_service, correlation_service, last_message)
             response = {
                 "choices": [
                     {
