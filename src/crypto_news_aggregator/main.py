@@ -55,10 +55,7 @@ from fastapi.responses import JSONResponse
 
 from .api.v1 import router as api_router
 from .api import openai_compatibility as openai_api
-from .core.config import get_settings
-from .core.auth import get_api_key, API_KEY_NAME
-from .db.mongodb import initialize_mongodb, mongo_manager
-from .services.price_service import price_service
+from .core.monitoring import setup_performance_monitoring
 
 logger.info("Attempting to load application settings...")
 try:
@@ -109,6 +106,9 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=[API_KEY_NAME],
 )
+
+# Setup performance monitoring
+setup_performance_monitoring(app)
 
 # Add exception handler for 401 Unauthorized
 @app.exception_handler(status.HTTP_401_UNAUTHORIZED)
