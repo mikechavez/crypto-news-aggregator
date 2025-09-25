@@ -12,18 +12,26 @@ API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 def get_api_keys() -> List[str]:
-    """Get the list of valid API keys from environment variables.
-    
+    """Get the list of valid API keys from environment variables or config.
+
     This function is called at runtime to ensure environment variables are loaded.
     """
+    from ..core.config import get_settings
+
+    settings = get_settings()
+    # First try to get from environment variable
     api_keys_raw = os.getenv("API_KEYS", "")
     api_keys = [key.strip() for key in api_keys_raw.split(",") if key.strip()]
-    
+
+    # If no API keys from env, use the single API_KEY from config
     if not api_keys:
-        logger.warning("No API keys found in environment variables. API authentication will fail for all requests.")
+        if settings.API_KEY:
+            api_keys = [settings.API_KEY]
+        else:
+            logger.warning("No API keys found in environment variables or config. API authentication will fail for all requests.")
     else:
         logger.debug(f"Loaded {len(api_keys)} API keys from environment")
-    
+
     return api_keys
 
 async def get_api_key(api_key_header: str = Security(api_key_header)) -> str:
