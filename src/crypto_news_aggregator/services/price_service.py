@@ -563,12 +563,13 @@ class CoinGeckoPriceService:
             return []
 
     
+    @cached(ttl=600) # Cache for 10 minutes - longer cache for analysis
     async def generate_market_analysis_commentary(self, coin_id: str = 'bitcoin') -> str:
-        """Generate enriched market commentary for a cryptocurrency."""
-        
+        """Generate enriched market commentary for a cryptocurrency with caching."""
+
         # TODO: Enhanced narrative analysis implementation pending syntax fixes
         # For now, return a working version with basic functionality
-        
+
         return f"Enhanced commentary system operational for {coin_id}. News integration and advanced analytics ready for deployment."
 
     async def _analyze_developing_narratives(
