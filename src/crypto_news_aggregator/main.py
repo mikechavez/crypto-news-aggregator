@@ -56,6 +56,10 @@ from fastapi.responses import JSONResponse
 from .api.v1 import router as api_router
 from .api import openai_compatibility as openai_api
 from .core.monitoring import setup_performance_monitoring
+from .core.config import get_settings
+from .core.auth import API_KEY_NAME
+from .db.mongodb import initialize_mongodb, mongo_manager
+from .services.price_service import price_service
 
 logger.info("Attempting to load application settings...")
 try:

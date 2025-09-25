@@ -6,11 +6,11 @@ import json
 import re
 import asyncio
 import logging
-import logging
 
 from ..services.price_service import CoinGeckoPriceService, get_price_service
 from ..services.article_service import article_service
 from ..services.correlation_service import get_correlation_service
+from ..core.auth import get_api_key
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -187,10 +187,19 @@ async def generate_response_content(intent: str, symbols: List[str], price_servi
 async def chat_completions(
     request: OpenAIChatRequest,
     price_service: CoinGeckoPriceService = Depends(get_price_service),
-    correlation_service = Depends(get_correlation_service)
+    correlation_service = Depends(get_correlation_service),
+    api_key: str = Depends(get_api_key)
 ):
     """OpenAI-compatible chat completions endpoint."""
     logger.info("Received chat completion request")
+
+    # Check if messages list is empty
+    if not request.messages:
+        raise HTTPException(
+            status_code=400,
+            detail="Messages list cannot be empty"
+        )
+
     last_message = request.messages[-1].content
     symbols = extract_symbols(last_message)
     intent = classify_intent(last_message)
