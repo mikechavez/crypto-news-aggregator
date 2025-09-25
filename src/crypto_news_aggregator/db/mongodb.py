@@ -259,11 +259,19 @@ class MongoManager:
 
                 logger.info(f"Initializing async MongoDB connection to {self._get_masked_uri()}")
                 
+                client_kwargs: Dict[str, Any] = {
+                    "maxPoolSize": self.settings.MONGODB_MAX_POOL_SIZE,
+                    "minPoolSize": self.settings.MONGODB_MIN_POOL_SIZE,
+                }
+
+                uri = self.settings.MONGODB_URI
+                use_tls = uri.startswith("mongodb+srv://") or "ssl=true" in uri.lower() or "tls=true" in uri.lower()
+                if use_tls:
+                    client_kwargs["tlsCAFile"] = certifi.where()
+
                 self._async_client = AsyncIOMotorClient(
-                    self.settings.MONGODB_URI,
-                    maxPoolSize=self.settings.MONGODB_MAX_POOL_SIZE,
-                    minPoolSize=self.settings.MONGODB_MIN_POOL_SIZE,
-                    tlsCAFile=certifi.where(),
+                    uri,
+                    **client_kwargs,
                 )
                 
                 await self._async_client.admin.command('ping')
@@ -332,14 +340,26 @@ class MongoManager:
     
     async def get_async_database(self, db_name: Optional[str] = None) -> AsyncIOMotorDatabase:
         """Get an asynchronous database instance with logging."""
-        db_name = db_name or DB_NAME
-        logger.debug("[MongoManager] Getting async database: %s", db_name)
+        target_db_name = db_name or getattr(self, "db_name", DB_NAME)
+        logger.debug("[MongoManager] Getting async database: %s", target_db_name)
+
+        if self._async_client is None:
+            # Support tests that inject a database handle directly
+            injected_db = getattr(self, "_db", None)
+            if injected_db is not None:
+                logger.debug("[MongoManager] Using injected async database handle for %s", target_db_name)
+                return injected_db
+
+            initialized = await self.initialize()
+            if not initialized or self._async_client is None:
+                raise RuntimeError("Async MongoDB client is not initialized")
+
         try:
-            db = self._async_client[db_name]
-            logger.debug("[MongoManager] Successfully got database: %s", db_name)
+            db = self._async_client[target_db_name]
+            logger.debug("[MongoManager] Successfully got database: %s", target_db_name)
             return db
         except Exception as e:
-            logger.error("[MongoManager] Error getting database %s: %s", db_name, e, exc_info=True)
+            logger.error("[MongoManager] Error getting database %s: %s", target_db_name, e, exc_info=True)
             raise
     
     def get_collection(self, collection_name: str, db_name: Optional[str] = None) -> Collection:
@@ -381,7 +401,8 @@ class MongoManager:
             await articles_col.drop_indexes()
             await alerts_col.drop_indexes()
             await price_history_col.drop_indexes()
-            await self.get_async_collection(COLLECTION_TWEETS).drop_indexes()
+            tweets_col_for_reset = await self.get_async_collection(COLLECTION_TWEETS)
+            await tweets_col_for_reset.drop_indexes()
         
         # Create indexes for articles collection
         for index_info in ARTICLE_INDEXES:

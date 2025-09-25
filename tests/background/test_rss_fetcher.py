@@ -37,8 +37,8 @@ class FakeRSSService:
 
 @pytest.mark.asyncio
 async def test_process_new_articles_from_mongodb_enriches_articles(mongo_db, monkeypatch):
-    monkeypatch.setattr(rss_fetcher, "get_llm_provider", lambda: FakeLLMProvider())
-
+    monkeypatch.setattr(rss_fetcher, "get_llm_provider", lambda: FakeLLMProvider(themes=["ETFs", "Institutional"]))
+    
     await mongo_db.articles.delete_many({})
     article_doc = {
         "title": "BTC surges as ETFs see inflows",
@@ -54,7 +54,6 @@ async def test_process_new_articles_from_mongodb_enriches_articles(mongo_db, mon
         "sentiment_label": None,
         "themes": [],
         "raw_data": {},
-        "published_at": datetime.now(timezone.utc),
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),
     }
@@ -62,17 +61,20 @@ async def test_process_new_articles_from_mongodb_enriches_articles(mongo_db, mon
 
     await rss_fetcher.process_new_articles_from_mongodb()
 
-    stored = await mongo_db.articles.find_one({"_id": insert_result.inserted_id})
+    # Wait a bit for enrichment to complete
+    await asyncio.sleep(0.1)
+
+    stored = await mongo_db.articles.find_one({"source_id": "test-article-1"})
+    assert stored is not None
     assert stored["relevance_score"] == pytest.approx(0.8)
     assert stored["sentiment_score"] == pytest.approx(0.6)
     assert stored["sentiment_label"] == "positive"
-    assert stored["themes"] == ["Bitcoin", "Market"]
+    assert stored["themes"] == ["ETFs", "Institutional"]
 
 
 @pytest.mark.asyncio
 async def test_fetch_and_process_rss_feeds_persists_and_enriches(mongo_db, monkeypatch):
     monkeypatch.setattr(rss_fetcher, "get_llm_provider", lambda: FakeLLMProvider(themes=["ETFs", "Institutional"]))
-
     await mongo_db.articles.delete_many({})
 
     article = ArticleCreate(
@@ -87,13 +89,13 @@ async def test_fetch_and_process_rss_feeds_persists_and_enriches(mongo_db, monke
         published_at=datetime.now(timezone.utc),
     )
 
-    monkeypatch.setattr(
-        rss_fetcher,
-        "RSSService",
-        lambda: FakeRSSService([article]),
-    )
+    from src.crypto_news_aggregator.services import rss_service
+    monkeypatch.setattr(rss_service, "RSSService", lambda: FakeRSSService([article]))
 
     await rss_fetcher.fetch_and_process_rss_feeds()
+
+    # Wait a bit for enrichment to complete
+    await asyncio.sleep(0.1)
 
     stored = await mongo_db.articles.find_one({"source_id": "test-article-2"})
     assert stored is not None

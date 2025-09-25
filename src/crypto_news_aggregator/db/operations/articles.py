@@ -1,5 +1,5 @@
 from typing import List
-from motor.motor_asyncio import AsyncIOMotorClient
+from datetime import datetime, timezone
 from crypto_news_aggregator.models.article import ArticleCreate, ArticleInDB
 from crypto_news_aggregator.db.mongodb import mongo_manager
 
@@ -21,7 +21,11 @@ async def create_or_update_articles(articles: List[ArticleCreate]):
             )
         else:
             # Insert new article
-            # Exclude '_id' to let MongoDB generate it
+            # Prepare article data for database insertion
             article_data = article.model_dump()
-            article_in_db = ArticleInDB(**article_data)
+            # Add required fields for database storage
+            article_data.update({
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
+            })
             await collection.insert_one(article_data)
