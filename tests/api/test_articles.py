@@ -268,45 +268,47 @@ def test_get_task_status_pending(client, monkeypatch, user_access_token, capsys)
         # Clean up the overrides
         app.dependency_overrides = {}
 
-@pytest.mark.broken(reason=
+@pytest.mark.broken(reason="Test getting the status of a failed task.")
+@patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
+def test_get_task_status_failed(mock_async_result_class, client, user_access_token, capsys):
     """Test getting the status of a failed task."""
     # Arrange
     task_id = 'failed-task-id'
     error_message = "Task failed with an error"
-    
+
     # Create a mock AsyncResult instance
     mock_result = MagicMock()
     mock_result.id = task_id
     mock_result.task_id = task_id
     mock_result.status = 'FAILURE'
     mock_result.ready.return_value = True
-    
+
     # Configure the mock to raise an exception when result is accessed
     mock_result.result = Exception(error_message)
     mock_result.get.side_effect = Exception(error_message)
-    
+
     # Ensure the mock has the necessary attributes
     mock_result.failed.return_value = True
     mock_result.successful.return_value = False
-    
+
     # Configure the mock class to return our mock instance
     mock_async_result_class.return_value = mock_result
-    
+
     # Act
     print("\n[DEBUG] Sending request to API for failed task...")
     response = client.get(f"/api/v1/tasks/{task_id}")
-    
+
     # Print response for debugging
     print(f"[DEBUG] Response status: {response.status_code}")
     print(f"[DEBUG] Response data: {response.json()}")
-    
+
     # Assert
     assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
     data = response.json()
-    
+
     assert data["task_id"] == task_id, f"Expected task_id '{task_id}', got '{data['task_id']}'"
     assert data["status"] == "FAILURE", f"Expected status 'FAILURE', got '{data['status']}'"
-    
+
     # The endpoint might return either 'error' or include the error in 'result'
     if "error" in data:
         assert error_message in data["error"], f"Expected error message to contain '{error_message}', but got '{data.get('error')}'"
