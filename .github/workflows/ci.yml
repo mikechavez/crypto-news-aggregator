@@ -43,7 +43,7 @@ jobs:
 
     - name: Run stable tests
       run: |
-        pytest -m "stable" --tb=short
+        poetry run pytest -m "stable" --tb=short
 
   test_broken:
     runs-on: ubuntu-latest
@@ -74,7 +74,7 @@ jobs:
         echo "REDIS_DB=1" >> $GITHUB_ENV
     - name: Run broken and flaky tests
       run: |
-        pytest -m "broken or flaky" --tb=short
+        poetry run pytest -m "broken or flaky" --tb=short
 
   deploy:
     runs-on: ubuntu-latest
