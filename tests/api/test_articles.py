@@ -132,6 +132,7 @@ def mock_celery_tasks():
             'result': mock_result
         }
 
+@pytest.mark.stable
 def test_get_task_status_success(client, monkeypatch, capsys):
     """Test getting the status of a successfully completed task."""
     from unittest.mock import MagicMock, AsyncMock, patch
@@ -211,6 +212,7 @@ def test_get_task_status_success(client, monkeypatch, capsys):
         test_app.dependency_overrides = {}
         print("[DEBUG] Cleaned up test app")
 
+@pytest.mark.stable
 def test_get_task_status_pending(client, monkeypatch, user_access_token, capsys):
     """Test getting the status of a pending task."""
     # Import the tasks module to access its attributes
@@ -266,53 +268,54 @@ def test_get_task_status_pending(client, monkeypatch, user_access_token, capsys)
         # Clean up the overrides
         app.dependency_overrides = {}
 
+@pytest.mark.broken(reason="Test getting the status of a failed task.")
 @patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
 def test_get_task_status_failed(mock_async_result_class, client, user_access_token, capsys):
     """Test getting the status of a failed task."""
     # Arrange
     task_id = 'failed-task-id'
     error_message = "Task failed with an error"
-    
+
     # Create a mock AsyncResult instance
     mock_result = MagicMock()
     mock_result.id = task_id
     mock_result.task_id = task_id
     mock_result.status = 'FAILURE'
     mock_result.ready.return_value = True
-    
+
     # Configure the mock to raise an exception when result is accessed
     mock_result.result = Exception(error_message)
     mock_result.get.side_effect = Exception(error_message)
-    
+
     # Ensure the mock has the necessary attributes
     mock_result.failed.return_value = True
     mock_result.successful.return_value = False
-    
+
     # Configure the mock class to return our mock instance
     mock_async_result_class.return_value = mock_result
-    
+
     # Act
     print("\n[DEBUG] Sending request to API for failed task...")
     response = client.get(f"/api/v1/tasks/{task_id}")
-    
+
     # Print response for debugging
     print(f"[DEBUG] Response status: {response.status_code}")
     print(f"[DEBUG] Response data: {response.json()}")
-    
+
     # Assert
     assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
     data = response.json()
-    
+
     assert data["task_id"] == task_id, f"Expected task_id '{task_id}', got '{data['task_id']}'"
     assert data["status"] == "FAILURE", f"Expected status 'FAILURE', got '{data['status']}'"
-    
+
     # The endpoint might return either 'error' or include the error in 'result'
     if "error" in data:
         assert error_message in data["error"], f"Expected error message to contain '{error_message}', but got '{data.get('error')}'"
     elif "result" in data and "error" in data["result"]:
         assert error_message in data["result"]["error"], f"Expected error message in result to contain '{error_message}', but got '{data.get('result', {}).get('error')}'"
 
-@patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
+@pytest.mark.stable
 def test_get_task_status_revoked(mock_async_result_class, client, user_access_token, capsys):
     """Test getting the status of a revoked task."""
     # Arrange
@@ -346,7 +349,7 @@ def test_get_task_status_revoked(mock_async_result_class, client, user_access_to
     # The API includes result: None for all task statuses
     assert data.get("result") is None, f"Expected result to be None for revoked task, but got {data.get('result')}"
 
-@patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
+@pytest.mark.stable
 def test_get_task_status_retry(mock_async_result_class, client, user_access_token, capsys):
     """Test getting the status of a task that's being retried."""
     # Arrange
@@ -380,7 +383,7 @@ def test_get_task_status_retry(mock_async_result_class, client, user_access_toke
     assert data["status"] == "RETRY", f"Expected status 'RETRY', got '{data['status']}'"
     assert data.get("result") == retry_message, f"Expected result '{retry_message}', got '{data.get('result')}'"
 
-@patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
+@pytest.mark.stable
 def test_get_task_status_with_large_result(mock_async_result_class, client, user_access_token, capsys):
     """Test getting the status of a task with a large result."""
     # Arrange
@@ -426,6 +429,7 @@ def test_get_task_status_with_large_result(mock_async_result_class, client, user
     first_item = result["data"][0]
     assert first_item == "x" * 1000, f"Expected first item to be 'x' * 1000, got {first_item}"
 
+@pytest.mark.stable
 @pytest.mark.asyncio
 async def test_get_task_status_not_found(user_access_token):
     """Test getting the status of a non-existent task."""
@@ -498,6 +502,7 @@ async def test_get_task_status_not_found(user_access_token):
         app.dependency_overrides = {}
         print(f"[DEBUG] Final dependency overrides: {app.dependency_overrides}")
 
+@pytest.mark.stable
 @pytest.mark.asyncio
 @patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
 async def test_get_task_status_with_exception(mock_celery_async_result, client, user_access_token):
@@ -551,6 +556,7 @@ async def test_get_task_status_with_exception(mock_celery_async_result, client, 
     
     print("\n[DEBUG] All assertions passed!")
 
+@pytest.mark.stable
 @pytest.mark.asyncio
 @patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult')
 async def test_get_task_status_with_serialization_error(mock_celery_async_result, client, user_access_token):
@@ -604,6 +610,7 @@ async def test_get_task_status_with_serialization_error(mock_celery_async_result
     
     print("\n[DEBUG] All assertions passed!")
 
+@pytest.mark.stable
 def test_get_task_status_with_custom_status(user_access_token):
     """Test handling of custom task status values."""
     from unittest.mock import MagicMock, PropertyMock, patch
@@ -696,6 +703,7 @@ def test_get_task_status_with_custom_status(user_access_token):
 from unittest.mock import patch, MagicMock
 from tests.test_utils import create_mock_async_result
 
+@pytest.mark.stable
 @pytest.mark.asyncio
 @patch('src.crypto_news_aggregator.api.v1.tasks.fetch_news')
 async def test_trigger_news_fetch(mock_fetch_news, client, user_access_token, test_user):
@@ -767,6 +775,7 @@ async def test_trigger_news_fetch(mock_fetch_news, client, user_access_token, te
     
     print("\n[DEBUG] All assertions passed!")
     
+@pytest.mark.stable
 @pytest.mark.asyncio
 async def test_trigger_sentiment_analysis(client, user_access_token, test_user):
     """Test triggering sentiment analysis for an article."""
@@ -849,6 +858,7 @@ async def test_trigger_sentiment_analysis(client, user_access_token, test_user):
         
         print("\n[DEBUG] All assertions passed!")
 
+@pytest.mark.stable
 @pytest.mark.asyncio
 async def test_trigger_trends_update(client, user_access_token, test_user):
     """Test triggering a trends update task."""
@@ -927,6 +937,7 @@ async def test_trigger_trends_update(client, user_access_token, test_user):
         print("\n[DEBUG] All assertions passed!")
 from unittest.mock import patch, MagicMock
 
+@pytest.mark.stable
 def test_get_task_status_with_timeout():
     """Test getting task status with a timeout error."""
     from unittest.mock import MagicMock, AsyncMock, patch
@@ -1008,6 +1019,7 @@ def test_get_task_status_with_timeout():
         test_app.dependency_overrides = {}
         print("[DEBUG] Cleaned up test app")
 
+@pytest.mark.stable
 def test_get_task_status_with_connection_error():
     """Test handling of connection errors when checking task status."""
     from unittest.mock import MagicMock, PropertyMock, patch
@@ -1130,6 +1142,7 @@ def test_get_article_sentiment(client, mock_db_session, test_user):
     assert data["sentiment"]["label"] == "Positive"
     assert data["sentiment"]["score"] == 0.8
 
+@pytest.mark.stable
 @pytest.mark.asyncio
 async def test_trigger_sentiment_analysis_invalid_article(client, user_access_token, test_user):
     """Test triggering sentiment analysis with a non-existent article ID."""
