@@ -354,12 +354,19 @@ class MongoManager:
             if not initialized or self._async_client is None:
                 raise RuntimeError("Async MongoDB client is not initialized")
 
-        try:
-            db = self._async_client[target_db_name]
-            logger.debug("[MongoManager] Successfully got database: %s", target_db_name)
+try:
+            # Ensure the client is initialized
+            if not self._initialized or self._async_client is None:
+                logger.info("[MongoManager] Client not initialized, initializing...")
+                success = await self.initialize()
+                if not success:
+                    raise RuntimeError("Failed to initialize MongoDB client")
+            
+            db = self._async_client[db_name]
+            logger.debug("[MongoManager] Successfully got database: %s", db_name)
             return db
         except Exception as e:
-            logger.error("[MongoManager] Error getting database %s: %s", target_db_name, e, exc_info=True)
+            logger.error("[MongoManager] Error getting database %s: %s", db_name, e, exc_info=True)
             raise
     
     def get_collection(self, collection_name: str, db_name: Optional[str] = None) -> Collection:

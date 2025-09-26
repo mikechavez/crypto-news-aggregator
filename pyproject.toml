@@ -49,6 +49,7 @@ tweepy = "^4.14.0"
 pandas = "^2.2.2"
 async_lru = "^2.0.4"
 oauthlib = "^3.2.2"
+feedparser = "^6.0.12"
 
 [tool.poetry]
 packages = [{include = "crypto_news_aggregator", from = "src"}]
