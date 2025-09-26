@@ -354,7 +354,7 @@ class MongoManager:
             if not initialized or self._async_client is None:
                 raise RuntimeError("Async MongoDB client is not initialized")
 
-try:
+        try:
             # Ensure the client is initialized
             if not self._initialized or self._async_client is None:
                 logger.info("[MongoManager] Client not initialized, initializing...")
@@ -362,7 +362,7 @@ try:
                 if not success:
                     raise RuntimeError("Failed to initialize MongoDB client")
             
-            db = self._async_client[db_name]
+            db = self._async_client[target_db_name]
             logger.debug("[MongoManager] Successfully got database: %s", db_name)
             return db
         except Exception as e:
