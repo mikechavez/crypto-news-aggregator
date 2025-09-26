@@ -114,15 +114,15 @@ async def process_new_articles_from_mongodb():
     collection = db.articles
     llm_client = get_llm_provider()
 
-enrichment_query = {
-        '': [
-            {'relevance_score': {'': False}},
+    enrichment_query = {
+        '$or': [
+            {'relevance_score': {'$exists': False}},
             {'relevance_score': None},
             {'relevance_score': 0.0},
-            {'sentiment_score': {'': False}},
+            {'sentiment_score': {'$exists': False}},
             {'sentiment_score': None},
             {'sentiment_score': 0.0},
-            {'sentiment': {'': False}},
+            {'sentiment': {'$exists': False}},
         ]
     }
 

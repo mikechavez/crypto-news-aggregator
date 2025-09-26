@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import pytest
 
 from src.crypto_news_aggregator.background import rss_fetcher
-from src.crypto_news_aggregator.models.article import ArticleCreate, ArticleMetrics
+from src.crypto_news_aggregator.models.article import ArticleCreate, ArticleMetrics, ArticleAuthor
 
 
 class FakeLLMProvider:
@@ -42,9 +42,10 @@ async def test_process_new_articles_from_mongodb_enriches_articles(mongo_db, mon
     await mongo_db.articles.delete_many({})
     article_doc = {
         "title": "BTC surges as ETFs see inflows",
-        "text": "Bitcoin rallied above $70k amid renewed ETF demand.",
-        "source": "rss",
         "source_id": "test-article-1",
+        "source": "rss",
+        "text": "Bitcoin rallied above $70k amid renewed ETF demand.",
+        "author": None,
         "url": "https://example.com/btc-surges",
         "lang": "en",
         "metrics": ArticleMetrics().model_dump(),
@@ -52,8 +53,8 @@ async def test_process_new_articles_from_mongodb_enriches_articles(mongo_db, mon
         "relevance_score": None,
         "sentiment_score": None,
         "sentiment_label": None,
-        "themes": [],
         "raw_data": {},
+        "published_at": datetime.now(timezone.utc),
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),
     }
@@ -79,12 +80,17 @@ async def test_fetch_and_process_rss_feeds_persists_and_enriches(mongo_db, monke
 
     article = ArticleCreate(
         title="Institutional flows drive crypto rally",
-        text="Large investors poured capital into Bitcoin ETFs, lifting prices.",
-        url="https://example.com/etf-flows",
         source_id="test-article-2",
         source="rss",
+        text="Large investors poured capital into Bitcoin ETFs, lifting prices.",
         author=None,
+        url="https://example.com/etf-flows",
+        lang="en",
         metrics=ArticleMetrics(),
+        keywords=[],
+        relevance_score=None,
+        sentiment_score=None,
+        sentiment_label=None,
         raw_data={},
         published_at=datetime.now(timezone.utc),
     )
