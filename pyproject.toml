@@ -51,6 +51,10 @@ async_lru = "^2.0.4"
 oauthlib = "^3.2.2"
 
 [tool.poetry]
+name = "crypto-news-aggregator"
+version = "0.1.0"
+description = "A comprehensive cryptocurrency news aggregation and analysis platform"
+authors = ["Crypto News Aggregator Team <team@cryptonewsaggregator.com>"]
 packages = [{include = "crypto_news_aggregator", from = "src"}]
 
 
