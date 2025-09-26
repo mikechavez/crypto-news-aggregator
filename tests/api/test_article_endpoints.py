@@ -27,7 +27,7 @@ os.environ["SECRET_KEY"] = "test-secret-key"
 
 # Import the FastAPI app after setting environment variables
 from src.crypto_news_aggregator.main import app
-from src.crypto_news_aggregator.models.article import ArticleInDB
+from src.crypto_news_aggregator.models.article import ArticleInDB, ArticleAuthor, ArticleMetrics
 from src.crypto_news_aggregator.services.article_service import article_service
 from src.crypto_news_aggregator.db.mongodb import PyObjectId
 

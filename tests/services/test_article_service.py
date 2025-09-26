@@ -9,7 +9,7 @@ from bson import ObjectId
 from pymongo.results import InsertOneResult, UpdateResult
 
 from src.crypto_news_aggregator.services.article_service import ArticleService, article_service
-from src.crypto_news_aggregator.models.article import ArticleInDB
+from src.crypto_news_aggregator.models.article import ArticleInDB, ArticleAuthor, ArticleMetrics
 from src.crypto_news_aggregator.models.sentiment import SentimentAnalysis, SentimentLabel
 
 # Test data
@@ -26,20 +26,35 @@ def create_test_article(article_id=TEST_ARTICLE_ID, **overrides):
     article = {
         "id": ObjectId(article_id),
         "title": "Test Article",
-        "description": "Test description",
-        "content": "This is a test article content.",
+        "source_id": "test-source-123",
+        "source": "rss",
+        "text": "This is a test article content.",
+        "author": ArticleAuthor(
+            id="author-123",
+            name="Test Author",
+            username="testauthor"
+        ),
         "url": "https://example.com/test-article",
-        "image_url": "https://example.com/image.jpg",
-        "author": "Test Author",
-        "source_name": "Test Source",
-        "language": "en",
-        "category": "test",
-        "tags": ["test", "crypto"],
-        "entities": [],
-        "sentiment_score": 0.0,
+        "lang": "en",
+        "metrics": ArticleMetrics(
+            views=100,
+            likes=10,
+            replies=5,
+            retweets=2,
+            quotes=1
+        ),
+        "keywords": ["test", "crypto"],
+        "relevance_score": 0.8,
+        "sentiment_score": 0.5,
+        "sentiment_label": "neutral",
+        "raw_data": {"original_source": "test"},
         "published_at": datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
         "created_at": datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
         "updated_at": datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+        "description": "Test description",
+        "image_url": "https://example.com/image.jpg",
+        "tags": ["test", "crypto"],
+        "entities": [],
     }
     article.update(overrides)
     return article
@@ -97,7 +112,8 @@ class TestArticleService:
         assert str(orig_id) == TEST_ARTICLE_ID
         mock_collection.find_one.assert_called_once()
 
-    @pytest.mark.broken(reason=
+    @pytest.mark.broken(reason="Test successful article creation")
+    async def test_create_article_success(self, mock_collection):
         """Test successful article creation."""
         service = ArticleService()
         article_data = create_test_article()
@@ -145,7 +161,8 @@ class TestArticleService:
             # Should have called update_duplicate_metadata
             mock_update.assert_awaited_once_with(ObjectId(TEST_ARTICLE_ID), article_data)
 
-    @pytest.mark.broken(reason=
+    @pytest.mark.broken(reason="Test retrieving an existing article")
+    async def test_get_article_success(self, mock_collection):
         """Test retrieving an existing article."""
         service = ArticleService()
         article_data = create_test_article()
@@ -178,7 +195,8 @@ class TestArticleService:
         # Should return None
         assert result is None
 
-    @pytest.mark.broken(reason=
+    @pytest.mark.broken(reason="Test listing articles with various filters")
+    async def test_list_articles_with_filters(self, mock_collection):
         """Test listing articles with various filters."""
         from unittest.mock import MagicMock
         
@@ -233,7 +251,8 @@ class TestArticleService:
         assert "$lte" in query["published_at"]
         assert "keywords" in query
 
-    @pytest.mark.broken(reason=
+    @pytest.mark.broken(reason="Test full-text search functionality")
+    async def test_search_articles_functionality(self, mock_collection):
         """Test full-text search functionality."""
         service = ArticleService()
         test_articles = [create_test_article()]

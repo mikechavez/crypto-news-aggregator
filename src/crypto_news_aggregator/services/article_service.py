@@ -144,8 +144,8 @@ class ArticleService:
         # Check for duplicates
         is_duplicate, original_id = await self._is_duplicate(
             title=article_data.get("title", ""),
-            content=article_data.get("content", ""),
-            source_id=article_data.get("source", {}).get("id", ""),
+            content=article_data.get("text", ""),  # Changed from "content" to "text"
+            source_id=article_data.get("source_id", ""),
             published_at=article_data.get("published_at", datetime.now(timezone.utc))
         )
         
@@ -158,7 +158,7 @@ class ArticleService:
         # Generate fingerprint for the article
         fingerprint = await self._generate_fingerprint(
             article_data.get("title", ""),
-            article_data.get("content", "")
+            article_data.get("text", "")  # Changed from "content" to "text"
         )
         
         # Add fingerprint and timestamps
@@ -169,7 +169,7 @@ class ArticleService:
         # Compute sentiment for the article content/title
         try:
             s = SentimentAnalyzer.analyze_article(
-                content=article_data.get("content") or "",
+                content=article_data.get("text") or "",  # Changed from "content" to "text"
                 title=article_data.get("title")
             )
             # Map to Mongo-friendly schema
@@ -208,12 +208,12 @@ class ArticleService:
         update_fields["updated_at"] = datetime.now(timezone.utc)
         
         # If the new article has a higher quality image, update it
-        if new_data.get("url_to_image") and not new_data["url_to_image"].endswith("placeholder.jpg"):
-            update_fields["url_to_image"] = new_data["url_to_image"]
+        if new_data.get("image_url") and not new_data.get("image_url", "").endswith("placeholder.jpg"):
+            update_fields["image_url"] = new_data["image_url"]
             
         # If the new article has more complete content, update it
-        if new_data.get("content") and len(new_data["content"]) > 100:  # Arbitrary threshold
-            update_fields["content"] = new_data["content"]
+        if new_data.get("text") and len(new_data.get("text", "")) > 100:  # Arbitrary threshold
+            update_fields["text"] = new_data["text"]
         
         # Only perform the update if we have fields to update
         if update_fields:
