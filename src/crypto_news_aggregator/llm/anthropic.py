@@ -43,9 +43,14 @@ class AnthropicProvider(LLMProvider):
 
     @track_usage
     def analyze_sentiment(self, text: str) -> float:
-        prompt = f"Analyze the sentiment of this crypto text. Return only a number from -1.0 (very bearish) to 1.0 (very bullish):\n\n{text}"
+        prompt = f"Analyze the sentiment of this crypto text. Return ONLY a single number from -1.0 (very bearish) to 1.0 (very bullish). Do not include any explanation or additional text. Just the number:\n\n{text}"
         response = self._get_completion(prompt)
         try:
+            # Extract the first number from the response (in case there's extra text)
+            import re
+            numbers = re.findall(r'[-+]?\d*\.\d+|\d+', response.strip())
+            if numbers:
+                return float(numbers[0])
             return float(response.strip())
         except (ValueError, TypeError):
             return 0.0
@@ -68,9 +73,14 @@ class AnthropicProvider(LLMProvider):
 
     @track_usage
     def score_relevance(self, text: str) -> float:
-        prompt = f"On a scale from 0.0 to 1.0, how relevant is this tweet to cryptocurrency market movements? Consider factors like market analysis, price predictions, major project updates, or significant whale movements. Ignore spam, memes, or general news. Respond with only a single floating-point number.\n\nTweet: \"{text}\""
+        prompt = f"On a scale from 0.0 to 1.0, how relevant is this text to cryptocurrency market movements? Return ONLY a single floating-point number with no explanation:\n\n{text}"
         response = self._get_completion(prompt)
         try:
+            # Extract the first number from the response (in case there's extra text)
+            import re
+            numbers = re.findall(r'[-+]?\d*\.\d+|\d+', response.strip())
+            if numbers:
+                return float(numbers[0])
             return float(response.strip())
         except (ValueError, TypeError):
             return 0.0

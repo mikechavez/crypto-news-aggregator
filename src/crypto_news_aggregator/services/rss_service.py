@@ -11,7 +11,7 @@ class RSSService:
     def __init__(self):
         settings = get_settings()
         self.feed_urls = {
-            "chaingpt": settings.CHAINGPT_RSS_URL,
+            # "chaingpt": settings.CHAINGPT_RSS_URL,  # Removed - returns 404
             "coindesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
             "cointelegraph": "https://cointelegraph.com/rss",
             "decrypt": "https://decrypt.co/feed",
