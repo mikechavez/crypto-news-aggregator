@@ -295,10 +295,5 @@ class EmailService:
         return success
 
 
-# Factory function for dependency injection
-@lru_cache()
-def get_email_service() -> EmailService:
-    return EmailService()
-
-
-
+# Singleton instance
+email_service = EmailService()

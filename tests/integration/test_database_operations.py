@@ -186,5 +186,5 @@ class TestArticleQueryIntegration:
         end_time = time.time()
 
         # Query should complete within 5 seconds
-        assert end_time - start_time < 5.0, f"Query took too long: {end_time - start_time".2f"}s"
+        assert end_time - start_time < 5.0, f"Query took too long: {end_time - start_time:.2f}s"
         assert isinstance(result, list)

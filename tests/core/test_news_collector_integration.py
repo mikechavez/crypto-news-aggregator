@@ -62,7 +62,8 @@ class TestNewsCollectorIntegration:
         mock_service.get_article_by_url.return_value = None
         return mock_service
 
-    @pytest.mark.broken(reason=
+    @pytest.mark.broken(reason="Test that rate limiting is respected between API calls")
+    async def test_rate_limiting(self, mock_newsapi, mock_article_service):
         """Test that rate limiting is respected between API calls."""
         collector = NewsCollector(
             newsapi_client=mock_newsapi,

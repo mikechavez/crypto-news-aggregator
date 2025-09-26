@@ -19,26 +19,22 @@ from crypto_news_aggregator.core.monitoring import (
 
 # Create a minimal test app for testing middleware
 def create_test_app():
-    """Create a minimal FastAPI app for testing middleware."""
+    """Create a test FastAPI app with performance monitoring."""
+    from fastapi import FastAPI
+    from src.crypto_news_aggregator.core.monitoring import PerformanceMonitoringMiddleware
+
     app = FastAPI()
 
     @app.get("/")
     async def root():
-        return {"status": "ok"}
+        return {"message": "test"}
 
     @app.get("/test-endpoint")
     async def test_endpoint():
         return {"message": "test"}
 
-    return app
-
-test_app = create_test_app()
-
-    @app.get("/test-endpoint")
-    async def test_endpoint():
-        return {"message": "test"}
-
-    return app
+    # Add performance monitoring middleware
+    app.add_middleware(PerformanceMonitoringMiddleware)
 
 test_app = create_test_app()
 
