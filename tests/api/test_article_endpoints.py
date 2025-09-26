@@ -43,17 +43,34 @@ test_article_id = "507f1f77bcf86cd799439011"
 test_article_data = {
     "id": PyObjectId(test_article_id),
     "title": "Test Article",
-    "content": "This is the full content of the test article.",
-    "source_name": "Test Source",
+    "source_id": "test-source-123",
+    "source": "rss",
+    "text": "This is the full content of the test article.",
+    "author": ArticleAuthor(
+        id="author-123",
+        name="Test Author",
+        username="testauthor"
+    ),
     "url": "https://example.com/test-article",
+    "lang": "en",
+    "metrics": ArticleMetrics(
+        views=100,
+        likes=10,
+        replies=5,
+        retweets=2,
+        quotes=1
+    ),
+    "keywords": ["test", "article"],
+    "relevance_score": 0.8,
+    "sentiment_score": 0.5,
+    "sentiment_label": "neutral",
+    "raw_data": {"original_source": "test"},
     "published_at": now,
     "created_at": now,
     "updated_at": now,
     "description": "A test article description",
-    "author": "Test Author",
     "image_url": "https://example.com/image.jpg",
     "tags": ["test"],
-    "sentiment_score": 0.5,
     "entities": [],
 }
 
