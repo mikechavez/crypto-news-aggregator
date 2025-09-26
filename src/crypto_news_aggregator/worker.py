@@ -7,6 +7,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from crypto_news_aggregator.tasks.price_monitor import get_price_monitor
+from crypto_news_aggregator.background.rss_fetcher import schedule_rss_fetch
 from crypto_news_aggregator.core.config import get_settings
 from crypto_news_aggregator.db.mongodb import initialize_mongodb, mongo_manager
 
@@ -26,6 +27,11 @@ async def main():
         logger.info("Starting price monitor task...")
         tasks.append(asyncio.create_task(price_monitor.start()))
         logger.info("Price monitor task created.")
+
+        rss_interval = 60 * 30  # 30 minutes
+        logger.info("Starting RSS ingestion schedule (every %s seconds)", rss_interval)
+        tasks.append(asyncio.create_task(schedule_rss_fetch(rss_interval)))
+        logger.info("RSS ingestion task created.")
 
     if not tasks:
         logger.warning("No background tasks to run. Worker will exit.")

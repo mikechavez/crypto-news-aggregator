@@ -473,6 +473,146 @@ class ArticleService:
             # Return an empty dict to indicate failure without crashing
             return {}
 
+    async def get_top_articles_for_symbols(
+        self,
+        symbols: List[str],
+        *,
+        hours: int = 48,
+        limit: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """Fetch top recent articles related to the provided symbols.
+
+        Args:
+            symbols: List of symbols or keywords to match (e.g., ['BTC', 'Bitcoin']).
+            hours: Lookback window in hours.
+            limit: Maximum number of articles to return.
+
+        Returns:
+            A list of article dictionaries with relevance and sentiment metadata.
+        """
+        if not symbols or limit <= 0:
+            return []
+
+        search_terms = sorted({s for s in symbols if s})
+        if not search_terms:
+            return []
+
+        try:
+            collection = await self._get_collection()
+        except Exception as e:
+            logger.error(f"Unable to access MongoDB collection for top articles: {e}", exc_info=True)
+            return []
+
+        now = datetime.now(timezone.utc)
+        start_time = now - timedelta(hours=hours)
+
+        or_conditions = [{"keywords": {"$in": search_terms}}]
+        for term in search_terms:
+            escaped = re.escape(term)
+            regex = {"$regex": escaped, "$options": "i"}
+            or_conditions.extend([
+                {"title": regex},
+                {"text": regex},
+                {"content": regex},
+            ])
+
+        query: Dict[str, Any] = {"published_at": {"$gte": start_time}}
+        if or_conditions:
+            query["$or"] = or_conditions
+
+        candidate_limit = max(limit * 3, limit)
+
+        try:
+            cursor = collection.find(query).sort("published_at", -1).limit(candidate_limit)
+            docs = await cursor.to_list(length=candidate_limit)
+            logger.info(f"DEBUG: Found {len(docs)} candidate documents for symbols {symbols}")
+        except Exception as e:
+            logger.error(f"Error querying top articles for symbols {symbols}: {e}", exc_info=True)
+            return []
+
+        ranked: List[Dict[str, Any]] = []
+        for doc in docs:
+            try:
+                # Debug: check what doc actually is
+                if not isinstance(doc, dict):
+                    logger.warning(f"Document is not a dict, it's {type(doc)}: {doc}")
+                    continue
+                    
+                published_at = doc.get("published_at")
+                if isinstance(published_at, str):
+                    try:
+                        # Handle various datetime string formats
+                        if published_at.endswith('Z'):
+                            published_at_dt = datetime.fromisoformat(published_at.replace('Z', '+00:00'))
+                        else:
+                            published_at_dt = datetime.fromisoformat(published_at)
+                        # Make timezone-aware if it's not
+                        if published_at_dt.tzinfo is None:
+                            published_at_dt = published_at_dt.replace(tzinfo=timezone.utc)
+                    except (ValueError, TypeError):
+                        published_at_dt = now
+                elif isinstance(published_at, datetime):
+                    published_at_dt = published_at
+                    # Make timezone-aware if it's not
+                    if published_at_dt.tzinfo is None:
+                        published_at_dt = published_at_dt.replace(tzinfo=timezone.utc)
+                else:
+                    published_at_dt = now
+
+                hours_old = max(0.0, (now - published_at_dt).total_seconds() / 3600)
+                recency_weight = max(0.0, 1 - (hours_old / max(hours, 1)))
+
+                base_relevance = float(doc.get("relevance_score") or 0.0)
+
+                # Handle sentiment data safely
+                sentiment_node = doc.get("sentiment")
+                if sentiment_node and isinstance(sentiment_node, dict):
+                    sentiment_score = float(sentiment_node.get("score") or 0.0)
+                    sentiment_label = sentiment_node.get("label") or "neutral"
+                elif sentiment_node and isinstance(sentiment_node, str):
+                    # Handle case where sentiment is stored as string
+                    try:
+                        import json
+                        parsed_sentiment = json.loads(sentiment_node)
+                        sentiment_score = float(parsed_sentiment.get("score") or 0.0)
+                        sentiment_label = parsed_sentiment.get("label") or "neutral"
+                    except (json.JSONDecodeError, AttributeError):
+                        sentiment_score = 0.0
+                        sentiment_label = "neutral"
+                else:
+                    sentiment_score = 0.0
+                    sentiment_label = "neutral"
+
+                sentiment_weight = 0.5 + 0.5 * abs(sentiment_score)
+
+                composite_score = (
+                    0.5 * base_relevance +
+                    0.3 * recency_weight +
+                    0.2 * sentiment_weight
+                )
+
+                ranked.append({
+                    "title": doc.get("title") or "Untitled",
+                    "source": doc.get("source_name")
+                    or (doc.get("source", {}).get("name") if isinstance(doc.get("source"), dict) else doc.get("source"))
+                    or "Unknown",
+                    "url": doc.get("url"),
+                    "published_at": published_at_dt,
+                    "relevance_score": round(composite_score, 4),
+                    "raw_relevance": base_relevance,
+                    "sentiment_score": sentiment_score,
+                    "sentiment_label": sentiment_label.lower(),
+                    "keywords": doc.get("keywords", []),
+                })
+            except Exception as parse_error:
+                logger.warning(f"Skipping article during scoring: {parse_error}, doc type: {type(doc)}, doc: {doc}")
+                continue
+
+        logger.info(f"DEBUG: After scoring, {len(ranked)} articles remain for symbols {symbols}")
+        ranked.sort(key=lambda item: item.get("relevance_score", 0.0), reverse=True)
+
+        return ranked[:limit]
+
 
 # Singleton instance
 article_service = ArticleService()
