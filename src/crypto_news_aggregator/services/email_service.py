@@ -297,3 +297,9 @@ class EmailService:
 
 # Singleton instance
 email_service = EmailService()
+
+
+@lru_cache(maxsize=1)
+def get_email_service() -> EmailService:
+    """Return the singleton `EmailService` instance."""
+    return email_service

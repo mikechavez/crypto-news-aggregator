@@ -70,6 +70,11 @@ pytest-httpx = "^0.35.0"
 testpaths = [
     "tests",
 ]
+markers = [
+    "stable: reliable tests that must always pass",
+    "broken: known broken tests that don't block CI",
+    "flaky: tests that sometimes fail and don't block CI",
+]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
