@@ -71,6 +71,13 @@ def mock_async_result():
     with patch('celery.result.AsyncResult', return_value=mock_result):
         yield mock_result
 
+
+@pytest.fixture
+def mock_async_result_class():
+    """Fixture to patch Celery's AsyncResult class reference used by the API."""
+    with patch('src.crypto_news_aggregator.api.v1.tasks.CeleryAsyncResult') as mock_class:
+        yield mock_class
+
 @pytest.fixture
 def mock_current_user():
     """Fixture to provide a mock current user for testing."""
