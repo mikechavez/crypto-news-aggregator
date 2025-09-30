@@ -99,7 +99,10 @@ async def test_process_entity_extraction_batch_empty():
     mock_client = Mock()
     result = await _process_entity_extraction_batch([], mock_client)
     
-    assert result == {"results": [], "usage": {}}
+    assert result["results"] == []
+    assert result["usage"] == {}
+    assert result["metrics"]["articles_processed"] == 0
+    assert result["metrics"]["entities_extracted"] == 0
     mock_client.extract_entities_batch.assert_not_called()
 
 
@@ -126,9 +129,11 @@ async def test_process_entity_extraction_batch_handles_exception(mock_llm_client
     """Test that exceptions during extraction are handled gracefully."""
     mock_llm_client.extract_entities_batch.side_effect = Exception("API Error")
     
-    result = await _process_entity_extraction_batch([{"_id": "test", "title": "Test", "text": "Test"}], mock_llm_client)
+    result = await _process_entity_extraction_batch([{"_id": "test", "title": "Test", "text": "Test"}], mock_llm_client, retry_individual=False)
     
-    assert result == {"results": [], "usage": {}}
+    assert result["results"] == []
+    assert result["usage"] == {}
+    assert result["metrics"]["articles_processed"] == 0
 
 
 @pytest.mark.asyncio

@@ -1,9 +1,10 @@
 import asyncio
 import logging
 import re
+import time
 from collections import Counter
 from datetime import datetime, timezone
-from typing import Iterable, List, Sequence, Dict, Any
+from typing import Iterable, List, Sequence, Dict, Any, Optional
 
 from ..services.rss_service import RSSService
 from ..db.operations.articles import create_or_update_articles
@@ -110,22 +111,111 @@ def _derive_sentiment_label(score: float) -> str:
     return "neutral"
 
 
-async def _process_entity_extraction_batch(articles_batch: List[Dict[str, Any]], llm_client) -> Dict[str, Any]:
+def _normalize_entity(entity_value: str, entity_type: str) -> str:
+    """Normalize entity values for consistency.
+    
+    Args:
+        entity_value: Raw entity value from extraction
+        entity_type: Type of entity (ticker, project, event)
+    
+    Returns:
+        Normalized entity value
     """
-    Processes a batch of articles for entity extraction.
+    if not entity_value:
+        return entity_value
+    
+    # Normalize tickers to uppercase
+    if entity_type == "ticker":
+        # Ensure $ prefix and uppercase
+        if not entity_value.startswith("$"):
+            entity_value = f"${entity_value}"
+        return entity_value.upper()
+    
+    # Normalize project names to title case
+    if entity_type == "project":
+        # Common crypto project names that should be capitalized
+        canonical_names = {
+            "bitcoin": "Bitcoin",
+            "ethereum": "Ethereum",
+            "solana": "Solana",
+            "cardano": "Cardano",
+            "polkadot": "Polkadot",
+            "avalanche": "Avalanche",
+            "polygon": "Polygon",
+            "chainlink": "Chainlink",
+            "uniswap": "Uniswap",
+            "aave": "Aave",
+        }
+        lower_value = entity_value.lower()
+        if lower_value in canonical_names:
+            return canonical_names[lower_value]
+        # Default to title case
+        return entity_value.title()
+    
+    # Normalize event types to lowercase
+    if entity_type == "event":
+        return entity_value.lower()
+    
+    return entity_value
+
+
+def _deduplicate_entities(entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Deduplicate entities, keeping highest confidence for duplicates.
+    
+    Args:
+        entities: List of entity dicts with type, value, confidence
+    
+    Returns:
+        Deduplicated list of entities
+    """
+    # Group by (type, normalized_value)
+    entity_map = {}
+    
+    for entity in entities:
+        entity_type = entity.get("type")
+        entity_value = entity.get("value")
+        confidence = entity.get("confidence", 1.0)
+        
+        # Normalize the value
+        normalized_value = _normalize_entity(entity_value, entity_type)
+        key = (entity_type, normalized_value)
+        
+        # Keep entity with highest confidence
+        if key not in entity_map or confidence > entity_map[key]["confidence"]:
+            entity_map[key] = {
+                "type": entity_type,
+                "value": normalized_value,
+                "confidence": confidence,
+            }
+    
+    return list(entity_map.values())
+
+
+async def _process_entity_extraction_batch(
+    articles_batch: List[Dict[str, Any]], 
+    llm_client,
+    retry_individual: bool = True
+) -> Dict[str, Any]:
+    """
+    Processes a batch of articles for entity extraction with partial failure handling.
     
     Args:
         articles_batch: List of article dicts with _id, title, and text
         llm_client: LLM provider instance
+        retry_individual: If True, retry failed articles individually
     
     Returns:
-        Dict with extraction results and usage stats
+        Dict with extraction results, usage stats, and metrics
     """
     if not articles_batch:
-        return {"results": [], "usage": {}}
+        return {"results": [], "usage": {}, "metrics": {"articles_processed": 0, "entities_extracted": 0}}
+    
+    start_time = time.time()
     
     # Prepare articles for batch processing
     batch_input = []
+    article_id_map = {}
+    
     for article in articles_batch:
         article_id = str(article.get("_id"))
         title = article.get("title") or ""
@@ -145,14 +235,105 @@ async def _process_entity_extraction_batch(articles_batch: List[Dict[str, Any]],
             "title": title,
             "text": combined_text,
         })
+        article_id_map[article_id] = article
     
     # Call batch entity extraction
     try:
         result = llm_client.extract_entities_batch(batch_input)
+        
+        # Normalize and deduplicate entities in results
+        for article_result in result.get("results", []):
+            if "entities" in article_result:
+                article_result["entities"] = _deduplicate_entities(article_result["entities"])
+        
+        processing_time = time.time() - start_time
+        
+        # Calculate metrics
+        total_entities = sum(len(r.get("entities", [])) for r in result.get("results", []))
+        result["metrics"] = {
+            "articles_processed": len(result.get("results", [])),
+            "entities_extracted": total_entities,
+            "processing_time": processing_time,
+        }
+        
         return result
+        
     except Exception as exc:
         logger.exception("Batch entity extraction failed: %s", exc)
-        return {"results": [], "usage": {}}
+        
+        # If retry_individual is enabled, try processing articles one by one
+        if retry_individual and len(articles_batch) > 1:
+            logger.info("Retrying %d articles individually after batch failure", len(articles_batch))
+            return await _retry_individual_extractions(articles_batch, llm_client, start_time)
+        
+        return {"results": [], "usage": {}, "metrics": {"articles_processed": 0, "entities_extracted": 0}}
+
+
+async def _retry_individual_extractions(
+    articles_batch: List[Dict[str, Any]], 
+    llm_client,
+    start_time: float
+) -> Dict[str, Any]:
+    """
+    Retry failed articles individually.
+    
+    Args:
+        articles_batch: List of article dicts
+        llm_client: LLM provider instance
+        start_time: Start time of the original batch
+    
+    Returns:
+        Combined results from individual extractions
+    """
+    all_results = []
+    total_usage = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_cost": 0.0,
+        "output_cost": 0.0,
+        "total_cost": 0.0,
+    }
+    failed_articles = []
+    
+    for article in articles_batch:
+        article_id = str(article.get("_id"))
+        try:
+            # Process single article
+            result = await _process_entity_extraction_batch([article], llm_client, retry_individual=False)
+            
+            if result.get("results"):
+                all_results.extend(result["results"])
+                
+                # Aggregate usage
+                usage = result.get("usage", {})
+                for key in total_usage:
+                    total_usage[key] += usage.get(key, 0)
+            else:
+                failed_articles.append(article_id)
+                logger.warning("Individual extraction failed for article %s", article_id)
+                
+        except Exception as exc:
+            failed_articles.append(article_id)
+            logger.error("Individual extraction failed for article %s: %s", article_id, exc)
+    
+    processing_time = time.time() - start_time
+    total_entities = sum(len(r.get("entities", [])) for r in all_results)
+    
+    if failed_articles:
+        logger.warning("Failed to extract entities from %d articles: %s", 
+                      len(failed_articles), ", ".join(failed_articles[:5]))
+    
+    return {
+        "results": all_results,
+        "usage": total_usage,
+        "metrics": {
+            "articles_processed": len(all_results),
+            "entities_extracted": total_entities,
+            "processing_time": processing_time,
+            "failed_articles": failed_articles,
+        }
+    }
 
 
 async def process_new_articles_from_mongodb():
@@ -194,18 +375,36 @@ async def process_new_articles_from_mongodb():
         
         extraction_result = await _process_entity_extraction_batch(batch, llm_client)
         
-        # Log usage stats
+        # Log usage stats and metrics
         usage = extraction_result.get("usage", {})
+        metrics = extraction_result.get("metrics", {})
+        
         if usage:
             batch_cost = usage.get("total_cost", 0.0)
             total_entity_cost += batch_cost
+            
+            # Log comprehensive batch metrics
             logger.info(
-                "Entity extraction batch cost: $%.6f (model: %s, tokens: %d in / %d out)",
+                "Batch metrics: articles_processed=%d, entities_extracted=%d, "
+                "cost_per_batch=$%.6f, processing_time=%.2fs",
+                metrics.get("articles_processed", 0),
+                metrics.get("entities_extracted", 0),
                 batch_cost,
+                metrics.get("processing_time", 0.0)
+            )
+            
+            logger.info(
+                "Token usage: model=%s, input=%d, output=%d, total=%d",
                 usage.get("model", "unknown"),
                 usage.get("input_tokens", 0),
-                usage.get("output_tokens", 0)
+                usage.get("output_tokens", 0),
+                usage.get("total_tokens", 0)
             )
+            
+            # Log any failed articles
+            failed = metrics.get("failed_articles", [])
+            if failed:
+                logger.warning("Failed articles in batch: %s", ", ".join(failed[:10]))
         
         # Map results by article_id
         for result in extraction_result.get("results", []):
