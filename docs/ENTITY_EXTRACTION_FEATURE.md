@@ -158,6 +158,18 @@ stats = await get_entity_stats("$BTC")
 - All 11 tests passing ✅
 
 ### Integration Tests
+**File:** `tests/background/test_entity_extraction_integration.py`
+
+- Tests batch processing of 10 articles with success scenario
+- Tests partial failure with automatic retry
+- Tests entity normalization (tickers, projects, events)
+- Tests entity deduplication with confidence selection
+- Tests cost tracking from actual API response
+- Tests batch metrics calculation
+- Tests exact Haiku model string verification
+- All 13 tests passing ✅
+
+### Database Tests
 **File:** `tests/db/test_entity_mentions.py`
 
 - Tests entity mention creation and retrieval
@@ -165,6 +177,11 @@ stats = await get_entity_stats("$BTC")
 - Tests batch operations
 - Tests entity statistics aggregation
 - Tests metadata storage
+
+### Test Summary
+- **Total Tests**: 24 entity extraction tests
+- **Status**: All passing ✅
+- **Coverage**: Batch processing, normalization, deduplication, partial failures, cost tracking, metrics
 
 ## Usage Example
 
@@ -186,21 +203,76 @@ await fetch_and_process_rss_feeds()
 # 7. Log costs and metrics
 ```
 
+## Advanced Features
+
+### Entity Normalization
+Entities are automatically normalized for consistency:
+
+- **Tickers**: Converted to uppercase with $ prefix
+  - `btc` → `$BTC`
+  - `$eth` → `$ETH`
+  
+- **Project Names**: Converted to canonical names
+  - `bitcoin` → `Bitcoin`
+  - `ethereum` → `Ethereum`
+  - `solana` → `Solana`
+  
+- **Event Types**: Converted to lowercase
+  - `REGULATION` → `regulation`
+  - `Hack` → `hack`
+
+### Entity Deduplication
+Duplicate entities are automatically removed, keeping the highest confidence score:
+
+```python
+# Input entities
+[
+  {"type": "ticker", "value": "$btc", "confidence": 0.90},
+  {"type": "ticker", "value": "$BTC", "confidence": 0.95},
+  {"type": "ticker", "value": "btc", "confidence": 0.85}
+]
+
+# After deduplication
+[
+  {"type": "ticker", "value": "$BTC", "confidence": 0.95}
+]
+```
+
+### Partial Failure Handling
+If a batch fails, the system automatically:
+
+1. Logs the batch failure
+2. Retries each article individually
+3. Aggregates successful results
+4. Logs which articles failed and why
+5. Continues processing remaining batches
+
+Example log output:
+```
+ERROR - Batch entity extraction failed: API timeout
+INFO - Retrying 10 articles individually after batch failure
+WARNING - Failed to extract entities from 2 articles: article_5, article_8
+INFO - Batch metrics: articles_processed=8, entities_extracted=24, cost_per_batch=$0.001920, processing_time=5.23s
+```
+
 ## Performance Considerations
 
-1. **Batch Size**: Default 10 articles per batch balances API efficiency with prompt size
+1. **Batch Size**: Default 10 articles per batch (configurable via `ENTITY_EXTRACTION_BATCH_SIZE`)
 2. **Text Truncation**: Articles truncated to 2000 chars to reduce token costs
 3. **Single API Call**: Each batch requires only one API call vs. individual calls per article
 4. **Cost Efficiency**: Claude Haiku 3.5 is optimized for speed and cost
+5. **Automatic Retry**: Failed batches are retried individually to maximize success rate
+6. **Deduplication**: Reduces storage and improves data quality
 
 ## Future Enhancements
 
-1. Add entity deduplication and normalization (e.g., "BTC" vs "$BTC")
+1. ~~Add entity deduplication and normalization~~ ✅ **Completed**
 2. Implement entity trending analysis
 3. Add entity-based article recommendations
 4. Create entity sentiment time series
 5. Add entity co-occurrence analysis
 6. Implement entity-based alerts
+7. Add entity relationship mapping (e.g., Bitcoin ↔ $BTC)
 
 ## Branch Information
 
@@ -219,5 +291,21 @@ await fetch_and_process_rss_feeds()
 ### Created
 - `src/crypto_news_aggregator/db/operations/entity_mentions.py`
 - `tests/background/test_entity_extraction.py`
+- `tests/background/test_entity_extraction_integration.py`
 - `tests/db/test_entity_mentions.py`
 - `docs/ENTITY_EXTRACTION_FEATURE.md`
+
+## Implementation Checklist
+
+All requirements completed:
+
+- ✅ Batch size configurable via `ENTITY_EXTRACTION_BATCH_SIZE` (default 10)
+- ✅ Partial batch failure handling with individual retries
+- ✅ Entity normalization (tickers uppercase, projects canonical, events lowercase)
+- ✅ Entity deduplication with highest confidence selection
+- ✅ Exact Haiku model string: `claude-haiku-3-5-20241022`
+- ✅ Actual token counts tracked from API response
+- ✅ Integration tests for batch processing (10 articles)
+- ✅ Tests for partial failure scenarios
+- ✅ Cost calculation verification
+- ✅ Comprehensive batch metrics logging: articles_processed, entities_extracted, cost_per_batch, processing_time
