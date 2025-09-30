@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     NEWS_API_KEY: str = ""  # Kept for backward compatibility
     TWITTER_BEARER_TOKEN: str = ""
     ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_DEFAULT_MODEL: str = "claude-3-haiku-20240307"
+    ANTHROPIC_ENTITY_MODEL: str = "claude-haiku-3-5-20241022"
+    ANTHROPIC_ENTITY_INPUT_COST_PER_1K_TOKENS: float = 0.0
+    ANTHROPIC_ENTITY_OUTPUT_COST_PER_1K_TOKENS: float = 0.0
+    ENTITY_EXTRACTION_BATCH_SIZE: int = 10
     POLYMARKET_API_KEY: str = ""
 
     # Reddit settings
