@@ -45,3 +45,13 @@ class LLMProvider(ABC):
         :return: A relevance score.
         """
         raise NotImplementedError
+
+    @abstractmethod
+    def extract_entities_batch(self, articles: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Extracts entities from a batch of articles.
+
+        :param articles: List of article dicts with 'id', 'title', and 'text' keys.
+        :return: Dict with 'results' (list of entity extractions per article) and 'usage' (token counts).
+        """
+        raise NotImplementedError
