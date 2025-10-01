@@ -40,15 +40,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install poetry==1.8.3
-          poetry install
-
-      - name: Regenerate lock file if needed
-        run: |
-          # Check if lock file needs updating due to pyproject.toml changes
-          if ! poetry check; then
-            echo "Regenerating poetry.lock due to compatibility issues..."
-            poetry lock --no-update
-          fi
+          poetry install --no-interaction
 
       - name: Set up test environment
         run: |
@@ -69,7 +61,7 @@ jobs:
       - name: Run linting checks
         run: |
           pip install pre-commit==3.8.0
-          poetry install
+          poetry install --no-interaction
           pre-commit install-hooks
           pre-commit run --all-files --show-diff-on-failure
 
