@@ -29,16 +29,24 @@ async def test_price_query_succeeds(server_process, http_client):
 
     headers = {"X-API-Key": "testapikey123"}
 
-    resp = await http_client.post(f"{base_url}/v1/chat/completions", json=payload, headers=headers, timeout=30)
+    resp = await http_client.post(
+        f"{base_url}/v1/chat/completions", json=payload, headers=headers, timeout=30
+    )
 
-    assert resp.status_code == 200, f"Unexpected status: {resp.status_code}, body: {resp.text}"
+    assert (
+        resp.status_code == 200
+    ), f"Unexpected status: {resp.status_code}, body: {resp.text}"
 
     data = resp.json()
     assert isinstance(data, dict)
-    assert "choices" in data and isinstance(data["choices"], list) and data["choices"], "choices missing or empty"
+    assert (
+        "choices" in data and isinstance(data["choices"], list) and data["choices"]
+    ), "choices missing or empty"
 
     content = data["choices"][0].get("message", {}).get("content", "")
-    assert isinstance(content, str) and content.strip(), "Empty content returned for price query"
+    assert (
+        isinstance(content, str) and content.strip()
+    ), "Empty content returned for price query"
 
 
 @pytest.mark.integration
@@ -56,22 +64,30 @@ async def test_sentiment_query_handled(server_process, http_client):
 
     headers = {"X-API-Key": "testapikey123"}
 
-    resp = await http_client.post(f"{base_url}/v1/chat/completions", json=payload, headers=headers, timeout=30)
+    resp = await http_client.post(
+        f"{base_url}/v1/chat/completions", json=payload, headers=headers, timeout=30
+    )
 
     # Should not 5xx; either 200 with content or a well-formed 4xx with JSON body
-    assert resp.status_code < 500, f"Sentiment query returned 5xx: {resp.status_code}, body: {resp.text}"
+    assert (
+        resp.status_code < 500
+    ), f"Sentiment query returned 5xx: {resp.status_code}, body: {resp.text}"
 
     # If 200, validate non-empty content
     if resp.status_code == 200:
         data = resp.json()
         content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        assert isinstance(content, str) and content.strip(), "Empty content returned for sentiment query"
+        assert (
+            isinstance(content, str) and content.strip()
+        ), "Empty content returned for sentiment query"
     else:
         # For non-200, ensure it's JSON and informative
         try:
             _ = resp.json()
         except Exception as e:
-            pytest.fail(f"Non-200 sentiment response is not JSON: {e}; body={resp.text}")
+            pytest.fail(
+                f"Non-200 sentiment response is not JSON: {e}; body={resp.text}"
+            )
 
 
 @pytest.mark.integration
@@ -91,4 +107,6 @@ async def test_logs_have_activity_marker(server_process):
         "Received chat completion request",
         "Classified intent",
     ]
-    assert any(m in text for m in markers), "Expected log markers not found in logs/app.log"
+    assert any(
+        m in text for m in markers
+    ), "Expected log markers not found in logs/app.log"

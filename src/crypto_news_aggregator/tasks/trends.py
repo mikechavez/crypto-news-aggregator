@@ -12,16 +12,17 @@ from ..core.config import get_settings
 logger = logging.getLogger(__name__)
 # settings = get_settings()  # Removed top-level settings; use lazy initialization in functions as needed.
 
+
 @shared_task
 def update_trends(time_window: str = "24h"):
     """
     Update trends based on recent articles.
-    
+
     Args:
         time_window: Time window to analyze ('1h', '24h', '7d')
     """
     logger.info(f"Updating trends for time window: {time_window}")
-    
+
     try:
         # Calculate time cutoff based on window
         now = datetime.now(timezone.utc)
@@ -33,18 +34,19 @@ def update_trends(time_window: str = "24h"):
             cutoff = now - timedelta(days=7)
         else:
             raise ValueError(f"Invalid time window: {time_window}")
-        
+
         # TODO: Implement trend analysis
         # - Extract keywords from recent articles
         # - Calculate frequency and sentiment
         # - Update or create Trend records
-        
+
         logger.info(f"Successfully updated trends for {time_window} window")
         return {"status": "success", "window": time_window, "processed": True}
-        
+
     except Exception as e:
         logger.error(f"Error in update_trends: {str(e)}")
         raise
+
 
 @shared_task
 def calculate_article_keywords(article_id: int):

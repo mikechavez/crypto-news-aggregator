@@ -65,6 +65,7 @@ pytest-asyncio = "^1.0.0"
 pytest-mock = "^3.14.1"
 pytest-cov = "^6.2.1"
 pytest-httpx = "^0.35.0"
+black = {version = "^25.9.0", allow-prereleases = true}
 
 [tool.pytest.ini_options]
 testpaths = [

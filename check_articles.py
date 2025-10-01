@@ -16,10 +16,10 @@ from crypto_news_aggregator.db.mongodb import mongo_manager
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
 
 async def check_articles_collection():
     """Check what's in the articles collection."""
@@ -38,16 +38,15 @@ async def check_articles_collection():
         # Get recent articles (last 7 days instead of 24 hours)
         recent_query = {
             "created_at": {
-                "$gte": datetime.utcnow().timestamp() - (7 * 24 * 60 * 60)  # Last 7 days
+                "$gte": datetime.utcnow().timestamp()
+                - (7 * 24 * 60 * 60)  # Last 7 days
             }
         }
         recent_count = await collection.count_documents(recent_query)
         logger.info(f"Articles from last 7 days: {recent_count}")
 
         # Get articles with sentiment analysis
-        analyzed_query = {
-            "sentiment_score": {"$exists": True, "$ne": None}
-        }
+        analyzed_query = {"sentiment_score": {"$exists": True, "$ne": None}}
         analyzed_count = await collection.count_documents(analyzed_query)
         logger.info(f"Articles with sentiment analysis: {analyzed_count}")
 
@@ -59,23 +58,23 @@ async def check_articles_collection():
             logger.info(f"Title: {article.get('title', 'No title')}")
             logger.info(f"Source: {article.get('source', 'No source')}")
             logger.info(f"DB Created: {article.get('created_at', 'No date')}")
-            if 'published_at' in article:
-                logger.info(f"Published: {article.get('published_at', 'No published date')}")
+            if "published_at" in article:
+                logger.info(
+                    f"Published: {article.get('published_at', 'No published date')}"
+                )
             logger.info(f"Sentiment: {article.get('sentiment_score', 'No sentiment')}")
             logger.info("---")
 
         # Check for articles without analysis
         unanalyzed_query = {
-            "$or": [
-                {"sentiment_score": {"$exists": False}},
-                {"sentiment_score": None}
-            ]
+            "$or": [{"sentiment_score": {"$exists": False}}, {"sentiment_score": None}]
         }
         unanalyzed_count = await collection.count_documents(unanalyzed_query)
         logger.info(f"Articles needing analysis: {unanalyzed_count}")
 
     except Exception as e:
         logger.error(f"Error checking articles: {str(e)}", exc_info=True)
+
 
 if __name__ == "__main__":
     asyncio.run(check_articles_collection())

@@ -1,27 +1,33 @@
 """Main FastAPI application module."""
+
 import logging
 import os
 import sys
 from logging.handlers import RotatingFileHandler
+
 
 def setup_logging():
     """Configure logging for the application."""
     # Force basic config to ensure stdout logging even if config is already set up
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         stream=sys.stdout,
-        force=True
+        force=True,
     )
 
     log_dir = "logs"
     os.makedirs(log_dir, exist_ok=True)
 
-    log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    log_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     log_file = os.path.join(log_dir, "app.log")
 
     # File handler
-    file_handler = RotatingFileHandler(log_file, maxBytes=10*1024*1024, backupCount=3)
+    file_handler = RotatingFileHandler(
+        log_file, maxBytes=10 * 1024 * 1024, backupCount=3
+    )
     file_handler.setFormatter(log_formatter)
 
     # Console handler
@@ -43,6 +49,7 @@ def setup_logging():
     logger = logging.getLogger(__name__)
     logger.info("--- Logging configured successfully ---")
     return logger
+
 
 logger = setup_logging()
 
@@ -70,10 +77,11 @@ except Exception as e:
     # Exit if settings fail to load, as the app cannot run.
     sys.exit(1)
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage lifespan events for the web server.
-    
+
     - Initializes MongoDB connection on startup.
     - Closes MongoDB connection on shutdown.
     """
@@ -87,6 +95,7 @@ async def lifespan(app: FastAPI):
     await price_service.close()
     logger.info("Price service client session closed.")
 
+
 # Create FastAPI application
 app = FastAPI(
     title="Crypto News Aggregator API",
@@ -96,7 +105,7 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan,
-    dependencies=None  # We'll add dependencies to specific routers instead
+    dependencies=None,  # We'll add dependencies to specific routers instead
 )
 
 # CORS middleware configuration
@@ -114,6 +123,7 @@ app.add_middleware(
 # Setup performance monitoring
 setup_performance_monitoring(app)
 
+
 # Add exception handler for 401 Unauthorized
 @app.exception_handler(status.HTTP_401_UNAUTHORIZED)
 async def unauthorized_exception_handler(request: Request, exc: Exception):
@@ -122,6 +132,7 @@ async def unauthorized_exception_handler(request: Request, exc: Exception):
         content={"detail": "Missing or invalid API key"},
         headers={"WWW-Authenticate": "API-Key"},
     )
+
 
 # Add exception handler for 403 Forbidden
 @app.exception_handler(status.HTTP_403_FORBIDDEN)
@@ -132,19 +143,23 @@ async def forbidden_exception_handler(request: Request, exc: Exception):
         headers={"WWW-Authenticate": "API-Key"},
     )
 
+
 # Include API routers
 app.include_router(api_router)
 
 app.include_router(openai_api.router, prefix="/v1/chat", tags=["OpenAI Compatibility"])
+
 
 # Root health check for deployment platforms
 @app.get("/")
 async def root():
     return {"status": "ok", "service": "context-owl"}
 
+
 # Health check endpoint is now in api/v1/health.py
 
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.getenv("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)

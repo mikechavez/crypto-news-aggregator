@@ -2,6 +2,7 @@
 Smoke tests for RSS fetcher enrichment functionality.
 Tests the core enrichment pipeline that processes articles with LLM analysis.
 """
+
 import asyncio
 import pytest
 from datetime import datetime, timezone
@@ -12,7 +13,7 @@ from src.crypto_news_aggregator.background.rss_fetcher import (
     fetch_and_process_rss_feeds,
     _derive_sentiment_label,
     _tokenize_for_keywords,
-    _select_keywords
+    _select_keywords,
 )
 from src.crypto_news_aggregator.models.article import ArticleCreate, ArticleMetrics
 
@@ -89,7 +90,10 @@ class TestEnrichmentPipeline:
         # Ensure model_name attribute exists and is a string
         mock_llm.model_name = "test-llm-provider"
 
-        with patch('src.crypto_news_aggregator.background.rss_fetcher.get_llm_provider', return_value=mock_llm):
+        with patch(
+            "src.crypto_news_aggregator.background.rss_fetcher.get_llm_provider",
+            return_value=mock_llm,
+        ):
             # Process the article
             processed_count = await process_new_articles_from_mongodb()
 
@@ -97,7 +101,9 @@ class TestEnrichmentPipeline:
             assert processed_count == 1
 
             # Verify enrichment was applied
-            enriched = await mongo_db.articles.find_one({"source_id": "test-enrichment-1"})
+            enriched = await mongo_db.articles.find_one(
+                {"source_id": "test-enrichment-1"}
+            )
             assert enriched is not None
             assert enriched["relevance_score"] == 0.9
             assert enriched["sentiment_score"] == 0.7
@@ -134,7 +140,10 @@ class TestEnrichmentPipeline:
         mock_llm.analyze_sentiment.side_effect = Exception("API Error")
         mock_llm.extract_themes.side_effect = Exception("API Error")
 
-        with patch('src.crypto_news_aggregator.background.rss_fetcher.get_llm_provider', return_value=mock_llm):
+        with patch(
+            "src.crypto_news_aggregator.background.rss_fetcher.get_llm_provider",
+            return_value=mock_llm,
+        ):
             # Should not raise exception, should handle errors gracefully
             processed_count = await process_new_articles_from_mongodb()
 
@@ -173,7 +182,10 @@ class TestEnrichmentPipeline:
         mock_llm.analyze_sentiment.return_value = 0.0
         mock_llm.extract_themes.return_value = []
 
-        with patch('src.crypto_news_aggregator.background.rss_fetcher.get_llm_provider', return_value=mock_llm):
+        with patch(
+            "src.crypto_news_aggregator.background.rss_fetcher.get_llm_provider",
+            return_value=mock_llm,
+        ):
             processed_count = await process_new_articles_from_mongodb()
 
             # Should skip articles with no meaningful content
@@ -208,12 +220,17 @@ class TestEnrichmentPipeline:
         mock_llm.extract_themes.return_value = ["Testing", "Integration"]
         mock_llm.model_name = "test-llm-provider"
 
-        with patch('src.crypto_news_aggregator.background.rss_fetcher.get_llm_provider', return_value=mock_llm):
+        with patch(
+            "src.crypto_news_aggregator.background.rss_fetcher.get_llm_provider",
+            return_value=mock_llm,
+        ):
             # Run only the enrichment part (skip RSS fetching)
             await process_new_articles_from_mongodb()
 
             # Verify article was enriched
-            stored = await mongo_db.articles.find_one({"source_id": "integration-test-1"})
+            stored = await mongo_db.articles.find_one(
+                {"source_id": "integration-test-1"}
+            )
             assert stored is not None
             assert stored["relevance_score"] == 0.8
             assert stored["sentiment_score"] == 0.2

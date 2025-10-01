@@ -4,6 +4,7 @@ End-to-End Integration Test for Context Owl - Sentient AGI Partnership
 This test simulates a complete integration scenario between Context Owl and Sentient AGI,
 demonstrating seamless OpenAI-compatible API integration with cryptocurrency analysis capabilities.
 """
+
 import pytest
 import json
 import time
@@ -33,16 +34,16 @@ class TestSentientAGIIntegration:
             "messages": [
                 {
                     "role": "user",
-                    "content": "Give me a comprehensive overview of the current cryptocurrency market. Focus on major coins like Bitcoin, Ethereum, and Solana."
+                    "content": "Give me a comprehensive overview of the current cryptocurrency market. Focus on major coins like Bitcoin, Ethereum, and Solana.",
                 }
             ],
-            "stream": False
+            "stream": False,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=market_query,
-            headers={"X-API-Key": self.api_key}
+            headers={"X-API-Key": self.api_key},
         )
 
         assert response.status_code == 200
@@ -60,16 +61,16 @@ class TestSentientAGIIntegration:
             "messages": [
                 {
                     "role": "user",
-                    "content": "What is the current market sentiment for Bitcoin and Ethereum? Should I be bullish or bearish?"
+                    "content": "What is the current market sentiment for Bitcoin and Ethereum? Should I be bullish or bearish?",
                 }
             ],
-            "stream": False
+            "stream": False,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=sentiment_query,
-            headers={"X-API-Key": self.api_key}
+            headers={"X-API-Key": self.api_key},
         )
 
         assert response.status_code == 200
@@ -84,16 +85,16 @@ class TestSentientAGIIntegration:
             "messages": [
                 {
                     "role": "user",
-                    "content": "How correlated are Bitcoin, Ethereum, and Solana? What does this mean for portfolio diversification?"
+                    "content": "How correlated are Bitcoin, Ethereum, and Solana? What does this mean for portfolio diversification?",
                 }
             ],
-            "stream": False
+            "stream": False,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=correlation_query,
-            headers={"X-API-Key": self.api_key}
+            headers={"X-API-Key": self.api_key},
         )
 
         assert response.status_code == 200
@@ -108,20 +109,22 @@ class TestSentientAGIIntegration:
             "messages": [
                 {
                     "role": "user",
-                    "content": "Give me real-time updates on Bitcoin price movements and news sentiment."
+                    "content": "Give me real-time updates on Bitcoin price movements and news sentiment.",
                 }
             ],
-            "stream": True
+            "stream": True,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=streaming_query,
-            headers={"X-API-Key": self.api_key}
+            headers={"X-API-Key": self.api_key},
         )
 
         assert response.status_code == 200
-        assert response.headers.get("content-type") == "text/event-stream; charset=utf-8"
+        assert (
+            response.headers.get("content-type") == "text/event-stream; charset=utf-8"
+        )
 
         streaming_content = response.content.decode()
         assert "data:" in streaming_content
@@ -135,28 +138,25 @@ class TestSentientAGIIntegration:
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are a cryptocurrency trading advisor."
+                    "content": "You are a cryptocurrency trading advisor.",
                 },
                 {
                     "role": "user",
-                    "content": "I'm new to crypto. What should I know about Bitcoin?"
+                    "content": "I'm new to crypto. What should I know about Bitcoin?",
                 },
                 {
                     "role": "assistant",
-                    "content": "Bitcoin is the first and most well-known cryptocurrency. It's a decentralized digital currency that operates on a blockchain network."
+                    "content": "Bitcoin is the first and most well-known cryptocurrency. It's a decentralized digital currency that operates on a blockchain network.",
                 },
-                {
-                    "role": "user",
-                    "content": "Is it a good investment right now?"
-                }
+                {"role": "user", "content": "Is it a good investment right now?"},
             ],
-            "stream": False
+            "stream": False,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=conversation_query,
-            headers={"X-API-Key": self.api_key}
+            headers={"X-API-Key": self.api_key},
         )
 
         assert response.status_code == 200
@@ -171,7 +171,7 @@ class TestSentientAGIIntegration:
             "sentiment_analysis": sentiment_response,
             "correlation_analysis": correlation_response,
             "streaming_response": streaming_content,
-            "conversation_response": conversation_response
+            "conversation_response": conversation_response,
         }
 
     def test_authentication_methods(self):
@@ -183,13 +183,13 @@ class TestSentientAGIIntegration:
         api_key_query = {
             "model": "crypto-insight-agent",
             "messages": [{"role": "user", "content": "Hello"}],
-            "stream": False
+            "stream": False,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=api_key_query,
-            headers={"X-API-Key": self.api_key}
+            headers={"X-API-Key": self.api_key},
         )
 
         assert response.status_code == 200
@@ -199,13 +199,13 @@ class TestSentientAGIIntegration:
         bearer_query = {
             "model": "crypto-insight-agent",
             "messages": [{"role": "user", "content": "Hello with Bearer token"}],
-            "stream": False
+            "stream": False,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=bearer_query,
-            headers={"Authorization": "Bearer test-token"}
+            headers={"Authorization": "Bearer test-token"},
         )
 
         # Should fail with invalid token but not with format error
@@ -218,16 +218,12 @@ class TestSentientAGIIntegration:
         print("❌ Testing Error Scenarios")
 
         # Test empty messages
-        empty_query = {
-            "model": "crypto-insight-agent",
-            "messages": [],
-            "stream": False
-        }
+        empty_query = {"model": "crypto-insight-agent", "messages": [], "stream": False}
 
         response = self.client.post(
             "/v1/chat/completions",
             json=empty_query,
-            headers={"X-API-Key": self.api_key}
+            headers={"X-API-Key": self.api_key},
         )
 
         assert response.status_code == 400
@@ -238,13 +234,10 @@ class TestSentientAGIIntegration:
         no_auth_query = {
             "model": "crypto-insight-agent",
             "messages": [{"role": "user", "content": "Hello"}],
-            "stream": False
+            "stream": False,
         }
 
-        response = self.client.post(
-            "/v1/chat/completions",
-            json=no_auth_query
-        )
+        response = self.client.post("/v1/chat/completions", json=no_auth_query)
 
         assert response.status_code == 401
         assert "Missing or invalid API key" in response.json()["detail"]
@@ -254,13 +247,13 @@ class TestSentientAGIIntegration:
         invalid_key_query = {
             "model": "crypto-insight-agent",
             "messages": [{"role": "user", "content": "Hello"}],
-            "stream": False
+            "stream": False,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=invalid_key_query,
-            headers={"X-API-Key": "invalid-key"}
+            headers={"X-API-Key": "invalid-key"},
         )
 
         assert response.status_code == 403
@@ -278,13 +271,11 @@ class TestSentientAGIIntegration:
         query = {
             "model": "crypto-insight-agent",
             "messages": [{"role": "user", "content": "What is Bitcoin price?"}],
-            "stream": False
+            "stream": False,
         }
 
         response = self.client.post(
-            "/v1/chat/completions",
-            json=query,
-            headers={"X-API-Key": self.api_key}
+            "/v1/chat/completions", json=query, headers={"X-API-Key": self.api_key}
         )
 
         end_time = time.time()
@@ -298,17 +289,19 @@ class TestSentientAGIIntegration:
         streaming_query = {
             "model": "crypto-insight-agent",
             "messages": [{"role": "user", "content": "Tell me about crypto"}],
-            "stream": True
+            "stream": True,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=streaming_query,
-            headers={"X-API-Key": self.api_key}
+            headers={"X-API-Key": self.api_key},
         )
 
         assert response.status_code == 200
-        assert response.headers.get("content-type") == "text/event-stream; charset=utf-8"
+        assert (
+            response.headers.get("content-type") == "text/event-stream; charset=utf-8"
+        )
         print("✅ Streaming response format correct")
 
     def test_openai_compatibility(self):
@@ -322,25 +315,23 @@ class TestSentientAGIIntegration:
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are a helpful cryptocurrency assistant."
+                    "content": "You are a helpful cryptocurrency assistant.",
                 },
                 {
                     "role": "user",
-                    "content": "What are the latest trends in cryptocurrency?"
-                }
+                    "content": "What are the latest trends in cryptocurrency?",
+                },
             ],
             "stream": False,
             "temperature": 0.7,
             "max_tokens": 1000,
             "top_p": 1.0,
             "frequency_penalty": 0.0,
-            "presence_penalty": 0.0
+            "presence_penalty": 0.0,
         }
 
         response = self.client.post(
-            "/v1/chat/completions",
-            json=full_query,
-            headers={"X-API-Key": self.api_key}
+            "/v1/chat/completions", json=full_query, headers={"X-API-Key": self.api_key}
         )
 
         assert response.status_code == 200

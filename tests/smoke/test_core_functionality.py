@@ -1,4 +1,5 @@
 """Smoke tests to validate core application functionality."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace

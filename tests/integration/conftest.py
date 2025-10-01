@@ -4,6 +4,7 @@ These fixtures intentionally start the app as a separate process to validate tha
 it starts correctly and serves real HTTP requests. They are kept local to the
 `tests/integration/` package to avoid affecting faster unit tests.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -29,7 +30,9 @@ def _find_free_port() -> int:
         return s.getsockname()[1]
 
 
-def _wait_for_health(urls: list[str] | str, proc: subprocess.Popen | None = None, timeout: float = 12.0) -> None:
+def _wait_for_health(
+    urls: list[str] | str, proc: subprocess.Popen | None = None, timeout: float = 12.0
+) -> None:
     if isinstance(urls, str):
         probe_urls = [urls]
     else:
@@ -46,7 +49,9 @@ def _wait_for_health(urls: list[str] | str, proc: subprocess.Popen | None = None
                         out = proc.stdout.read() or ""
                 except Exception:
                     pass
-                raise TimeoutError(f"Server process exited early with code {proc.returncode}. STDOUT tail:\n{out[-2000:]}")
+                raise TimeoutError(
+                    f"Server process exited early with code {proc.returncode}. STDOUT tail:\n{out[-2000:]}"
+                )
             for url in probe_urls:
                 try:
                     r = client.get(url, timeout=2)

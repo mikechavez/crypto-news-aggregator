@@ -32,7 +32,7 @@ def create_mock_crash_articles() -> List[Dict[str, Any]]:
             "sentiment_label": "negative",
             "keywords": ["ETF", "outflows", "bitcoin", "investors", "risk"],
             "published_at": datetime.now(timezone.utc).isoformat(),
-            "summary": "Major Bitcoin ETFs see massive outflows as market sentiment turns bearish."
+            "summary": "Major Bitcoin ETFs see massive outflows as market sentiment turns bearish.",
         },
         {
             "title": "Whale Liquidations Trigger Cascade Selling in Crypto Markets",
@@ -41,7 +41,7 @@ def create_mock_crash_articles() -> List[Dict[str, Any]]:
             "sentiment_label": "negative",
             "keywords": ["whale", "liquidations", "cascade", "selling", "crypto"],
             "published_at": datetime.now(timezone.utc).isoformat(),
-            "summary": "Large position liquidations create downward pressure across major cryptocurrencies."
+            "summary": "Large position liquidations create downward pressure across major cryptocurrencies.",
         },
         {
             "title": "Federal Reserve Signals Continued Hawkish Policy Stance",
@@ -50,7 +50,7 @@ def create_mock_crash_articles() -> List[Dict[str, Any]]:
             "sentiment_label": "negative",
             "keywords": ["federal reserve", "policy", "hawkish", "rates"],
             "published_at": datetime.now(timezone.utc).isoformat(),
-            "summary": "Fed officials indicate no immediate plans for rate cuts, impacting risk assets."
+            "summary": "Fed officials indicate no immediate plans for rate cuts, impacting risk assets.",
         },
         {
             "title": "Crypto Market Sees $1.7B in Liquidations as Prices Plummet",
@@ -59,8 +59,8 @@ def create_mock_crash_articles() -> List[Dict[str, Any]]:
             "sentiment_label": "negative",
             "keywords": ["liquidations", "crypto", "prices", "market"],
             "published_at": datetime.now(timezone.utc).isoformat(),
-            "summary": "Total liquidations across crypto exchanges reach record levels amid market turmoil."
-        }
+            "summary": "Total liquidations across crypto exchanges reach record levels amid market turmoil.",
+        },
     ]
 
 
@@ -106,7 +106,7 @@ def test_context_owl_crash_analysis():
         "Should I sell Bitcoin?",
         "Is this the start of a bear market?",
         "How are ETF outflows affecting Bitcoin?",
-        "What are the main drivers of this market dump?"
+        "What are the main drivers of this market dump?",
     ]
 
     all_tests_passed = True
@@ -115,35 +115,52 @@ def test_context_owl_crash_analysis():
         print(f"\n🧪 TEST {i}: {query}")
         print("-" * 40)
 
-        with patch('crypto_news_aggregator.api.openai_compatibility.get_price_service') as mock_price_service, \
-             patch('crypto_news_aggregator.api.openai_compatibility.get_correlation_service') as mock_correlation_service, \
-             patch('crypto_news_aggregator.api.openai_compatibility.article_service') as mock_article_service:
+        with (
+            patch(
+                "crypto_news_aggregator.api.openai_compatibility.get_price_service"
+            ) as mock_price_service,
+            patch(
+                "crypto_news_aggregator.api.openai_compatibility.get_correlation_service"
+            ) as mock_correlation_service,
+            patch(
+                "crypto_news_aggregator.api.openai_compatibility.article_service"
+            ) as mock_article_service,
+        ):
 
             # Setup mocks for comprehensive analysis
             mock_price_service_instance = AsyncMock()
-            mock_price_service_instance.generate_market_analysis_commentary.return_value = create_comprehensive_crash_analysis()
+            mock_price_service_instance.generate_market_analysis_commentary.return_value = (
+                create_comprehensive_crash_analysis()
+            )
             mock_price_service.return_value = mock_price_service_instance
 
             mock_correlation_service_instance = AsyncMock()
-            mock_correlation_service_instance.calculate_correlation.return_value = {"ethereum": 0.85, "solana": 0.72}
+            mock_correlation_service_instance.calculate_correlation.return_value = {
+                "ethereum": 0.85,
+                "solana": 0.72,
+            }
             mock_correlation_service.return_value = mock_correlation_service_instance
 
             # Mock article service with crash-related articles
-            mock_article_service.get_average_sentiment_for_symbols.return_value = {"BTC": -0.45}
+            mock_article_service.get_average_sentiment_for_symbols.return_value = {
+                "BTC": -0.45
+            }
 
             # Mock the _fetch_related_news method to return crash articles
-            mock_price_service_instance._fetch_related_news.return_value = create_mock_crash_articles()
+            mock_price_service_instance._fetch_related_news.return_value = (
+                create_mock_crash_articles()
+            )
 
             request_data = {
                 "model": "crypto-insight-agent",
                 "messages": [{"role": "user", "content": query}],
-                "stream": False
+                "stream": False,
             }
 
             response = client.post(
                 "/v1/chat/completions",
                 json=request_data,
-                headers={"X-API-Key": valid_api_keys[0]}
+                headers={"X-API-Key": valid_api_keys[0]},
             )
 
             if response.status_code != 200:
@@ -189,16 +206,35 @@ def validate_crash_analysis(content: str, query: str) -> tuple[bool, str]:
     content_lower = content.lower()
 
     # Check for key crash drivers
-    key_drivers = ["etf", "outflows", "whale", "liquidations", "fed", "policy", "federal"]
+    key_drivers = [
+        "etf",
+        "outflows",
+        "whale",
+        "liquidations",
+        "fed",
+        "policy",
+        "federal",
+    ]
     driver_mentions = sum(1 for driver in key_drivers if driver in content_lower)
 
     # Check for actionable context
-    context_indicators = ["sentiment", "narratives", "themes", "analysis", "context", "outlook"]
-    context_mentions = sum(1 for indicator in context_indicators if indicator in content_lower)
+    context_indicators = [
+        "sentiment",
+        "narratives",
+        "themes",
+        "analysis",
+        "context",
+        "outlook",
+    ]
+    context_mentions = sum(
+        1 for indicator in context_indicators if indicator in content_lower
+    )
 
     # Check for correlation with news
     news_indicators = ["news", "articles", "coverage", "reporting", "sources"]
-    news_mentions = sum(1 for indicator in news_indicators if indicator in content_lower)
+    news_mentions = sum(
+        1 for indicator in news_indicators if indicator in content_lower
+    )
 
     # Validate requirements
     issues = []
@@ -220,7 +256,9 @@ def validate_crash_analysis(content: str, query: str) -> tuple[bool, str]:
     if "no high-signal news" in content_lower:
         issues.append("Using fallback response instead of comprehensive analysis")
 
-    return len(issues) == 0, "; ".join(issues) if issues else "All validation checks passed"
+    return len(issues) == 0, (
+        "; ".join(issues) if issues else "All validation checks passed"
+    )
 
 
 if __name__ == "__main__":

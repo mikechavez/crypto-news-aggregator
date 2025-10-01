@@ -32,7 +32,15 @@ def create_crash_articles() -> List[Dict[str, Any]]:
             "source": "The Block",
             "sentiment_score": -0.6,
             "sentiment_label": "negative",
-            "keywords": ["BTC", "bitcoin", "whale", "liquidations", "cascade", "selling", "crypto"],
+            "keywords": [
+                "BTC",
+                "bitcoin",
+                "whale",
+                "liquidations",
+                "cascade",
+                "selling",
+                "crypto",
+            ],
             "published_at": datetime.now(timezone.utc).isoformat(),
         },
         {
@@ -40,9 +48,17 @@ def create_crash_articles() -> List[Dict[str, Any]]:
             "source": "Reuters",
             "sentiment_score": -0.3,
             "sentiment_label": "negative",
-            "keywords": ["BTC", "bitcoin", "federal reserve", "policy", "hawkish", "crypto", "turmoil"],
+            "keywords": [
+                "BTC",
+                "bitcoin",
+                "federal reserve",
+                "policy",
+                "hawkish",
+                "crypto",
+                "turmoil",
+            ],
             "published_at": datetime.now(timezone.utc).isoformat(),
-        }
+        },
     ]
 
 
@@ -65,7 +81,7 @@ def test_context_owl_fix():
     crash_queries = [
         "Why is crypto crashing?",
         "What are the main drivers of this market dump?",
-        "How are ETF outflows affecting Bitcoin?"
+        "How are ETF outflows affecting Bitcoin?",
     ]
 
     all_tests_passed = True
@@ -75,41 +91,49 @@ def test_context_owl_fix():
         print("-" * 40)
 
         # Test with real implementation (no mocking of main function)
-        with patch('crypto_news_aggregator.services.price_service.article_service') as mock_article_service:
+        with patch(
+            "crypto_news_aggregator.services.price_service.article_service"
+        ) as mock_article_service:
             # Mock the article service to return crash articles
-            mock_article_service.get_top_articles_for_symbols.return_value = create_crash_articles()
-            mock_article_service.get_average_sentiment_for_symbols.return_value = {"BTC": -0.45}
+            mock_article_service.get_top_articles_for_symbols.return_value = (
+                create_crash_articles()
+            )
+            mock_article_service.get_average_sentiment_for_symbols.return_value = {
+                "BTC": -0.45
+            }
 
             # Mock market data
-            with patch('crypto_news_aggregator.services.price_service.CoinGeckoPriceService.get_global_market_data') as mock_get_data:
+            with patch(
+                "crypto_news_aggregator.services.price_service.CoinGeckoPriceService.get_global_market_data"
+            ) as mock_get_data:
                 mock_get_data.return_value = {
-                    'bitcoin': {
-                        'current_price': 43000,
-                        'price_change_percentage_1h_in_currency': -1.2,
-                        'price_change_percentage_24h_in_currency': -2.7,
-                        'price_change_percentage_7d_in_currency': -8.5,
-                        'market_cap_rank': 1,
-                        'total_volume': 25000000000,
-                        'market_cap': 840000000000,
-                        'name': 'Bitcoin'
+                    "bitcoin": {
+                        "current_price": 43000,
+                        "price_change_percentage_1h_in_currency": -1.2,
+                        "price_change_percentage_24h_in_currency": -2.7,
+                        "price_change_percentage_7d_in_currency": -8.5,
+                        "market_cap_rank": 1,
+                        "total_volume": 25000000000,
+                        "market_cap": 840000000000,
+                        "name": "Bitcoin",
                     },
-                    'ethereum': {
-                        'current_price': 2300,
-                        'price_change_percentage_24h_in_currency': -6.5,
-                        'name': 'Ethereum'
-                    }
+                    "ethereum": {
+                        "current_price": 2300,
+                        "price_change_percentage_24h_in_currency": -6.5,
+                        "name": "Ethereum",
+                    },
                 }
 
                 request_data = {
                     "model": "crypto-insight-agent",
                     "messages": [{"role": "user", "content": query}],
-                    "stream": False
+                    "stream": False,
                 }
 
                 response = client.post(
                     "/v1/chat/completions",
                     json=request_data,
-                    headers={"X-API-Key": valid_api_keys[0]}
+                    headers={"X-API-Key": valid_api_keys[0]},
                 )
 
                 if response.status_code != 200:
@@ -152,16 +176,42 @@ def validate_crash_analysis(content: str, query: str) -> tuple[bool, str]:
     content_lower = content.lower()
 
     # Check for key crash drivers
-    key_drivers = ["etf", "outflows", "whale", "liquidations", "fed", "policy", "federal"]
+    key_drivers = [
+        "etf",
+        "outflows",
+        "whale",
+        "liquidations",
+        "fed",
+        "policy",
+        "federal",
+    ]
     driver_mentions = sum(1 for driver in key_drivers if driver in content_lower)
 
     # Check for actionable context
-    context_indicators = ["sentiment", "narratives", "themes", "analysis", "context", "outlook"]
-    context_mentions = sum(1 for indicator in context_indicators if indicator in content_lower)
+    context_indicators = [
+        "sentiment",
+        "narratives",
+        "themes",
+        "analysis",
+        "context",
+        "outlook",
+    ]
+    context_mentions = sum(
+        1 for indicator in context_indicators if indicator in content_lower
+    )
 
     # Check for crash-specific content
-    crash_indicators = ["crash", "market", "volatility", "momentum", "bearish", "selling"]
-    crash_mentions = sum(1 for indicator in crash_indicators if indicator in content_lower)
+    crash_indicators = [
+        "crash",
+        "market",
+        "volatility",
+        "momentum",
+        "bearish",
+        "selling",
+    ]
+    crash_mentions = sum(
+        1 for indicator in crash_indicators if indicator in content_lower
+    )
 
     # Validate requirements
     issues = []
@@ -179,7 +229,9 @@ def validate_crash_analysis(content: str, query: str) -> tuple[bool, str]:
     if len(content.split()) < 20:
         issues.append("Response too brief for comprehensive analysis")
 
-    return len(issues) == 0, "; ".join(issues) if issues else "All validation checks passed"
+    return len(issues) == 0, (
+        "; ".join(issues) if issues else "All validation checks passed"
+    )
 
 
 if __name__ == "__main__":

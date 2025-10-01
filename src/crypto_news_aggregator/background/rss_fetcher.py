@@ -70,7 +70,7 @@ async def fetch_and_process_rss_feeds():
     rss_service = RSSService()
     articles = await rss_service.fetch_all_feeds()
     await create_or_update_articles(articles)
-    
+
     # Run LLM analysis on the newly fetched articles
     await process_new_articles_from_mongodb()
 
@@ -85,11 +85,15 @@ def _tokenize_for_keywords(text: str) -> Iterable[str]:
         yield token.strip("$#")
 
 
-def _select_keywords(tokens: Sequence[str], max_keywords: int = _MAX_KEYWORDS) -> List[str]:
+def _select_keywords(
+    tokens: Sequence[str], max_keywords: int = _MAX_KEYWORDS
+) -> List[str]:
     if not tokens:
         return []
     counter = Counter(tokens)
-    sorted_tokens = sorted(counter.items(), key=lambda item: (-item[1], item[0].lower()))
+    sorted_tokens = sorted(
+        counter.items(), key=lambda item: (-item[1], item[0].lower())
+    )
     keywords: List[str] = []
     for word, _ in sorted_tokens:
         normalized = word.upper() if word.isupper() else word.title()
@@ -113,24 +117,24 @@ def _derive_sentiment_label(score: float) -> str:
 
 def _normalize_entity(entity_value: str, entity_type: str) -> str:
     """Normalize entity values for consistency.
-    
+
     Args:
         entity_value: Raw entity value from extraction
         entity_type: Type of entity (ticker, project, event)
-    
+
     Returns:
         Normalized entity value
     """
     if not entity_value:
         return entity_value
-    
+
     # Normalize tickers to uppercase
     if entity_type == "ticker":
         # Ensure $ prefix and uppercase
         if not entity_value.startswith("$"):
             entity_value = f"${entity_value}"
         return entity_value.upper()
-    
+
     # Normalize project names to title case
     if entity_type == "project":
         # Common crypto project names that should be capitalized
@@ -151,35 +155,35 @@ def _normalize_entity(entity_value: str, entity_type: str) -> str:
             return canonical_names[lower_value]
         # Default to title case
         return entity_value.title()
-    
+
     # Normalize event types to lowercase
     if entity_type == "event":
         return entity_value.lower()
-    
+
     return entity_value
 
 
 def _deduplicate_entities(entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Deduplicate entities, keeping highest confidence for duplicates.
-    
+
     Args:
         entities: List of entity dicts with type, value, confidence
-    
+
     Returns:
         Deduplicated list of entities
     """
     # Group by (type, normalized_value)
     entity_map = {}
-    
+
     for entity in entities:
         entity_type = entity.get("type")
         entity_value = entity.get("value")
         confidence = entity.get("confidence", 1.0)
-        
+
         # Normalize the value
         normalized_value = _normalize_entity(entity_value, entity_type)
         key = (entity_type, normalized_value)
-        
+
         # Keep entity with highest confidence
         if key not in entity_map or confidence > entity_map[key]["confidence"]:
             entity_map[key] = {
@@ -187,35 +191,37 @@ def _deduplicate_entities(entities: List[Dict[str, Any]]) -> List[Dict[str, Any]
                 "value": normalized_value,
                 "confidence": confidence,
             }
-    
+
     return list(entity_map.values())
 
 
 async def _process_entity_extraction_batch(
-    articles_batch: List[Dict[str, Any]], 
-    llm_client,
-    retry_individual: bool = True
+    articles_batch: List[Dict[str, Any]], llm_client, retry_individual: bool = True
 ) -> Dict[str, Any]:
     """
     Processes a batch of articles for entity extraction with partial failure handling.
-    
+
     Args:
         articles_batch: List of article dicts with _id, title, and text
         llm_client: LLM provider instance
         retry_individual: If True, retry failed articles individually
-    
+
     Returns:
         Dict with extraction results, usage stats, and metrics
     """
     if not articles_batch:
-        return {"results": [], "usage": {}, "metrics": {"articles_processed": 0, "entities_extracted": 0}}
-    
+        return {
+            "results": [],
+            "usage": {},
+            "metrics": {"articles_processed": 0, "entities_extracted": 0},
+        }
+
     start_time = time.time()
-    
+
     # Prepare articles for batch processing
     batch_input = []
     article_id_map = {}
-    
+
     for article in articles_batch:
         article_id = str(article.get("_id"))
         title = article.get("title") or ""
@@ -225,63 +231,76 @@ async def _process_entity_extraction_batch(
             article.get("description") or "",
         ]
         combined_text = " ".join(part.strip() for part in body_parts if part).strip()
-        
+
         # Truncate text if too long (keep first 2000 chars)
         if len(combined_text) > 2000:
             combined_text = combined_text[:2000] + "..."
-        
-        batch_input.append({
-            "id": article_id,
-            "title": title,
-            "text": combined_text,
-        })
+
+        batch_input.append(
+            {
+                "id": article_id,
+                "title": title,
+                "text": combined_text,
+            }
+        )
         article_id_map[article_id] = article
-    
+
     # Call batch entity extraction
     try:
         result = llm_client.extract_entities_batch(batch_input)
-        
+
         # Normalize and deduplicate entities in results
         for article_result in result.get("results", []):
             if "entities" in article_result:
-                article_result["entities"] = _deduplicate_entities(article_result["entities"])
-        
+                article_result["entities"] = _deduplicate_entities(
+                    article_result["entities"]
+                )
+
         processing_time = time.time() - start_time
-        
+
         # Calculate metrics
-        total_entities = sum(len(r.get("entities", [])) for r in result.get("results", []))
+        total_entities = sum(
+            len(r.get("entities", [])) for r in result.get("results", [])
+        )
         result["metrics"] = {
             "articles_processed": len(result.get("results", [])),
             "entities_extracted": total_entities,
             "processing_time": processing_time,
         }
-        
+
         return result
-        
+
     except Exception as exc:
         logger.exception("Batch entity extraction failed: %s", exc)
-        
+
         # If retry_individual is enabled, try processing articles one by one
         if retry_individual and len(articles_batch) > 1:
-            logger.info("Retrying %d articles individually after batch failure", len(articles_batch))
-            return await _retry_individual_extractions(articles_batch, llm_client, start_time)
-        
-        return {"results": [], "usage": {}, "metrics": {"articles_processed": 0, "entities_extracted": 0}}
+            logger.info(
+                "Retrying %d articles individually after batch failure",
+                len(articles_batch),
+            )
+            return await _retry_individual_extractions(
+                articles_batch, llm_client, start_time
+            )
+
+        return {
+            "results": [],
+            "usage": {},
+            "metrics": {"articles_processed": 0, "entities_extracted": 0},
+        }
 
 
 async def _retry_individual_extractions(
-    articles_batch: List[Dict[str, Any]], 
-    llm_client,
-    start_time: float
+    articles_batch: List[Dict[str, Any]], llm_client, start_time: float
 ) -> Dict[str, Any]:
     """
     Retry failed articles individually.
-    
+
     Args:
         articles_batch: List of article dicts
         llm_client: LLM provider instance
         start_time: Start time of the original batch
-    
+
     Returns:
         Combined results from individual extractions
     """
@@ -295,35 +314,44 @@ async def _retry_individual_extractions(
         "total_cost": 0.0,
     }
     failed_articles = []
-    
+
     for article in articles_batch:
         article_id = str(article.get("_id"))
         try:
             # Process single article
-            result = await _process_entity_extraction_batch([article], llm_client, retry_individual=False)
-            
+            result = await _process_entity_extraction_batch(
+                [article], llm_client, retry_individual=False
+            )
+
             if result.get("results"):
                 all_results.extend(result["results"])
-                
+
                 # Aggregate usage
                 usage = result.get("usage", {})
                 for key in total_usage:
                     total_usage[key] += usage.get(key, 0)
             else:
                 failed_articles.append(article_id)
-                logger.warning("Individual extraction failed for article %s", article_id)
-                
+                logger.warning(
+                    "Individual extraction failed for article %s", article_id
+                )
+
         except Exception as exc:
             failed_articles.append(article_id)
-            logger.error("Individual extraction failed for article %s: %s", article_id, exc)
-    
+            logger.error(
+                "Individual extraction failed for article %s: %s", article_id, exc
+            )
+
     processing_time = time.time() - start_time
     total_entities = sum(len(r.get("entities", [])) for r in all_results)
-    
+
     if failed_articles:
-        logger.warning("Failed to extract entities from %d articles: %s", 
-                      len(failed_articles), ", ".join(failed_articles[:5]))
-    
+        logger.warning(
+            "Failed to extract entities from %d articles: %s",
+            len(failed_articles),
+            ", ".join(failed_articles[:5]),
+        )
+
     return {
         "results": all_results,
         "usage": total_usage,
@@ -332,7 +360,7 @@ async def _retry_individual_extractions(
             "entities_extracted": total_entities,
             "processing_time": processing_time,
             "failed_articles": failed_articles,
-        }
+        },
     }
 
 
@@ -343,14 +371,14 @@ async def process_new_articles_from_mongodb():
     llm_client = get_llm_provider()
 
     enrichment_query = {
-        '$or': [
-            {'relevance_score': {'$exists': False}},
-            {'relevance_score': None},
-            {'relevance_score': 0.0},
-            {'sentiment_score': {'$exists': False}},
-            {'sentiment_score': None},
-            {'sentiment_score': 0.0},
-            {'sentiment': {'$exists': False}},
+        "$or": [
+            {"relevance_score": {"$exists": False}},
+            {"relevance_score": None},
+            {"relevance_score": 0.0},
+            {"sentiment_score": {"$exists": False}},
+            {"sentiment_score": None},
+            {"sentiment_score": 0.0},
+            {"sentiment": {"$exists": False}},
         ]
     }
 
@@ -358,31 +386,35 @@ async def process_new_articles_from_mongodb():
     articles_list = []
     async for article in collection.find(enrichment_query):
         articles_list.append(article)
-    
+
     if not articles_list:
         logger.debug("No articles to enrich")
         return 0
-    
+
     # Process entity extraction in batches
     batch_size = settings.ENTITY_EXTRACTION_BATCH_SIZE
     total_entity_cost = 0.0
     entity_extraction_results = {}
-    
+
     for i in range(0, len(articles_list), batch_size):
-        batch = articles_list[i:i + batch_size]
-        logger.info("Processing entity extraction batch %d-%d of %d articles", 
-                   i, min(i + batch_size, len(articles_list)), len(articles_list))
-        
+        batch = articles_list[i : i + batch_size]
+        logger.info(
+            "Processing entity extraction batch %d-%d of %d articles",
+            i,
+            min(i + batch_size, len(articles_list)),
+            len(articles_list),
+        )
+
         extraction_result = await _process_entity_extraction_batch(batch, llm_client)
-        
+
         # Log usage stats and metrics
         usage = extraction_result.get("usage", {})
         metrics = extraction_result.get("metrics", {})
-        
+
         if usage:
             batch_cost = usage.get("total_cost", 0.0)
             total_entity_cost += batch_cost
-            
+
             # Log comprehensive batch metrics
             logger.info(
                 "Batch metrics: articles_processed=%d, entities_extracted=%d, "
@@ -390,28 +422,28 @@ async def process_new_articles_from_mongodb():
                 metrics.get("articles_processed", 0),
                 metrics.get("entities_extracted", 0),
                 batch_cost,
-                metrics.get("processing_time", 0.0)
+                metrics.get("processing_time", 0.0),
             )
-            
+
             logger.info(
                 "Token usage: model=%s, input=%d, output=%d, total=%d",
                 usage.get("model", "unknown"),
                 usage.get("input_tokens", 0),
                 usage.get("output_tokens", 0),
-                usage.get("total_tokens", 0)
+                usage.get("total_tokens", 0),
             )
-            
+
             # Log any failed articles
             failed = metrics.get("failed_articles", [])
             if failed:
                 logger.warning("Failed articles in batch: %s", ", ".join(failed[:10]))
-        
+
         # Map results by article_id
         for result in extraction_result.get("results", []):
             article_id = result.get("article_id")
             if article_id:
                 entity_extraction_results[article_id] = result
-    
+
     # Now process articles individually for other enrichments
     processed = 0
     async for article in collection.find(enrichment_query):
@@ -423,7 +455,9 @@ async def process_new_articles_from_mongodb():
                 article.get("content") or "",
                 article.get("description") or "",
             ]
-            combined_text = " ".join(part.strip() for part in [title, *body_parts] if part).strip()
+            combined_text = " ".join(
+                part.strip() for part in [title, *body_parts] if part
+            ).strip()
 
             if not combined_text:
                 logger.debug("Skipping article %s due to missing text", article_id)
@@ -443,13 +477,16 @@ async def process_new_articles_from_mongodb():
 
             try:
                 extracted_themes = llm_client.extract_themes([combined_text])
-                themes: List[str] = [str(theme) for theme in extracted_themes] if isinstance(extracted_themes, list) else []
+                themes: List[str] = (
+                    [str(theme) for theme in extracted_themes]
+                    if isinstance(extracted_themes, list)
+                    else []
+                )
             except Exception as exc:
                 logger.warning("Theme extraction failed for %s: %s", article_id, exc)
                 themes = []
 
             sentiment_label = _derive_sentiment_label(sentiment_score)
-
 
             keyword_tokens = list(_tokenize_for_keywords(combined_text))
             keywords = _select_keywords(keyword_tokens)
@@ -466,7 +503,9 @@ async def process_new_articles_from_mongodb():
                 "score": sentiment_score,
                 "magnitude": abs(sentiment_score),
                 "label": sentiment_label,
-                "provider": str(getattr(llm_client, "model_name", llm_client.__class__.__name__)),
+                "provider": str(
+                    getattr(llm_client, "model_name", llm_client.__class__.__name__)
+                ),
                 "updated_at": datetime.now(timezone.utc),
             }
 
@@ -490,35 +529,44 @@ async def process_new_articles_from_mongodb():
             }
 
             await collection.update_one({"_id": article_id}, update_operations)
-            
+
             # Create entity mentions for tracking
             if entities:
                 mentions_to_create = []
                 for entity in entities:
-                    mentions_to_create.append({
-                        "entity": entity.get("value"),
-                        "entity_type": entity.get("type"),
-                        "article_id": article_id_str,
-                        "sentiment": entity_sentiment,
-                        "confidence": entity.get("confidence", 1.0),
-                        "metadata": {
-                            "article_title": title,
-                            "extraction_batch": True,
+                    mentions_to_create.append(
+                        {
+                            "entity": entity.get("value"),
+                            "entity_type": entity.get("type"),
+                            "article_id": article_id_str,
+                            "sentiment": entity_sentiment,
+                            "confidence": entity.get("confidence", 1.0),
+                            "metadata": {
+                                "article_title": title,
+                                "extraction_batch": True,
+                            },
                         }
-                    })
-                
+                    )
+
                 try:
                     await create_entity_mentions_batch(mentions_to_create)
                 except Exception as exc:
-                    logger.warning("Failed to create entity mentions for article %s: %s", article_id, exc)
-            
+                    logger.warning(
+                        "Failed to create entity mentions for article %s: %s",
+                        article_id,
+                        exc,
+                    )
+
             processed += 1
         except Exception as exc:
             logger.exception("Failed to enrich article %s: %s", article_id, exc)
 
     if processed:
-        logger.info("Enriched %s article(s) with sentiment, themes, keywords, and entities", processed)
-    
+        logger.info(
+            "Enriched %s article(s) with sentiment, themes, keywords, and entities",
+            processed,
+        )
+
     if total_entity_cost > 0:
         logger.info("Total entity extraction cost: $%.6f", total_entity_cost)
 
@@ -527,7 +575,9 @@ async def process_new_articles_from_mongodb():
 
 async def schedule_rss_fetch(interval_seconds: int) -> None:
     """Continuously run the RSS fetcher on a fixed interval."""
-    logger.info("Starting RSS fetcher schedule with interval %s seconds", interval_seconds)
+    logger.info(
+        "Starting RSS fetcher schedule with interval %s seconds", interval_seconds
+    )
     while True:
         try:
             await fetch_and_process_rss_feeds()
