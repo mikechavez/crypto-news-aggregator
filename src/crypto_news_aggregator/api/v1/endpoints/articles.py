@@ -9,8 +9,7 @@ from bson import ObjectId
 
 from ....db.mongodb_models import ArticleInDB, ArticleResponse, SentimentAnalysis, SentimentLabel
 from ....services.article_service import article_service
-from ....core.security import get_current_user
-from ....models.user import UserInDB
+from ....core.auth import get_api_key
 
 router = APIRouter()
 
@@ -24,7 +23,7 @@ async def list_articles(
     keywords: Optional[str] = Query(None, description="Comma-separated list of keywords"),
     min_sentiment: Optional[float] = Query(None, ge=-1.0, le=1.0, description="Minimum sentiment score (-1 to 1)"),
     max_sentiment: Optional[float] = Query(None, ge=-1.0, le=1.0, description="Maximum sentiment score (-1 to 1)"),
-    current_user: UserInDB = Depends(get_current_user)
+    api_key: str = Depends(get_api_key)
 ):
     """
     List articles with filtering and pagination.
@@ -50,19 +49,15 @@ async def list_articles(
     # Add X-Total-Count header for pagination
     response = JSONResponse(
         content=[article.model_dump(by_alias=True) for article in articles]
-    )
-    response.headers["X-Total-Count"] = str(total)
-    return response
-
 @router.get("/search", response_model=List[ArticleResponse])
 async def search_articles(
-    q: str = Query(..., min_length=2, description="Search query"),
+    q: str = Query(..., description="Search query"),
     skip: int = Query(0, ge=0, description="Number of items to skip"),
     limit: int = Query(10, ge=1, le=100, description="Number of items per page"),
     source_id: Optional[str] = Query(None, description="Filter by source ID"),
     start_date: Optional[datetime] = Query(None, description="Filter by start date"),
     end_date: Optional[datetime] = Query(None, description="Filter by end date"),
-    current_user: UserInDB = Depends(get_current_user)
+    api_key: str = Depends(get_api_key)
 ):
     """
     Search articles by text query.
@@ -90,7 +85,7 @@ async def search_articles(
 @router.get("/{article_id}", response_model=ArticleResponse)
 async def get_article(
     article_id: str,
-    current_user: UserInDB = Depends(get_current_user)
+    api_key: str = Depends(get_api_key)
 ):
     """
     Get a single article by ID.
@@ -115,7 +110,7 @@ async def get_trending_keywords(
     hours: int = Query(24, ge=1, le=168, description="Time window in hours (1-168)"),
     limit: int = Query(10, ge=1, le=50, description="Number of keywords to return"),
     min_mentions: int = Query(2, ge=1, description="Minimum number of mentions"),
-    current_user: UserInDB = Depends(get_current_user)
+    api_key: str = Depends(get_api_key)
 ):
     """
     Get trending keywords from recent articles.
@@ -145,7 +140,7 @@ async def get_trending_keywords(
 async def get_sentiment_trends(
     hours: int = Query(24, ge=1, le=168, description="Time window in hours (1-168)"),
     interval: int = Query(1, ge=1, le=24, description="Time interval in hours"),
-    current_user: UserInDB = Depends(get_current_user)
+    api_key: str = Depends(get_api_key)
 ):
     """
     Get sentiment trends over time.
@@ -248,7 +243,7 @@ async def get_sentiment_trends(
 async def get_source_stats(
     hours: int = Query(24, ge=1, le=168, description="Time window in hours (1-168)"),
     limit: int = Query(10, ge=1, le=50, description="Number of sources to return"),
-    current_user: UserInDB = Depends(get_current_user)
+    api_key: str = Depends(get_api_key)
 ):
     """
     Get statistics by source.
