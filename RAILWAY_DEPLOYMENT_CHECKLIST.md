@@ -23,12 +23,55 @@
 - **Resolution**: Removed the deploy job from `.github/workflows/ci.yml`
 - **Result**: Cleaner CI pipeline that focuses only on testing and code quality
 
-### Updated CI/CD Pipeline
-The GitHub Actions workflow now:
-- ✅ Runs comprehensive test suites on all PRs and pushes
-- ✅ Performs code quality checks and linting
-- ✅ **No longer attempts Railway deployment** (handled by Railway's Git integration)
-- ✅ Eliminates authentication issues with redundant deployment steps
+### Optimized CI/CD Pipeline
+
+The GitHub Actions workflow is now optimized for faster runs while maintaining quality:
+
+#### **Performance Optimizations**
+1. **Parallel Job Execution**: Tests run in parallel across multiple jobs
+2. **Smart Caching**: Poetry dependencies cached based on lock file hash
+3. **Conditional Execution**: Skip tests if only documentation changes
+4. **Parallel Test Execution**: Uses `pytest-xdist` for parallel test execution within jobs
+5. **Optimized Database Setup**: Faster MongoDB health checks and startup
+
+#### **CI Pipeline Structure**
+```mermaid
+graph TD
+    A[Pull Request] --> B{File Changes?}
+    B -->|Only Docs| C[Skip Tests]
+    B -->|Code Changes| D[Run Tests]
+    D --> E[Check Changes]
+    E --> F[Linting]
+    F --> G[Unit Tests]
+    G --> H[Integration Tests]
+    H --> I[Flaky Tests]
+```
+
+#### **Job Breakdown**
+- **check-changes**: Early exit if only docs changed (paths-ignore filter)
+- **lint**: Pre-commit hooks for code quality (black, isort, flake8)
+- **unit-tests**: Fast unit tests with parallel execution (`-n auto`)
+- **integration-tests**: Integration tests requiring external services
+- **flaky-tests**: Non-blocking flaky/broken tests (continue-on-error)
+
+#### **Test Strategy**
+- **Stable Tests Only**: Only run tests marked as `stable` in CI
+- **Parallel Execution**: `-n auto` uses all available CPU cores
+- **Fail Fast**: `-x` stops on first failure in each job
+- **Matrix Strategy**: Test across Python versions (currently 3.13)
+
+#### **Expected Performance**
+- **Target**: <3-5 minutes total CI runtime
+- **Previous**: Sequential execution across 2 jobs
+- **Current**: Parallel execution across 4+ jobs with smart caching
+
+#### **Caching Strategy**
+```yaml
+key: ${{ runner.os }}-poetry-${{ matrix.job-type }}-${{ hashFiles('poetry.lock') }}
+```
+- Separate cache keys for different job types
+- Includes pre-commit cache for linting
+- Automatic cache invalidation when dependencies change
 
 ### Deployment Verification
 Railway deployments are verified through:
