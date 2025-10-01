@@ -49,6 +49,10 @@ async def list_articles(
     # Add X-Total-Count header for pagination
     response = JSONResponse(
         content=[article.model_dump(by_alias=True) for article in articles]
+    )
+    response.headers["X-Total-Count"] = str(total)
+    return response
+
 @router.get("/search", response_model=List[ArticleResponse])
 async def search_articles(
     q: str = Query(..., description="Search query"),
