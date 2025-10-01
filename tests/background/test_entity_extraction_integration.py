@@ -50,7 +50,7 @@ def mock_llm_client_success():
         return {
             "results": results,
             "usage": {
-                "model": "claude-haiku-3-5-20241022",
+                "model": "claude-3-5-haiku-20241022",
                 "input_tokens": len(articles) * 150,
                 "output_tokens": len(articles) * 30,
                 "total_tokens": len(articles) * 180,
@@ -95,7 +95,7 @@ def mock_llm_client_partial_failure():
         return {
             "results": results,
             "usage": {
-                "model": "claude-haiku-3-5-20241022",
+                "model": "claude-3-5-haiku-20241022",
                 "input_tokens": 150,
                 "output_tokens": 30,
                 "total_tokens": 180,
@@ -124,7 +124,7 @@ async def test_batch_processing_10_articles_success(mock_llm_client_success, sam
     
     # Verify cost calculation
     usage = result["usage"]
-    assert usage["model"] == "claude-haiku-3-5-20241022"
+    assert usage["model"] == "claude-3-5-haiku-20241022"
     assert usage["input_tokens"] == 1500  # 10 articles * 150 tokens
     assert usage["output_tokens"] == 300  # 10 articles * 30 tokens
     assert usage["total_tokens"] == 1800
@@ -305,7 +305,7 @@ async def test_cost_tracking_from_api_response(mock_llm_client_success, sample_1
     assert usage["total_cost"] == usage["input_cost"] + usage["output_cost"]
     
     # Verify model is tracked
-    assert usage["model"] == "claude-haiku-3-5-20241022"
+    assert usage["model"] == "claude-3-5-haiku-20241022"
 
 
 @pytest.mark.asyncio
@@ -325,4 +325,4 @@ async def test_exact_haiku_model_string():
     from crypto_news_aggregator.core.config import settings
     
     # Verify exact model string
-    assert settings.ANTHROPIC_ENTITY_MODEL == "claude-haiku-3-5-20241022"
+    assert settings.ANTHROPIC_ENTITY_MODEL == "claude-3-5-haiku-20241022"
