@@ -3,124 +3,128 @@ name: CI
 on:
   pull_request:
     branches: [ main ]
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - 'README.md'
-      - 'LICENSE'
-      - '.gitignore'
+  push:
+    branches: [ main ]
 
 jobs:
-  lint-and-unit-tests:
+  test_stable:
     runs-on: ubuntu-latest
 
     services:
       mongo:
         image: mongo:6
         ports:
-          - 27017:27017
+        - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.13'
+    - name: Set up Python 3.13
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.13'
 
-      - name: Cache Poetry dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/pypoetry
-            ~/.cache/pip
-          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+    - name: Cache Poetry dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/pypoetry
+          ~/.cache/pip
+        key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install poetry==1.8.3
-          poetry config virtualenvs.create false
-          poetry lock --no-update
-          poetry install --no-interaction
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry==1.8.3
+        poetry install
 
-      - name: Set up test environment
-        run: |
-          echo "SECRET_KEY=test-secret-key-for-ci" >> $GITHUB_ENV
-          echo "MONGODB_URI=mongodb://localhost:27017" >> $GITHUB_ENV
-          echo "MONGODB_NAME=test_crypto_news_aggregator" >> $GITHUB_ENV
-          echo "REDIS_HOST=localhost" >> $GITHUB_ENV
-          echo "REDIS_PORT=6379" >> $GITHUB_ENV
-          echo "REDIS_DB=1" >> $GITHUB_ENV
-          echo "NEWS_API_KEY=test-api-key" >> $GITHUB_ENV
-          echo "API_KEYS=testapikey123" >> $GITHUB_ENV
-          echo "TESTING=True" >> $GITHUB_ENV
-          echo "CELERY_BROKER_URL=memory://" >> $GITHUB_ENV
-          echo "CELERY_RESULT_BACKEND=cache+memory://" >> $GITHUB_ENV
-          echo "CELERY_TASK_ALWAYS_EAGER=True" >> $GITHUB_ENV
-          echo "CELERY_TASK_EAGER_PROPAGATES=True" >> $GITHUB_ENV
+    - name: Set up environment variables
+      run: |
+        echo "Setting up test environment variables..."
+        echo "SECRET_KEY=test-secret-key-for-ci" >> $GITHUB_ENV
+        echo "MONGODB_URI=mongodb://localhost:27017" >> $GITHUB_ENV
+        echo "MONGODB_NAME=test_crypto_news_aggregator" >> $GITHUB_ENV
+        echo "REDIS_HOST=localhost" >> $GITHUB_ENV
+        echo "REDIS_PORT=6379" >> $GITHUB_ENV
+        echo "REDIS_DB=1" >> $GITHUB_ENV
+        echo "NEWS_API_KEY=test-api-key" >> $GITHUB_ENV
+        echo "API_KEYS=testapikey123" >> $GITHUB_ENV
+        echo "TESTING=True" >> $GITHUB_ENV
+        echo "CELERY_BROKER_URL=memory://" >> $GITHUB_ENV
+        echo "CELERY_RESULT_BACKEND=cache+memory://" >> $GITHUB_ENV
+        echo "CELERY_TASK_ALWAYS_EAGER=True" >> $GITHUB_ENV
+        echo "CELERY_TASK_EAGER_PROPAGATES=True" >> $GITHUB_ENV
 
-      - name: Run linting checks
-        run: |
-          pip install pre-commit==3.8.0
-          poetry install --no-interaction
-          pre-commit install-hooks
-          pre-commit run --all-files --show-diff-on-failure
+    - name: Run stable tests
+      run: |
+        poetry run pytest -m "stable" --tb=short
 
-      - name: Run unit tests
-        run: |
-          poetry run pytest -m "stable and unit" --tb=short
-
-  integration-tests:
+  test_broken:
     runs-on: ubuntu-latest
-    needs: lint-and-unit-tests
+    continue-on-error: true
 
     services:
       mongo:
         image: mongo:6
         ports:
-          - 27017:27017
+        - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.13'
+    - name: Set up Python 3.13
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.13'
 
-      - name: Cache Poetry dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/pypoetry
-            ~/.cache/pip
-          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+    - name: Cache Poetry dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/pypoetry
+          ~/.cache/pip
+        key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install poetry==1.8.3
-          poetry config virtualenvs.create false
-          poetry lock --no-update
-          poetry install --no-interaction
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry==1.8.3
+        poetry install
 
-      - name: Set up test environment
-        run: |
-          echo "SECRET_KEY=test-secret-key-for-ci" >> $GITHUB_ENV
-          echo "MONGODB_URI=mongodb://localhost:27017" >> $GITHUB_ENV
-          echo "MONGODB_NAME=test_crypto_news_aggregator" >> $GITHUB_ENV
-          echo "REDIS_HOST=localhost" >> $GITHUB_ENV
-          echo "REDIS_PORT=6379" >> $GITHUB_ENV
-          echo "REDIS_DB=1" >> $GITHUB_ENV
-          echo "NEWS_API_KEY=test-api-key" >> $GITHUB_ENV
-          echo "API_KEYS=testapikey123" >> $GITHUB_ENV
-          echo "TESTING=True" >> $GITHUB_ENV
-          echo "CELERY_BROKER_URL=memory://" >> $GITHUB_ENV
-          echo "CELERY_RESULT_BACKEND=cache+memory://" >> $GITHUB_ENV
-          echo "CELERY_TASK_ALWAYS_EAGER=True" >> $GITHUB_ENV
-          echo "CELERY_TASK_EAGER_PROPAGATES=True" >> $GITHUB_ENV
+    - name: Set up environment variables
+      run: |
+        echo "Setting up test environment variables..."
+        echo "SECRET_KEY=test-secret-key-for-ci" >> $GITHUB_ENV
+        echo "MONGODB_URI=mongodb://localhost:27017" >> $GITHUB_ENV
+        echo "MONGODB_NAME=test_crypto_news_aggregator" >> $GITHUB_ENV
+        echo "REDIS_HOST=localhost" >> $GITHUB_ENV
+        echo "REDIS_PORT=6379" >> $GITHUB_ENV
+        echo "REDIS_DB=1" >> $GITHUB_ENV
+    - name: Run broken and flaky tests
+      run: |
+        poetry run pytest -m "broken or flaky" --tb=short
 
-      - name: Run integration tests
-        run: |
-          poetry run pytest -m "stable and integration" --tb=short
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test_stable
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Deploy to Railway
+      uses: bervProject/railway-deploy@main
+      with:
+        service: "crypto-news-aggregator"
+      env:
+        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

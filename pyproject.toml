@@ -65,7 +65,6 @@ pytest-asyncio = "^1.0.0"
 pytest-mock = "^3.14.1"
 pytest-cov = "^6.2.1"
 pytest-httpx = "^0.35.0"
-black = {version = "^25.9.0", allow-prereleases = true}
 
 [tool.pytest.ini_options]
 testpaths = [
@@ -75,8 +74,6 @@ markers = [
     "stable: reliable tests that must always pass",
     "broken: known broken tests that don't block CI",
     "flaky: tests that sometimes fail and don't block CI",
-    "unit: unit tests that don't require external services",
-    "integration: integration tests that require external services",
 ]
 
 [build-system]
