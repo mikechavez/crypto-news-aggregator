@@ -23,55 +23,45 @@
 - **Resolution**: Removed the deploy job from `.github/workflows/ci.yml`
 - **Result**: Cleaner CI pipeline that focuses only on testing and code quality
 
-### Optimized CI/CD Pipeline
+### Simplified CI/CD Pipeline
 
-The GitHub Actions workflow is now optimized for faster runs while maintaining quality:
+The GitHub Actions workflow is optimized for **speed and simplicity** while maintaining quality:
 
-#### **Performance Optimizations**
-1. **Parallel Job Execution**: Tests run in parallel across multiple jobs
-2. **Smart Caching**: Poetry dependencies cached based on lock file hash
-3. **Conditional Execution**: Skip tests if only documentation changes
-4. **Parallel Test Execution**: Uses `pytest-xdist` for parallel test execution within jobs
-5. **Optimized Database Setup**: Faster MongoDB health checks and startup
+#### **What We Kept (The Good Stuff)**
+1. **Poetry dependency caching** - Massive time saver on repeated runs
+2. **Skip tests on doc-only changes** - No unnecessary CI runs
+3. **Run stable tests only** - Focus on reliable tests that matter
+4. **Linting integration** - Code quality checks before testing
 
-#### **CI Pipeline Structure**
+#### **What We Removed (The Overhead)**
+1. **Complex parallel jobs** - Too much coordination overhead
+2. **pytest-xdist** - Parallel test overhead > benefit for small suite
+3. **Matrix strategies** - Single Python version is sufficient
+4. **Multiple MongoDB configurations** - Simple is faster
+
+#### **Current Pipeline Structure**
 ```mermaid
 graph TD
-    A[Pull Request] --> B{File Changes?}
-    B -->|Only Docs| C[Skip Tests]
-    B -->|Code Changes| D[Run Tests]
-    D --> E[Check Changes]
-    E --> F[Linting]
-    F --> G[Unit Tests]
-    G --> H[Integration Tests]
-    H --> I[Flaky Tests]
+    A[Pull Request] --> B{Src/Tests Changed?}
+    B -->|No| C[Skip CI]
+    B -->|Yes| D[Lint + Unit Tests]
+    D --> E[Integration Tests]
 ```
 
 #### **Job Breakdown**
-- **check-changes**: Early exit if only docs changed (paths-ignore filter)
-- **lint**: Pre-commit hooks for code quality (black, isort, flake8)
-- **unit-tests**: Fast unit tests with parallel execution (`-n auto`)
-- **integration-tests**: Integration tests requiring external services
-- **flaky-tests**: Non-blocking flaky/broken tests (continue-on-error)
+- **lint-and-unit-tests**: Pre-commit hooks + unit tests (fast, sequential)
+- **integration-tests**: Integration tests only if lint+unit pass
 
-#### **Test Strategy**
-- **Stable Tests Only**: Only run tests marked as `stable` in CI
-- **Parallel Execution**: `-n auto` uses all available CPU cores
-- **Fail Fast**: `-x` stops on first failure in each job
-- **Matrix Strategy**: Test across Python versions (currently 3.13)
+#### **Performance Focus**
+- **Single Python version** (3.13) - No matrix overhead
+- **Sequential execution** - Simple dependency chain
+- **Smart caching** - Poetry dependencies cached by lock file hash
+- **Early exit** - Paths-ignore prevents unnecessary runs
 
 #### **Expected Performance**
-- **Target**: <3-5 minutes total CI runtime
-- **Previous**: Sequential execution across 2 jobs
-- **Current**: Parallel execution across 4+ jobs with smart caching
-
-#### **Caching Strategy**
-```yaml
-key: ${{ runner.os }}-poetry-${{ matrix.job-type }}-${{ hashFiles('poetry.lock') }}
-```
-- Separate cache keys for different job types
-- Includes pre-commit cache for linting
-- Automatic cache invalidation when dependencies change
+- **Target**: 2-3 minutes total CI runtime
+- **Key wins**: Caching + early exits + simple structure
+- **Quality**: Same linting and test coverage, much faster
 
 ### Deployment Verification
 Railway deployments are verified through:
