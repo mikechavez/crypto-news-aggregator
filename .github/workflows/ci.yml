@@ -42,6 +42,14 @@ jobs:
           pip install poetry==1.8.3
           poetry install
 
+      - name: Regenerate lock file if needed
+        run: |
+          # Check if lock file needs updating due to pyproject.toml changes
+          if ! poetry check; then
+            echo "Regenerating poetry.lock due to compatibility issues..."
+            poetry lock --no-update
+          fi
+
       - name: Set up test environment
         run: |
           echo "SECRET_KEY=test-secret-key-for-ci" >> $GITHUB_ENV
