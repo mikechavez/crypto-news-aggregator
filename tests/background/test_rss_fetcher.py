@@ -4,7 +4,11 @@ from datetime import datetime, timezone
 import pytest
 
 from src.crypto_news_aggregator.background import rss_fetcher
-from src.crypto_news_aggregator.models.article import ArticleCreate, ArticleMetrics, ArticleAuthor
+from src.crypto_news_aggregator.models.article import (
+    ArticleCreate,
+    ArticleMetrics,
+    ArticleAuthor,
+)
 
 
 class FakeLLMProvider:
@@ -36,9 +40,15 @@ class FakeRSSService:
 
 
 @pytest.mark.asyncio
-async def test_process_new_articles_from_mongodb_enriches_articles(mongo_db, monkeypatch):
-    monkeypatch.setattr(rss_fetcher, "get_llm_provider", lambda: FakeLLMProvider(themes=["ETFs", "Institutional"]))
-    
+async def test_process_new_articles_from_mongodb_enriches_articles(
+    mongo_db, monkeypatch
+):
+    monkeypatch.setattr(
+        rss_fetcher,
+        "get_llm_provider",
+        lambda: FakeLLMProvider(themes=["ETFs", "Institutional"]),
+    )
+
     await mongo_db.articles.delete_many({})
     article_doc = {
         "title": "BTC surges as ETFs see inflows",
@@ -75,7 +85,11 @@ async def test_process_new_articles_from_mongodb_enriches_articles(mongo_db, mon
 
 @pytest.mark.asyncio
 async def test_fetch_and_process_rss_feeds_persists_and_enriches(mongo_db, monkeypatch):
-    monkeypatch.setattr(rss_fetcher, "get_llm_provider", lambda: FakeLLMProvider(themes=["ETFs", "Institutional"]))
+    monkeypatch.setattr(
+        rss_fetcher,
+        "get_llm_provider",
+        lambda: FakeLLMProvider(themes=["ETFs", "Institutional"]),
+    )
     await mongo_db.articles.delete_many({})
 
     article = ArticleCreate(
@@ -96,6 +110,7 @@ async def test_fetch_and_process_rss_feeds_persists_and_enriches(mongo_db, monke
     )
 
     from src.crypto_news_aggregator.services import rss_service
+
     monkeypatch.setattr(rss_service, "RSSService", lambda: FakeRSSService([article]))
 
     await rss_fetcher.fetch_and_process_rss_feeds()

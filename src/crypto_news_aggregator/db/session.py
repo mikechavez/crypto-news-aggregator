@@ -5,6 +5,7 @@ from functools import lru_cache
 
 from ..core.config import get_settings
 
+
 @lru_cache()
 def get_engine():
     settings = get_settings()
@@ -14,6 +15,7 @@ def get_engine():
         echo=settings.DEBUG,
     )
 
+
 @lru_cache()
 def get_sessionmaker():
     return sessionmaker(
@@ -21,6 +23,7 @@ def get_sessionmaker():
         class_=AsyncSession,
         expire_on_commit=False,
     )
+
 
 async def get_session():
     SessionLocal = get_sessionmaker()

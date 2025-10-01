@@ -45,7 +45,7 @@ def demonstrate_context_owl_crash_analysis():
         "🏦 Fed Policy: Federal Reserve signals continued hawkish stance",
         "💹 Market Mechanics: $1.7B total liquidations across crypto exchanges",
         "📰 Narrative Analysis: Strong bearish sentiment with regulatory concerns",
-        "📊 Correlation: High correlation between BTC/ETH during crash events"
+        "📊 Correlation: High correlation between BTC/ETH during crash events",
     ]
 
     for driver in key_drivers:
@@ -69,20 +69,20 @@ def generate_comprehensive_crash_analysis() -> str:
             "title": "Bitcoin ETF Outflows Reach $1.2B as Investors Flee Risk Assets",
             "source": "CoinDesk",
             "sentiment_score": -0.4,
-            "keywords": ["ETF", "outflows", "bitcoin", "investors", "risk"]
+            "keywords": ["ETF", "outflows", "bitcoin", "investors", "risk"],
         },
         {
             "title": "Whale Liquidations Trigger Cascade Selling in Crypto Markets",
             "source": "The Block",
             "sentiment_score": -0.6,
-            "keywords": ["whale", "liquidations", "cascade", "selling"]
+            "keywords": ["whale", "liquidations", "cascade", "selling"],
         },
         {
             "title": "Federal Reserve Signals Continued Hawkish Policy Stance",
             "source": "Reuters",
             "sentiment_score": -0.3,
-            "keywords": ["federal reserve", "policy", "hawkish"]
-        }
+            "keywords": ["federal reserve", "policy", "hawkish"],
+        },
     ]
 
     # Analyze themes and narratives
@@ -95,7 +95,7 @@ def generate_comprehensive_crash_analysis() -> str:
         "Timeframe performance — 1h -1.20%, 24h -2.70%, 7d -8.50%.",
         "Key peer check: Ethereum 24h move -6.50%.",
         generate_narrative_description(themes, sentiment_trend),
-        "Bitcoin's market dominance stands at 52.30%."
+        "Bitcoin's market dominance stands at 52.30%.",
     ]
 
     return " ".join(analysis_parts)
@@ -112,11 +112,11 @@ def extract_themes_from_articles(articles: List[Dict[str, Any]]) -> Dict[str, An
         keywords = article.get("keywords", [])
 
         # Extract themes
-        if any(word in title for word in ['etf', 'outflows', 'institutional']):
+        if any(word in title for word in ["etf", "outflows", "institutional"]):
             themes.append("institutional_investment")
-        if any(word in title for word in ['whale', 'liquidations', 'cascade']):
+        if any(word in title for word in ["whale", "liquidations", "cascade"]):
             themes.append("liquidation_events")
-        if any(word in title for word in ['federal', 'policy', 'hawkish']):
+        if any(word in title for word in ["federal", "policy", "hawkish"]):
             themes.append("regulatory_development")
 
         # Extract sentiment
@@ -134,14 +134,18 @@ def extract_themes_from_articles(articles: List[Dict[str, Any]]) -> Dict[str, An
         "themes": sorted_themes,
         "sentiment_scores": sentiment_scores,
         "narrative_elements": list(set(narrative_elements)),
-        "avg_sentiment": sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0.0
+        "avg_sentiment": (
+            sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0.0
+        ),
     }
 
 
 def analyze_sentiment_trend(articles: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Analyze sentiment trends in crash articles."""
     sentiment_scores = [article.get("sentiment_score", 0.0) for article in articles]
-    avg_sentiment = sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0.0
+    avg_sentiment = (
+        sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0.0
+    )
 
     if avg_sentiment <= -0.15:
         trend = "bearish"
@@ -175,7 +179,9 @@ def generate_narrative_description(themes: Dict, sentiment_trend: Dict) -> str:
     narrative_parts.append(f"Key themes: {', '.join(theme_descriptions)}")
 
     # Add crash-specific context
-    narrative_parts.append("Strong bearish sentiment with institutional selling pressure")
+    narrative_parts.append(
+        "Strong bearish sentiment with institutional selling pressure"
+    )
     narrative_parts.append("Market experiencing coordinated liquidation events")
     narrative_parts.append("Regulatory uncertainty contributing to downward momentum")
 

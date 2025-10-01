@@ -23,12 +23,45 @@
 - **Resolution**: Removed the deploy job from `.github/workflows/ci.yml`
 - **Result**: Cleaner CI pipeline that focuses only on testing and code quality
 
-### Updated CI/CD Pipeline
-The GitHub Actions workflow now:
-- ✅ Runs comprehensive test suites on all PRs and pushes
-- ✅ Performs code quality checks and linting
-- ✅ **No longer attempts Railway deployment** (handled by Railway's Git integration)
-- ✅ Eliminates authentication issues with redundant deployment steps
+### Simplified CI/CD Pipeline
+
+The GitHub Actions workflow is optimized for **speed and simplicity** while maintaining quality:
+
+#### **What We Kept (The Good Stuff)**
+1. **Poetry dependency caching** - Massive time saver on repeated runs
+2. **Skip tests on doc-only changes** - No unnecessary CI runs
+3. **Run stable tests only** - Focus on reliable tests that matter
+4. **Linting integration** - Code quality checks before testing
+
+#### **What We Removed (The Overhead)**
+1. **Complex parallel jobs** - Too much coordination overhead
+2. **pytest-xdist** - Parallel test overhead > benefit for small suite
+3. **Matrix strategies** - Single Python version is sufficient
+4. **Multiple MongoDB configurations** - Simple is faster
+
+#### **Current Pipeline Structure**
+```mermaid
+graph TD
+    A[Pull Request] --> B{Src/Tests Changed?}
+    B -->|No| C[Skip CI]
+    B -->|Yes| D[Lint + Unit Tests]
+    D --> E[Integration Tests]
+```
+
+#### **Job Breakdown**
+- **lint-and-unit-tests**: Pre-commit hooks + unit tests (fast, sequential)
+- **integration-tests**: Integration tests only if lint+unit pass
+
+#### **Performance Focus**
+- **Single Python version** (3.13) - No matrix overhead
+- **Sequential execution** - Simple dependency chain
+- **Smart caching** - Poetry dependencies cached by lock file hash
+- **Early exit** - Paths-ignore prevents unnecessary runs
+
+#### **Expected Performance**
+- **Target**: 2-3 minutes total CI runtime
+- **Key wins**: Caching + early exits + simple structure
+- **Quality**: Same linting and test coverage, much faster
 
 ### Deployment Verification
 Railway deployments are verified through:

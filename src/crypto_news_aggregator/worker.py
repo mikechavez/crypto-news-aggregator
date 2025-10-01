@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from crypto_news_aggregator.tasks.price_monitor import get_price_monitor
 from crypto_news_aggregator.background.rss_fetcher import schedule_rss_fetch
@@ -12,7 +12,10 @@ from crypto_news_aggregator.core.config import get_settings
 from crypto_news_aggregator.db.mongodb import initialize_mongodb, mongo_manager
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+
 
 async def main():
     """Initializes and runs all background tasks."""
@@ -38,7 +41,7 @@ async def main():
         return
 
     logger.info(f"{len(tasks)} background task(s) are running.")
-    
+
     try:
         await asyncio.gather(*tasks)
     except asyncio.CancelledError:
@@ -50,6 +53,7 @@ async def main():
         await asyncio.gather(*tasks, return_exceptions=True)
         await mongo_manager.aclose()
         logger.info("Worker process shut down gracefully.")
+
 
 if __name__ == "__main__":
     try:

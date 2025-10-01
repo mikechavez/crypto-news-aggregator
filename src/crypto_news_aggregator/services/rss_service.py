@@ -4,8 +4,13 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from time import mktime
 
-from crypto_news_aggregator.models.article import ArticleCreate, ArticleMetrics, ArticleAuthor
+from crypto_news_aggregator.models.article import (
+    ArticleCreate,
+    ArticleMetrics,
+    ArticleAuthor,
+)
 from crypto_news_aggregator.core.config import get_settings
+
 
 class RSSService:
     def __init__(self):
@@ -36,7 +41,7 @@ class RSSService:
         """Fetches and processes all configured RSS feeds."""
         tasks = [self.fetch_feed(url) for url in self.feed_urls.values()]
         feeds = await asyncio.gather(*tasks)
-        
+
         all_articles = []
         source_names = list(self.feed_urls.keys())
 
@@ -45,38 +50,51 @@ class RSSService:
                 source = source_names[i]
                 articles = self.parse_feed(feed, source)
                 all_articles.extend(articles)
-        
+
         return all_articles
 
-    def parse_feed(self, feed: feedparser.FeedParserDict, source: str) -> List[ArticleCreate]:
+    def parse_feed(
+        self, feed: feedparser.FeedParserDict, source: str
+    ) -> List[ArticleCreate]:
         """Parses a feed and returns a list of Article objects."""
         articles = []
         for entry in feed.entries:
-            published_date = datetime.fromtimestamp(mktime(entry.published_parsed)) if hasattr(entry, 'published_parsed') and entry.published_parsed else datetime.utcnow()
-            
-            author = ArticleAuthor(id=entry.author, name=entry.author) if hasattr(entry, 'author') and entry.author else None
+            published_date = (
+                datetime.fromtimestamp(mktime(entry.published_parsed))
+                if hasattr(entry, "published_parsed") and entry.published_parsed
+                else datetime.utcnow()
+            )
+
+            author = (
+                ArticleAuthor(id=entry.author, name=entry.author)
+                if hasattr(entry, "author") and entry.author
+                else None
+            )
 
             article = ArticleCreate(
                 title=entry.title,
                 text=entry.summary,
                 url=str(entry.link),
-                source_id=entry.link, # Use link as a unique ID for RSS
-                source='rss',
+                source_id=entry.link,  # Use link as a unique ID for RSS
+                source="rss",
                 author=author,
                 published_at=published_date,
                 metrics=ArticleMetrics(),
-                raw_data=entry
+                raw_data=entry,
             )
             articles.append(article)
         return articles
 
+
 from crypto_news_aggregator.db.operations.articles import create_or_update_articles
+
 
 async def main():
     rss_service = RSSService()
     articles = await rss_service.fetch_all_feeds()
     await create_or_update_articles(articles)
     print(f"Successfully fetched and saved {len(articles)} articles.")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

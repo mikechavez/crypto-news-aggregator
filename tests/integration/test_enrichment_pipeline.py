@@ -2,6 +2,7 @@
 Integration tests for the enrichment pipeline.
 Tests the interaction between RSS fetcher, database, and LLM services.
 """
+
 import asyncio
 import pytest
 from datetime import datetime, timezone
@@ -9,7 +10,7 @@ from unittest.mock import Mock, patch
 
 from src.crypto_news_aggregator.background.rss_fetcher import (
     process_new_articles_from_mongodb,
-    fetch_and_process_rss_feeds
+    fetch_and_process_rss_feeds,
 )
 from src.crypto_news_aggregator.models.article import ArticleCreate, ArticleMetrics
 
@@ -63,7 +64,7 @@ class TestEnrichmentPipelineIntegration:
                 "raw_data": {},
                 "created_at": datetime.now(timezone.utc),
                 "updated_at": datetime.now(timezone.utc),
-            }
+            },
         ]
 
         # Insert test articles
@@ -71,6 +72,7 @@ class TestEnrichmentPipelineIntegration:
 
         # Mock LLM provider with realistic responses
         mock_llm = Mock()
+
         def mock_score_relevance(text: str) -> float:
             if "Bitcoin" in text:
                 return 0.9
@@ -100,7 +102,10 @@ class TestEnrichmentPipelineIntegration:
         # Ensure model_name attribute exists and is a string
         mock_llm.model_name = "test-llm-provider"
 
-        with patch('src.crypto_news_aggregator.background.rss_fetcher.get_llm_provider', return_value=mock_llm):
+        with patch(
+            "src.crypto_news_aggregator.background.rss_fetcher.get_llm_provider",
+            return_value=mock_llm,
+        ):
             # Process articles
             processed_count = await process_new_articles_from_mongodb()
 
@@ -108,7 +113,9 @@ class TestEnrichmentPipelineIntegration:
             assert processed_count == 2
 
             # Verify first article (Bitcoin)
-            btc_article = await mongo_db.articles.find_one({"source_id": "integration-test-1"})
+            btc_article = await mongo_db.articles.find_one(
+                {"source_id": "integration-test-1"}
+            )
             assert btc_article is not None
             assert btc_article["relevance_score"] == 0.9
             assert btc_article["sentiment_score"] == 0.7
@@ -116,7 +123,9 @@ class TestEnrichmentPipelineIntegration:
             assert "Bitcoin" in str(btc_article.get("themes", []))
 
             # Verify second article (Ethereum)
-            eth_article = await mongo_db.articles.find_one({"source_id": "integration-test-2"})
+            eth_article = await mongo_db.articles.find_one(
+                {"source_id": "integration-test-2"}
+            )
             assert eth_article is not None
             assert eth_article["relevance_score"] == 0.8
             assert eth_article["sentiment_score"] == 0.6
@@ -135,22 +144,22 @@ class TestEnrichmentPipelineIntegration:
                 "text": None,
                 "content": None,
                 "description": None,
-                "expected_processed": False  # Should be skipped due to no content
+                "expected_processed": False,  # Should be skipped due to no content
             },
             {
                 "title": "Title with Description",
                 "text": None,
                 "content": None,
                 "description": "This article has only a description with important information about crypto trends.",
-                "expected_processed": True
+                "expected_processed": True,
             },
             {
                 "title": "Full Article",
                 "text": "This is the main article text with detailed information.",
                 "content": "Additional content from the full article body.",
                 "description": "Brief description",
-                "expected_processed": True
-            }
+                "expected_processed": True,
+            },
         ]
 
         # Insert test articles
@@ -182,7 +191,10 @@ class TestEnrichmentPipelineIntegration:
         mock_llm.analyze_sentiment.return_value = 0.3
         mock_llm.extract_themes.return_value = ["Testing"]
 
-        with patch('src.crypto_news_aggregator.background.rss_fetcher.get_llm_provider', return_value=mock_llm):
+        with patch(
+            "src.crypto_news_aggregator.background.rss_fetcher.get_llm_provider",
+            return_value=mock_llm,
+        ):
             processed_count = await process_new_articles_from_mongodb()
 
             # Should have processed 2 articles (skipping the one with no content)
@@ -191,7 +203,9 @@ class TestEnrichmentPipelineIntegration:
             # Verify the articles that should have been processed
             for i, case in enumerate(test_cases):
                 if case["expected_processed"]:
-                    article = await mongo_db.articles.find_one({"source_id": f"mixed-content-{i}"})
+                    article = await mongo_db.articles.find_one(
+                        {"source_id": f"mixed-content-{i}"}
+                    )
                     assert article is not None
                     assert article["relevance_score"] == 0.7
                     assert article["sentiment_score"] == 0.3
@@ -224,7 +238,10 @@ class TestEnrichmentPipelineIntegration:
         mock_llm.analyze_sentiment.return_value = 0.5
         mock_llm.extract_themes.return_value = ["DeFi", "Yield Farming", "Liquidity"]
 
-        with patch('src.crypto_news_aggregator.background.rss_fetcher.get_llm_provider', return_value=mock_llm):
+        with patch(
+            "src.crypto_news_aggregator.background.rss_fetcher.get_llm_provider",
+            return_value=mock_llm,
+        ):
             processed_count = await process_new_articles_from_mongodb()
 
             assert processed_count == 1

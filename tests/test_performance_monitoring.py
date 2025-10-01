@@ -1,6 +1,7 @@
 """
 Smoke tests for performance monitoring and caching features.
 """
+
 import pytest
 import asyncio
 import time
@@ -14,14 +15,17 @@ from crypto_news_aggregator.core.monitoring import (
     PerformanceMonitoringMiddleware,
     DatabaseErrorMonitor,
     LLMErrorMonitor,
-    PerformanceMetrics
+    PerformanceMetrics,
 )
+
 
 # Create a minimal test app for testing middleware
 def create_test_app():
     """Create a test FastAPI app with performance monitoring."""
     from fastapi import FastAPI
-    from src.crypto_news_aggregator.core.monitoring import PerformanceMonitoringMiddleware
+    from src.crypto_news_aggregator.core.monitoring import (
+        PerformanceMonitoringMiddleware,
+    )
 
     app = FastAPI()
 
@@ -36,7 +40,9 @@ def create_test_app():
     # Add performance monitoring middleware
     app.add_middleware(PerformanceMonitoringMiddleware)
 
+
 test_app = create_test_app()
+
 
 class TestPerformanceMonitoring:
     """Test performance monitoring functionality."""
@@ -80,6 +86,7 @@ class TestPerformanceMonitoring:
         category = middleware._categorize_error(llm_error)
         assert category == "llm_error"
 
+
 class TestDatabaseErrorMonitor:
     """Test database error monitoring."""
 
@@ -89,6 +96,7 @@ class TestDatabaseErrorMonitor:
         # In a real test, we'd mock the logger and verify calls
         pass
 
+
 class TestLLMErrorMonitor:
     """Test LLM error monitoring."""
 
@@ -97,6 +105,7 @@ class TestLLMErrorMonitor:
         # This would typically test the logging functionality
         # In a real test, we'd mock the logger and verify calls
         pass
+
 
 class TestPerformanceMetrics:
     """Test performance metrics collection."""
@@ -112,6 +121,7 @@ class TestPerformanceMetrics:
         # This would typically test the logging functionality
         # In a real test, we'd mock the logger and verify calls
         pass
+
 
 class TestPriceServiceCaching:
     """Test caching functionality in price service."""
@@ -136,10 +146,10 @@ class TestPriceServiceCaching:
         service = CoinGeckoPriceService()
 
         # First call should cache the result
-        result1 = await service.generate_market_analysis_commentary('bitcoin')
+        result1 = await service.generate_market_analysis_commentary("bitcoin")
 
         # Second call should use cache (if within TTL)
-        result2 = await service.generate_market_analysis_commentary('bitcoin')
+        result2 = await service.generate_market_analysis_commentary("bitcoin")
 
         # Results should be identical (indicating cache hit)
         assert result1 == result2
@@ -151,20 +161,21 @@ class TestPriceServiceCaching:
             # Create multiple concurrent requests
             tasks = []
             for i in range(5):
-                tasks.append(
-                    client.get("/test-endpoint")
-                )
+                tasks.append(client.get("/test-endpoint"))
 
             # Execute all requests concurrently
             responses = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Check that all requests succeeded
-            successful_responses = [r for r in responses if not isinstance(r, Exception)]
+            successful_responses = [
+                r for r in responses if not isinstance(r, Exception)
+            ]
             assert len(successful_responses) == 5
 
             # All should be successful
             for response in successful_responses:
                 assert response.status_code == 200
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

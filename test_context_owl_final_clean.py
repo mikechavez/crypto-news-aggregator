@@ -52,7 +52,15 @@ def create_crash_articles() -> List[Dict[str, Any]]:
             "source": "The Block",
             "sentiment_score": -0.6,
             "sentiment_label": "negative",
-            "keywords": ["BTC", "bitcoin", "whale", "liquidations", "cascade", "selling", "crypto"],
+            "keywords": [
+                "BTC",
+                "bitcoin",
+                "whale",
+                "liquidations",
+                "cascade",
+                "selling",
+                "crypto",
+            ],
             "published_at": datetime.now(timezone.utc).isoformat(),
         },
         {
@@ -60,9 +68,17 @@ def create_crash_articles() -> List[Dict[str, Any]]:
             "source": "Reuters",
             "sentiment_score": -0.3,
             "sentiment_label": "negative",
-            "keywords": ["BTC", "bitcoin", "federal reserve", "policy", "hawkish", "crypto", "turmoil"],
+            "keywords": [
+                "BTC",
+                "bitcoin",
+                "federal reserve",
+                "policy",
+                "hawkish",
+                "crypto",
+                "turmoil",
+            ],
             "published_at": datetime.now(timezone.utc).isoformat(),
-        }
+        },
     ]
 
 
@@ -87,7 +103,7 @@ def test_context_owl_comprehensive():
         "Should I sell Bitcoin?",
         "Is this the start of a bear market?",
         "How are ETF outflows affecting Bitcoin?",
-        "What are the main drivers of this market dump?"
+        "What are the main drivers of this market dump?",
     ]
 
     all_tests_passed = True
@@ -98,42 +114,52 @@ def test_context_owl_comprehensive():
         print("-" * 50)
 
         # Test with comprehensive mocking
-        with patch('crypto_news_aggregator.services.price_service.article_service') as mock_article_service:
-            mock_article_service.get_top_articles_for_symbols.return_value = create_crash_articles()
-            mock_article_service.get_average_sentiment_for_symbols.return_value = {"BTC": -0.45}
+        with patch(
+            "crypto_news_aggregator.services.price_service.article_service"
+        ) as mock_article_service:
+            mock_article_service.get_top_articles_for_symbols.return_value = (
+                create_crash_articles()
+            )
+            mock_article_service.get_average_sentiment_for_symbols.return_value = {
+                "BTC": -0.45
+            }
 
-            with patch('crypto_news_aggregator.services.price_service.CoinGeckoPriceService.get_global_market_data') as mock_get_data:
+            with patch(
+                "crypto_news_aggregator.services.price_service.CoinGeckoPriceService.get_global_market_data"
+            ) as mock_get_data:
                 mock_get_data.return_value = {
-                    'bitcoin': {
-                        'current_price': 60250,  # Realistic Bitcoin price
-                        'price_change_percentage_1h_in_currency': -1.2,
-                        'price_change_percentage_24h_in_currency': -2.7,
-                        'price_change_percentage_7d_in_currency': -8.5,
-                        'market_cap_rank': 1,
-                        'total_volume': 25000000000,
-                        'market_cap': 1180000000000,  # ~$1.18T market cap
-                        'name': 'Bitcoin'
+                    "bitcoin": {
+                        "current_price": 60250,  # Realistic Bitcoin price
+                        "price_change_percentage_1h_in_currency": -1.2,
+                        "price_change_percentage_24h_in_currency": -2.7,
+                        "price_change_percentage_7d_in_currency": -8.5,
+                        "market_cap_rank": 1,
+                        "total_volume": 25000000000,
+                        "market_cap": 1180000000000,  # ~$1.18T market cap
+                        "name": "Bitcoin",
                     },
-                    'ethereum': {
-                        'current_price': 2300,
-                        'price_change_percentage_24h_in_currency': -6.5,
-                        'name': 'Ethereum'
-                    }
+                    "ethereum": {
+                        "current_price": 2300,
+                        "price_change_percentage_24h_in_currency": -6.5,
+                        "name": "Ethereum",
+                    },
                 }
 
-                with patch('crypto_news_aggregator.services.price_service.CoinGeckoPriceService._fetch_related_news') as mock_fetch_news:
+                with patch(
+                    "crypto_news_aggregator.services.price_service.CoinGeckoPriceService._fetch_related_news"
+                ) as mock_fetch_news:
                     mock_fetch_news.return_value = create_crash_articles()
 
                     request_data = {
                         "model": "crypto-insight-agent",
                         "messages": [{"role": "user", "content": query}],
-                        "stream": False
+                        "stream": False,
                     }
 
                     response = client.post(
                         "/v1/chat/completions",
                         json=request_data,
-                        headers={"X-API-Key": valid_api_keys[0]}
+                        headers={"X-API-Key": valid_api_keys[0]},
                     )
 
                     if response.status_code != 200:
@@ -146,7 +172,9 @@ def test_context_owl_comprehensive():
                     print(f"✅ Response received ({len(content)} chars)")
 
                     # Validate comprehensive analysis
-                    score, issues, details = validate_comprehensive_crash_analysis(content, query)
+                    score, issues, details = validate_comprehensive_crash_analysis(
+                        content, query
+                    )
                     total_score += score
 
                     if score >= 8:
@@ -176,7 +204,9 @@ def test_context_owl_comprehensive():
         print("🎉 EXCELLENT: Context Owl provides comprehensive crash analysis!")
         print("✅ Responds to general market queries")
         print("✅ Uses sophisticated narrative analysis")
-        print("✅ Mentions key crash drivers (ETF outflows, whale liquidations, Fed policy)")
+        print(
+            "✅ Mentions key crash drivers (ETF outflows, whale liquidations, Fed policy)"
+        )
         print("✅ Provides actionable context beyond price reporting")
         print("✅ Correlates price movements with news drivers")
         print("✅ Shows market volatility and momentum analysis")
@@ -193,7 +223,9 @@ def test_context_owl_comprehensive():
     return all_tests_passed and avg_score >= 8
 
 
-def validate_comprehensive_crash_analysis(content: str, query: str) -> tuple[int, str, str]:
+def validate_comprehensive_crash_analysis(
+    content: str, query: str
+) -> tuple[int, str, str]:
     """Validate comprehensive crash analysis with detailed scoring."""
 
     content_lower = content.lower()
@@ -202,7 +234,15 @@ def validate_comprehensive_crash_analysis(content: str, query: str) -> tuple[int
     details = []
 
     # 1. Check for key crash drivers (3 points)
-    key_drivers = ["etf", "outflows", "whale", "liquidations", "fed", "policy", "federal"]
+    key_drivers = [
+        "etf",
+        "outflows",
+        "whale",
+        "liquidations",
+        "fed",
+        "policy",
+        "federal",
+    ]
     driver_mentions = sum(1 for driver in key_drivers if driver in content_lower)
     score += min(driver_mentions * 0.5, 3)
     if driver_mentions >= 2:
@@ -211,8 +251,17 @@ def validate_comprehensive_crash_analysis(content: str, query: str) -> tuple[int
         issues.append(f"Only {driver_mentions}/7 key drivers mentioned")
 
     # 2. Check for actionable context (2 points)
-    context_indicators = ["sentiment", "narratives", "themes", "analysis", "context", "outlook"]
-    context_mentions = sum(1 for indicator in context_indicators if indicator in content_lower)
+    context_indicators = [
+        "sentiment",
+        "narratives",
+        "themes",
+        "analysis",
+        "context",
+        "outlook",
+    ]
+    context_mentions = sum(
+        1 for indicator in context_indicators if indicator in content_lower
+    )
     score += min(context_mentions * 0.4, 2)
     if context_mentions >= 3:
         details.append(f"✅ Context: {context_mentions}/6 indicators")
@@ -221,7 +270,9 @@ def validate_comprehensive_crash_analysis(content: str, query: str) -> tuple[int
 
     # 3. Check for market mechanics (2 points)
     market_indicators = ["volatility", "momentum", "volume", "dominance", "correlation"]
-    market_mentions = sum(1 for indicator in market_indicators if indicator in content_lower)
+    market_mentions = sum(
+        1 for indicator in market_indicators if indicator in content_lower
+    )
     score += min(market_mentions * 0.4, 2)
     if market_mentions >= 2:
         details.append(f"✅ Market mechanics: {market_mentions}/5 indicators")

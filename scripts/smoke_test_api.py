@@ -7,6 +7,7 @@ Verifies:
 3) Sentiment queries return proper errors (not 500) and are handled gracefully
 4) All responses are logged properly in logs/app.log
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -149,7 +150,12 @@ async def run_smoke() -> int:
             print("[FAIL] Price query did not return 200.")
             rc = 1
         else:
-            content = price_resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+            content = (
+                price_resp.json()
+                .get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+            )
             if not content:
                 print("[FAIL] Price query returned empty content.")
                 rc = 1
@@ -169,7 +175,12 @@ async def run_smoke() -> int:
             print("[FAIL] Sentiment query returned 5xx.")
             rc = 1
         else:
-            sent_content = sent_resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+            sent_content = (
+                sent_resp.json()
+                .get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+            )
             if not sent_content:
                 print("[FAIL] Sentiment query returned empty content.")
                 rc = 1

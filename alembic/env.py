@@ -6,7 +6,7 @@ import os
 # Add src directory to Python path for src layout
 alembic_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(alembic_dir)
-src_path = os.path.join(project_root, 'src')
+src_path = os.path.join(project_root, "src")
 sys.path.insert(0, src_path)
 
 from sqlalchemy import pool
@@ -22,19 +22,29 @@ if config.config_file_name is not None:
 
 # Import Base and models (should work now with correct path)
 from crypto_news_aggregator.db import Base
-from crypto_news_aggregator.db.models import Source, Article, Sentiment, Trend, User, Alert
+from crypto_news_aggregator.db.models import (
+    Source,
+    Article,
+    Sentiment,
+    Trend,
+    User,
+    Alert,
+)
 
 target_metadata = Base.metadata
 
 # Set up the database URL
 from crypto_news_aggregator.core.config import get_settings
+
 settings = get_settings()
-config.set_main_option('sqlalchemy.url', settings.DATABASE_URL)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # Debug logging
 import logging
+
 logging.basicConfig()
-logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
@@ -48,13 +58,14 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
+
 def do_run_migrations(connection: Connection) -> None:
     print(f"Tables in metadata: {list(target_metadata.tables.keys())}")
-    
+
     if not target_metadata.tables:
         print("WARNING: No tables found in metadata!")
         return
-    
+
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
@@ -64,6 +75,7 @@ def do_run_migrations(connection: Connection) -> None:
 
     with context.begin_transaction():
         context.run_migrations()
+
 
 async def run_async_migrations() -> None:
     connectable = async_engine_from_config(
@@ -78,8 +90,10 @@ async def run_async_migrations() -> None:
 
     await connectable.dispose()
 
+
 def run_migrations_online() -> None:
     asyncio.run(run_async_migrations())
+
 
 if context.is_offline_mode():
     run_migrations_offline()

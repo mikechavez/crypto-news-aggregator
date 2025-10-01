@@ -1,4 +1,5 @@
 """Pydantic models for PostgreSQL User data."""
+
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
@@ -6,6 +7,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 class UserBaseSQL(BaseModel):
     """Base Pydantic model for a user, matching the SQL schema."""
+
     email: EmailStr = Field(..., examples=["user@example.com"])
     is_active: bool = True
     is_superuser: bool = False
@@ -15,18 +17,21 @@ class UserBaseSQL(BaseModel):
 
 class UserCreateSQL(UserBaseSQL):
     """Pydantic model for creating a user in SQL."""
+
     username: str = Field(..., examples=["johndoe"])
     password: str = Field(..., min_length=8, examples=["aSecurePassword123!"])
 
 
 class UserUpdateSQL(UserBaseSQL):
     """Pydantic model for updating a user in SQL."""
+
     username: Optional[str] = None
     password: Optional[str] = None
 
 
 class UserInDBBase(UserBaseSQL):
     """Base model for user data stored in the DB."""
+
     id: int = Field(..., examples=[1])
     username: str = Field(..., examples=["johndoe"])
     created_at: datetime
@@ -37,9 +42,11 @@ class UserInDBBase(UserBaseSQL):
 
 class UserSQL(UserInDBBase):
     """Pydantic model representing a user in SQL, for API responses."""
+
     pass
 
 
 class UserInDB(UserInDBBase):
     """Pydantic model for user data in the database, including hashed password."""
+
     hashed_password: str

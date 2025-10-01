@@ -17,8 +17,7 @@ from pathlib import Path
 from typing import List
 
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("sentiment_query_test")
 
@@ -35,7 +34,9 @@ from crypto_news_aggregator.services.article_service import ArticleService
 async def main(symbols: List[str]) -> int:
     settings = get_settings()
     if not settings.MONGODB_URI:
-        logger.error("MONGODB_URI is not set. Please export it or add it to your .env file.")
+        logger.error(
+            "MONGODB_URI is not set. Please export it or add it to your .env file."
+        )
         return 2
 
     logger.info("Initializing MongoDB...")

@@ -2,6 +2,7 @@
 Test script to trigger a price alert with a small threshold (0.05%) and verify
 email delivery with news articles.
 """
+
 import asyncio
 import logging
 import os
@@ -15,9 +16,16 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.crypto_news_aggregator.services.price_service import price_service
 from src.crypto_news_aggregator.services.news_correlator import NewsCorrelator
-from src.crypto_news_aggregator.services.notification_service import notification_service
+from src.crypto_news_aggregator.services.notification_service import (
+    notification_service,
+)
 from src.crypto_news_aggregator.models.alert import AlertInDB
-from src.crypto_news_aggregator.models.user import UserInDB, UserBase, UserSubscriptionPreferences, UserTrackingSettings
+from src.crypto_news_aggregator.models.user import (
+    UserInDB,
+    UserBase,
+    UserSubscriptionPreferences,
+    UserTrackingSettings,
+)
 from src.crypto_news_aggregator.core.config import settings
 from src.crypto_news_aggregator.db.mongodb import mongo_manager, initialize_mongodb
 from src.crypto_news_aggregator.db.session import get_session
@@ -25,8 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -49,7 +56,7 @@ TEST_USER = UserInDB(
     created_at=now,
     updated_at=now,
     timezone="UTC",
-    locale="en-US"
+    locale="en-US",
 )
 
 # Test alert data
@@ -71,11 +78,12 @@ try:
         created_at=now,
         updated_at=now,
         last_triggered=None,
-        last_triggered_price=None
+        last_triggered_price=None,
     )
 except Exception as e:
     logger.error(f"Error creating test alert: {e}")
     raise
+
 
 async def init_db():
     """Initialize the database connection."""
@@ -85,27 +93,30 @@ async def init_db():
     async for session in get_session():
         return session
 
+
 async def test_alert_trigger():
     """Test triggering an alert with a small price change."""
     logger.info("Starting alert trigger test...")
-    
+
     # Initialize database
     db = await init_db()
-    
+
     # Get current BTC price
     btc_data = await price_service.get_bitcoin_price()
-    current_price = btc_data['price']
-    logger.info(f"Current BTC price: ${current_price:,.2f} (24h change: {btc_data['change_24h']:.2f}%)")
-    
+    current_price = btc_data["price"]
+    logger.info(
+        f"Current BTC price: ${current_price:,.2f} (24h change: {btc_data['change_24h']:.2f}%)"
+    )
+
     # Simulate a small price increase (0.06%)
     new_price = current_price * 1.0006  # 0.06% increase
     logger.info(f"Simulating price change: 0.06% to ${new_price:,.2f}")
-    
+
     # Get relevant news articles
     news_correlator = NewsCorrelator()
     relevant_articles = await news_correlator.get_relevant_news("bitcoin", 0.06)
     logger.info(f"Found {len(relevant_articles)} relevant articles:")
-    
+
     # Process the alert with the database session
     logger.info("Processing alert...")
     stats = await notification_service.process_price_alert(
@@ -115,28 +126,31 @@ async def test_alert_trigger():
         crypto_symbol=TEST_ALERT.crypto_symbol,
         current_price=new_price,
         price_change_24h=0.06,  # Using 0.06% as the price change for testing
-        context_articles=relevant_articles
+        context_articles=relevant_articles,
     )
-    
+
     logger.info(f"Alert processing complete. Stats: {stats}")
-    
+
     # Log detailed stats
     logger.info(f"Alerts processed: {stats.get('alerts_processed', 0)}")
     logger.info(f"Alerts triggered: {stats.get('alerts_triggered', 0)}")
     logger.info(f"Notifications sent: {stats.get('notifications_sent', 0)}")
     logger.info(f"Errors: {stats.get('errors', 0)}")
-    
-    if stats.get('notifications_sent', 0) > 0:
-        logger.info("✅ Test successful! Email notification was sent with news articles.")
+
+    if stats.get("notifications_sent", 0) > 0:
+        logger.info(
+            "✅ Test successful! Email notification was sent with news articles."
+        )
     else:
         logger.warning("⚠️  No notifications were sent. Check the logs for details.")
-    
+
     # Clean up
-    if hasattr(db, 'close') and callable(db.close):
+    if hasattr(db, "close") and callable(db.close):
         await db.close()
     await price_service.close()
-    
+
     return stats
+
 
 if __name__ == "__main__":
     asyncio.run(test_alert_trigger())

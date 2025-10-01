@@ -1,6 +1,7 @@
 import pytest
 from httpx import AsyncClient
 
+
 @pytest.mark.asyncio
 async def test_register_and_login(client: AsyncClient):
     # Register a new user
@@ -13,7 +14,7 @@ async def test_register_and_login(client: AsyncClient):
         "email": email,
         "password": password,
         "first_name": "Test",
-        "last_name": "User"
+        "last_name": "User",
     }
 
     # Use the correct registration endpoint
@@ -28,10 +29,7 @@ async def test_register_and_login(client: AsyncClient):
         assert user_data["username"] == username
 
     # Now, log in with the new user
-    login_data = {
-        "username": username,
-        "password": password
-    }
+    login_data = {"username": username, "password": password}
 
     login_response = await client.post("/api/v1/auth/login", data=login_data)
     assert login_response.status_code == 200, f"Failed to log in: {login_response.text}"

@@ -12,6 +12,7 @@ PROVIDER_MAP = {
     "openai": OpenAIProvider,
 }
 
+
 def get_llm_provider() -> LLMProvider:
     """
     Factory function to get an LLM provider instance.
@@ -21,7 +22,7 @@ def get_llm_provider() -> LLMProvider:
     :return: An instance of the LLM provider.
     """
     settings = get_settings()
-    provider_name = getattr(settings, 'LLM_PROVIDER', 'openai').lower()
+    provider_name = getattr(settings, "LLM_PROVIDER", "openai").lower()
     providers_to_try = [provider_name]
 
     last_exception = None
@@ -34,13 +35,13 @@ def get_llm_provider() -> LLMProvider:
                     api_key = settings.ANTHROPIC_API_KEY
                 elif name == "openai":
                     api_key = settings.OPENAI_API_KEY
-                
+
                 return provider_class(api_key=api_key)
             except Exception as e:
                 last_exception = e
                 print(f"Failed to initialize provider '{name}': {e}")
                 continue
-    
+
     raise RuntimeError(
         f"Could not initialize any of the specified LLM providers: {providers_to_try}. "
         f"Last error: {last_exception}"

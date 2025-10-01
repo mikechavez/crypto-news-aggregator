@@ -4,6 +4,7 @@ This module tests Context Owl's ability to provide comprehensive market crash an
 during real-world market dumps, correlating price movements with news drivers and
 providing actionable context to users.
 """
+
 import pytest
 import json
 from fastapi.testclient import TestClient
@@ -37,15 +38,15 @@ class TestContextOwlMarketCrashAnalysis:
                 "price_change_percentage_24h_in_currency": -2.7,
                 "price_change_percentage_1h_in_currency": -1.2,
                 "market_cap": 840000000000,
-                "total_volume": 25000000000
+                "total_volume": 25000000000,
             },
             "ethereum": {
                 "current_price": 2300,
                 "price_change_percentage_24h_in_currency": -6.5,
                 "price_change_percentage_1h_in_currency": -2.8,
                 "market_cap": 280000000000,
-                "total_volume": 15000000000
-            }
+                "total_volume": 15000000000,
+            },
         }
 
     def _create_mock_crash_articles(self) -> List[Dict[str, Any]]:
@@ -59,7 +60,7 @@ class TestContextOwlMarketCrashAnalysis:
                 "keywords": ["ETF", "outflows", "bitcoin", "investors", "risk"],
                 "published_at": datetime.now(timezone.utc).isoformat(),
                 "url": "https://example.com/etf-outflows",
-                "summary": "Major Bitcoin ETFs see massive outflows as market sentiment turns bearish."
+                "summary": "Major Bitcoin ETFs see massive outflows as market sentiment turns bearish.",
             },
             {
                 "title": "Whale Liquidations Trigger Cascade Selling in Crypto Markets",
@@ -69,7 +70,7 @@ class TestContextOwlMarketCrashAnalysis:
                 "keywords": ["whale", "liquidations", "cascade", "selling", "crypto"],
                 "published_at": datetime.now(timezone.utc).isoformat(),
                 "url": "https://example.com/whale-liquidations",
-                "summary": "Large position liquidations create downward pressure across major cryptocurrencies."
+                "summary": "Large position liquidations create downward pressure across major cryptocurrencies.",
             },
             {
                 "title": "Federal Reserve Signals Continued Hawkish Policy Stance",
@@ -79,7 +80,7 @@ class TestContextOwlMarketCrashAnalysis:
                 "keywords": ["federal reserve", "policy", "hawkish", "rates"],
                 "published_at": datetime.now(timezone.utc).isoformat(),
                 "url": "https://example.com/fed-policy",
-                "summary": "Fed officials indicate no immediate plans for rate cuts, impacting risk assets."
+                "summary": "Fed officials indicate no immediate plans for rate cuts, impacting risk assets.",
             },
             {
                 "title": "Crypto Market Sees $1.7B in Liquidations as Prices Plummet",
@@ -89,8 +90,8 @@ class TestContextOwlMarketCrashAnalysis:
                 "keywords": ["liquidations", "crypto", "prices", "market"],
                 "published_at": datetime.now(timezone.utc).isoformat(),
                 "url": "https://example.com/market-liquidations",
-                "summary": "Total liquidations across crypto exchanges reach record levels amid market turmoil."
-            }
+                "summary": "Total liquidations across crypto exchanges reach record levels amid market turmoil.",
+            },
         ]
 
     def _create_mock_market_analysis(self, coin_id: str) -> str:
@@ -122,33 +123,45 @@ class TestContextOwlMarketCrashAnalysis:
         else:
             return f"{coin_id.capitalize()} market analysis during crash period."
 
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_price_service')
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_correlation_service')
-    def test_crash_query_why_crypto_crashing(self, mock_correlation_service, mock_price_service):
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_price_service")
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_correlation_service")
+    def test_crash_query_why_crypto_crashing(
+        self, mock_correlation_service, mock_price_service
+    ):
         """Test 'Why is crypto crashing?' query with comprehensive context."""
         # Mock services
         mock_price_service_instance = AsyncMock()
-        mock_price_service_instance.generate_market_analysis_commentary.side_effect = self._create_mock_market_analysis
+        mock_price_service_instance.generate_market_analysis_commentary.side_effect = (
+            self._create_mock_market_analysis
+        )
         mock_price_service.return_value = mock_price_service_instance
 
         mock_correlation_service_instance = AsyncMock()
-        mock_correlation_service_instance.calculate_correlation.return_value = {"ethereum": 0.85, "solana": 0.72}
+        mock_correlation_service_instance.calculate_correlation.return_value = {
+            "ethereum": 0.85,
+            "solana": 0.72,
+        }
         mock_correlation_service.return_value = mock_correlation_service_instance
 
         # Mock article service with crash-related articles
-        with patch('crypto_news_aggregator.api.openai_compatibility.article_service') as mock_article_service:
-            mock_article_service.get_average_sentiment_for_symbols.return_value = {"BTC": -0.45, "ETH": -0.52}
+        with patch(
+            "crypto_news_aggregator.api.openai_compatibility.article_service"
+        ) as mock_article_service:
+            mock_article_service.get_average_sentiment_for_symbols.return_value = {
+                "BTC": -0.45,
+                "ETH": -0.52,
+            }
 
             request_data = {
                 "model": "crypto-insight-agent",
                 "messages": [{"role": "user", "content": "Why is crypto crashing?"}],
-                "stream": False
+                "stream": False,
             }
 
             response = self.client.post(
                 "/v1/chat/completions",
                 json=request_data,
-                headers={"X-API-Key": self.valid_api_keys[0]}
+                headers={"X-API-Key": self.valid_api_keys[0]},
             )
 
             assert response.status_code == 200
@@ -162,42 +175,69 @@ class TestContextOwlMarketCrashAnalysis:
             assert "content" in response_data["choices"][0]["message"]
 
             # Check for key crash drivers mentioned
-            crash_drivers = ["etf", "outflows", "whale", "liquidations", "fed", "policy"]
+            crash_drivers = [
+                "etf",
+                "outflows",
+                "whale",
+                "liquidations",
+                "fed",
+                "policy",
+            ]
             driver_mentions = sum(1 for driver in crash_drivers if driver in content)
-            assert driver_mentions >= 2, f"Expected at least 2 crash drivers mentioned, got {driver_mentions}"
+            assert (
+                driver_mentions >= 2
+            ), f"Expected at least 2 crash drivers mentioned, got {driver_mentions}"
 
             # Verify actionable context is provided
-            actionable_terms = ["context", "analysis", "sentiment", "narratives", "themes"]
+            actionable_terms = [
+                "context",
+                "analysis",
+                "sentiment",
+                "narratives",
+                "themes",
+            ]
             actionable_mentions = sum(1 for term in actionable_terms if term in content)
-            assert actionable_mentions >= 2, f"Expected actionable context, got {actionable_mentions} terms"
+            assert (
+                actionable_mentions >= 2
+            ), f"Expected actionable context, got {actionable_mentions} terms"
 
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_price_service')
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_correlation_service')
-    def test_crash_query_should_sell_bitcoin(self, mock_correlation_service, mock_price_service):
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_price_service")
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_correlation_service")
+    def test_crash_query_should_sell_bitcoin(
+        self, mock_correlation_service, mock_price_service
+    ):
         """Test 'Should I sell Bitcoin?' query with balanced analysis."""
         # Mock services
         mock_price_service_instance = AsyncMock()
-        mock_price_service_instance.generate_market_analysis_commentary.side_effect = self._create_mock_market_analysis
+        mock_price_service_instance.generate_market_analysis_commentary.side_effect = (
+            self._create_mock_market_analysis
+        )
         mock_price_service.return_value = mock_price_service_instance
 
         mock_correlation_service_instance = AsyncMock()
-        mock_correlation_service_instance.calculate_correlation.return_value = {"ethereum": 0.85}
+        mock_correlation_service_instance.calculate_correlation.return_value = {
+            "ethereum": 0.85
+        }
         mock_correlation_service.return_value = mock_correlation_service_instance
 
         # Mock article service with crash-related articles
-        with patch('crypto_news_aggregator.api.openai_compatibility.article_service') as mock_article_service:
-            mock_article_service.get_average_sentiment_for_symbols.return_value = {"BTC": -0.45}
+        with patch(
+            "crypto_news_aggregator.api.openai_compatibility.article_service"
+        ) as mock_article_service:
+            mock_article_service.get_average_sentiment_for_symbols.return_value = {
+                "BTC": -0.45
+            }
 
             request_data = {
                 "model": "crypto-insight-agent",
                 "messages": [{"role": "user", "content": "Should I sell Bitcoin?"}],
-                "stream": False
+                "stream": False,
             }
 
             response = self.client.post(
                 "/v1/chat/completions",
                 json=request_data,
-                headers={"X-API-Key": self.valid_api_keys[0]}
+                headers={"X-API-Key": self.valid_api_keys[0]},
             )
 
             assert response.status_code == 200
@@ -207,7 +247,10 @@ class TestContextOwlMarketCrashAnalysis:
             # Verify balanced analysis (not just price reporting)
             assert "choices" in response_data
             assert "bitcoin" in content
-            assert any(term in content for term in ["analysis", "context", "sentiment", "narratives"])
+            assert any(
+                term in content
+                for term in ["analysis", "context", "sentiment", "narratives"]
+            )
 
             # Should provide context beyond just price
             price_only_terms = ["trading at", "price", "$"]
@@ -215,35 +258,51 @@ class TestContextOwlMarketCrashAnalysis:
             price_mentions = sum(1 for term in price_only_terms if term in content)
             context_mentions = sum(1 for term in context_terms if term in content)
 
-            assert context_mentions >= 1, "Should provide context beyond just price reporting"
+            assert (
+                context_mentions >= 1
+            ), "Should provide context beyond just price reporting"
 
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_price_service')
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_correlation_service')
-    def test_crash_query_bear_market_start(self, mock_correlation_service, mock_price_service):
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_price_service")
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_correlation_service")
+    def test_crash_query_bear_market_start(
+        self, mock_correlation_service, mock_price_service
+    ):
         """Test 'Is this the start of a bear market?' query with historical context."""
         # Mock services
         mock_price_service_instance = AsyncMock()
-        mock_price_service_instance.generate_market_analysis_commentary.side_effect = self._create_mock_market_analysis
+        mock_price_service_instance.generate_market_analysis_commentary.side_effect = (
+            self._create_mock_market_analysis
+        )
         mock_price_service.return_value = mock_price_service_instance
 
         mock_correlation_service_instance = AsyncMock()
-        mock_correlation_service_instance.calculate_correlation.return_value = {"ethereum": 0.85, "solana": 0.72}
+        mock_correlation_service_instance.calculate_correlation.return_value = {
+            "ethereum": 0.85,
+            "solana": 0.72,
+        }
         mock_correlation_service.return_value = mock_correlation_service_instance
 
         # Mock article service with crash-related articles
-        with patch('crypto_news_aggregator.api.openai_compatibility.article_service') as mock_article_service:
-            mock_article_service.get_average_sentiment_for_symbols.return_value = {"BTC": -0.45, "ETH": -0.52}
+        with patch(
+            "crypto_news_aggregator.api.openai_compatibility.article_service"
+        ) as mock_article_service:
+            mock_article_service.get_average_sentiment_for_symbols.return_value = {
+                "BTC": -0.45,
+                "ETH": -0.52,
+            }
 
             request_data = {
                 "model": "crypto-insight-agent",
-                "messages": [{"role": "user", "content": "Is this the start of a bear market?"}],
-                "stream": False
+                "messages": [
+                    {"role": "user", "content": "Is this the start of a bear market?"}
+                ],
+                "stream": False,
             }
 
             response = self.client.post(
                 "/v1/chat/completions",
                 json=request_data,
-                headers={"X-API-Key": self.valid_api_keys[0]}
+                headers={"X-API-Key": self.valid_api_keys[0]},
             )
 
             assert response.status_code == 200
@@ -255,37 +314,60 @@ class TestContextOwlMarketCrashAnalysis:
             assert "bitcoin" in content or "crypto" in content
 
             # Should mention market context and drivers
-            context_indicators = ["sentiment", "narratives", "themes", "analysis", "outlook"]
-            context_mentions = sum(1 for indicator in context_indicators if indicator in content)
+            context_indicators = [
+                "sentiment",
+                "narratives",
+                "themes",
+                "analysis",
+                "outlook",
+            ]
+            context_mentions = sum(
+                1 for indicator in context_indicators if indicator in content
+            )
             assert context_mentions >= 2, "Should provide comprehensive market context"
 
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_price_service')
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_correlation_service')
-    def test_crash_query_etf_outflows(self, mock_correlation_service, mock_price_service):
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_price_service")
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_correlation_service")
+    def test_crash_query_etf_outflows(
+        self, mock_correlation_service, mock_price_service
+    ):
         """Test query specifically about ETF outflows."""
         # Mock services
         mock_price_service_instance = AsyncMock()
-        mock_price_service_instance.generate_market_analysis_commentary.side_effect = self._create_mock_market_analysis
+        mock_price_service_instance.generate_market_analysis_commentary.side_effect = (
+            self._create_mock_market_analysis
+        )
         mock_price_service.return_value = mock_price_service_instance
 
         mock_correlation_service_instance = AsyncMock()
-        mock_correlation_service_instance.calculate_correlation.return_value = {"ethereum": 0.85}
+        mock_correlation_service_instance.calculate_correlation.return_value = {
+            "ethereum": 0.85
+        }
         mock_correlation_service.return_value = mock_correlation_service_instance
 
         # Mock article service with crash-related articles
-        with patch('crypto_news_aggregator.api.openai_compatibility.article_service') as mock_article_service:
-            mock_article_service.get_average_sentiment_for_symbols.return_value = {"BTC": -0.45}
+        with patch(
+            "crypto_news_aggregator.api.openai_compatibility.article_service"
+        ) as mock_article_service:
+            mock_article_service.get_average_sentiment_for_symbols.return_value = {
+                "BTC": -0.45
+            }
 
             request_data = {
                 "model": "crypto-insight-agent",
-                "messages": [{"role": "user", "content": "How are ETF outflows affecting Bitcoin price?"}],
-                "stream": False
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "How are ETF outflows affecting Bitcoin price?",
+                    }
+                ],
+                "stream": False,
             }
 
             response = self.client.post(
                 "/v1/chat/completions",
                 json=request_data,
-                headers={"X-API-Key": self.valid_api_keys[0]}
+                headers={"X-API-Key": self.valid_api_keys[0]},
             )
 
             assert response.status_code == 200
@@ -294,40 +376,70 @@ class TestContextOwlMarketCrashAnalysis:
 
             # Verify ETF-specific analysis
             assert "choices" in response_data
-            assert any(term in content for term in ["etf", "outflows", "institutional", "investment"])
+            assert any(
+                term in content
+                for term in ["etf", "outflows", "institutional", "investment"]
+            )
 
             # Should correlate with price movements
-            correlation_terms = ["affecting", "impact", "correlation", "relationship", "sentiment"]
-            correlation_mentions = sum(1 for term in correlation_terms if term in content)
-            assert correlation_mentions >= 1, "Should correlate ETF outflows with price movements"
+            correlation_terms = [
+                "affecting",
+                "impact",
+                "correlation",
+                "relationship",
+                "sentiment",
+            ]
+            correlation_mentions = sum(
+                1 for term in correlation_terms if term in content
+            )
+            assert (
+                correlation_mentions >= 1
+            ), "Should correlate ETF outflows with price movements"
 
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_price_service')
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_correlation_service')
-    def test_crash_query_liquidations_impact(self, mock_correlation_service, mock_price_service):
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_price_service")
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_correlation_service")
+    def test_crash_query_liquidations_impact(
+        self, mock_correlation_service, mock_price_service
+    ):
         """Test query about liquidations impact."""
         # Mock services
         mock_price_service_instance = AsyncMock()
-        mock_price_service_instance.generate_market_analysis_commentary.side_effect = self._create_mock_market_analysis
+        mock_price_service_instance.generate_market_analysis_commentary.side_effect = (
+            self._create_mock_market_analysis
+        )
         mock_price_service.return_value = mock_price_service_instance
 
         mock_correlation_service_instance = AsyncMock()
-        mock_correlation_service_instance.calculate_correlation.return_value = {"ethereum": 0.85, "solana": 0.72}
+        mock_correlation_service_instance.calculate_correlation.return_value = {
+            "ethereum": 0.85,
+            "solana": 0.72,
+        }
         mock_correlation_service.return_value = mock_correlation_service_instance
 
         # Mock article service with crash-related articles
-        with patch('crypto_news_aggregator.api.openai_compatibility.article_service') as mock_article_service:
-            mock_article_service.get_average_sentiment_for_symbols.return_value = {"BTC": -0.45, "ETH": -0.52}
+        with patch(
+            "crypto_news_aggregator.api.openai_compatibility.article_service"
+        ) as mock_article_service:
+            mock_article_service.get_average_sentiment_for_symbols.return_value = {
+                "BTC": -0.45,
+                "ETH": -0.52,
+            }
 
             request_data = {
                 "model": "crypto-insight-agent",
-                "messages": [{"role": "user", "content": "How are whale liquidations affecting the market?"}],
-                "stream": False
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "How are whale liquidations affecting the market?",
+                    }
+                ],
+                "stream": False,
             }
 
             response = self.client.post(
                 "/v1/chat/completions",
                 json=request_data,
-                headers={"X-API-Key": self.valid_api_keys[0]}
+                headers={"X-API-Key": self.valid_api_keys[0]},
             )
 
             assert response.status_code == 200
@@ -336,12 +448,23 @@ class TestContextOwlMarketCrashAnalysis:
 
             # Verify liquidations analysis
             assert "choices" in response_data
-            assert any(term in content for term in ["liquidations", "whale", "cascade", "selling"])
+            assert any(
+                term in content
+                for term in ["liquidations", "whale", "cascade", "selling"]
+            )
 
             # Should explain market mechanics
-            mechanics_terms = ["pressure", "momentum", "volatility", "downward", "impact"]
+            mechanics_terms = [
+                "pressure",
+                "momentum",
+                "volatility",
+                "downward",
+                "impact",
+            ]
             mechanics_mentions = sum(1 for term in mechanics_terms if term in content)
-            assert mechanics_mentions >= 1, "Should explain market mechanics of liquidations"
+            assert (
+                mechanics_mentions >= 1
+            ), "Should explain market mechanics of liquidations"
 
     def test_crash_context_owl_comprehensive_analysis(self):
         """Test that Context Owl provides comprehensive crash analysis."""
@@ -355,35 +478,53 @@ class TestContextOwlMarketCrashAnalysis:
             "What are the main drivers of this market dump?",
             "How are ETF outflows impacting Bitcoin?",
             "Should I be worried about this crash?",
-            "Is this a temporary correction or start of bear market?"
+            "Is this a temporary correction or start of bear market?",
         ]
 
         for query in crash_queries:
-            with patch('crypto_news_aggregator.api.openai_compatibility.get_price_service') as mock_price_service, \
-                 patch('crypto_news_aggregator.api.openai_compatibility.get_correlation_service') as mock_correlation_service, \
-                 patch('crypto_news_aggregator.api.openai_compatibility.article_service') as mock_article_service:
+            with (
+                patch(
+                    "crypto_news_aggregator.api.openai_compatibility.get_price_service"
+                ) as mock_price_service,
+                patch(
+                    "crypto_news_aggregator.api.openai_compatibility.get_correlation_service"
+                ) as mock_correlation_service,
+                patch(
+                    "crypto_news_aggregator.api.openai_compatibility.article_service"
+                ) as mock_article_service,
+            ):
 
                 # Setup mocks
                 mock_price_service_instance = AsyncMock()
-                mock_price_service_instance.generate_market_analysis_commentary.side_effect = self._create_mock_market_analysis
+                mock_price_service_instance.generate_market_analysis_commentary.side_effect = (
+                    self._create_mock_market_analysis
+                )
                 mock_price_service.return_value = mock_price_service_instance
 
                 mock_correlation_service_instance = AsyncMock()
-                mock_correlation_service_instance.calculate_correlation.return_value = {"ethereum": 0.85, "solana": 0.72}
-                mock_correlation_service.return_value = mock_correlation_service_instance
+                mock_correlation_service_instance.calculate_correlation.return_value = {
+                    "ethereum": 0.85,
+                    "solana": 0.72,
+                }
+                mock_correlation_service.return_value = (
+                    mock_correlation_service_instance
+                )
 
-                mock_article_service.get_average_sentiment_for_symbols.return_value = {"BTC": -0.45, "ETH": -0.52}
+                mock_article_service.get_average_sentiment_for_symbols.return_value = {
+                    "BTC": -0.45,
+                    "ETH": -0.52,
+                }
 
                 request_data = {
                     "model": "crypto-insight-agent",
                     "messages": [{"role": "user", "content": query}],
-                    "stream": False
+                    "stream": False,
                 }
 
                 response = self.client.post(
                     "/v1/chat/completions",
                     json=request_data,
-                    headers={"X-API-Key": self.valid_api_keys[0]}
+                    headers={"X-API-Key": self.valid_api_keys[0]},
                 )
 
                 assert response.status_code == 200, f"Failed for query: {query}"
@@ -399,8 +540,17 @@ class TestContextOwlMarketCrashAnalysis:
                 assert response_data["choices"][0]["message"]["role"] == "assistant"
 
                 # Verify actionable context is provided
-                actionable_indicators = ["sentiment", "narratives", "themes", "analysis", "context", "outlook"]
-                actionable_score = sum(1 for indicator in actionable_indicators if indicator in content)
+                actionable_indicators = [
+                    "sentiment",
+                    "narratives",
+                    "themes",
+                    "analysis",
+                    "context",
+                    "outlook",
+                ]
+                actionable_score = sum(
+                    1 for indicator in actionable_indicators if indicator in content
+                )
 
                 # Content should be substantial (more than just price reporting)
                 content_length = len(content.split())
@@ -414,33 +564,60 @@ class TestContextOwlMarketCrashAnalysis:
         """This test specifically verifies that Context Owl mentions key drivers:
         ETF outflows, whale liquidations, Fed policy uncertainty.
         """
-        key_drivers = ["etf", "outflows", "whale", "liquidations", "fed", "policy", "federal reserve"]
+        key_drivers = [
+            "etf",
+            "outflows",
+            "whale",
+            "liquidations",
+            "fed",
+            "policy",
+            "federal reserve",
+        ]
 
-        with patch('crypto_news_aggregator.api.openai_compatibility.get_price_service') as mock_price_service, \
-             patch('crypto_news_aggregator.api.openai_compatibility.get_correlation_service') as mock_correlation_service, \
-             patch('crypto_news_aggregator.api.openai_compatibility.article_service') as mock_article_service:
+        with (
+            patch(
+                "crypto_news_aggregator.api.openai_compatibility.get_price_service"
+            ) as mock_price_service,
+            patch(
+                "crypto_news_aggregator.api.openai_compatibility.get_correlation_service"
+            ) as mock_correlation_service,
+            patch(
+                "crypto_news_aggregator.api.openai_compatibility.article_service"
+            ) as mock_article_service,
+        ):
 
             # Setup mocks
             mock_price_service_instance = AsyncMock()
-            mock_price_service_instance.generate_market_analysis_commentary.side_effect = self._create_mock_market_analysis
+            mock_price_service_instance.generate_market_analysis_commentary.side_effect = (
+                self._create_mock_market_analysis
+            )
             mock_price_service.return_value = mock_price_service_instance
 
             mock_correlation_service_instance = AsyncMock()
-            mock_correlation_service_instance.calculate_correlation.return_value = {"ethereum": 0.85}
+            mock_correlation_service_instance.calculate_correlation.return_value = {
+                "ethereum": 0.85
+            }
             mock_correlation_service.return_value = mock_correlation_service_instance
 
-            mock_article_service.get_average_sentiment_for_symbols.return_value = {"BTC": -0.45}
+            mock_article_service.get_average_sentiment_for_symbols.return_value = {
+                "BTC": -0.45
+            }
 
             request_data = {
                 "model": "crypto-insight-agent",
-                "messages": [{"role": "user", "content": "Why is the crypto market dumping so hard?"}],
-                "stream": False
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "Why is the crypto market dumping so hard?",
+                    }
+                ],
+                "stream": False,
             }
 
             response = self.client.post(
                 "/v1/chat/completions",
                 json=request_data,
-                headers={"X-API-Key": self.valid_api_keys[0]}
+                headers={"X-API-Key": self.valid_api_keys[0]},
             )
 
             assert response.status_code == 200
@@ -449,15 +626,23 @@ class TestContextOwlMarketCrashAnalysis:
 
             # Check that key drivers are mentioned
             driver_mentions = sum(1 for driver in key_drivers if driver in content)
-            assert driver_mentions >= 2, f"Expected at least 2 key drivers mentioned, got {driver_mentions}: {content}"
+            assert (
+                driver_mentions >= 2
+            ), f"Expected at least 2 key drivers mentioned, got {driver_mentions}: {content}"
 
             # Verify specific driver categories
             institutional_drivers = ["etf", "outflows", "institutional"]
-            institutional_mentions = sum(1 for driver in institutional_drivers if driver in content)
-            assert institutional_mentions >= 1, "Should mention institutional/ETF drivers"
+            institutional_mentions = sum(
+                1 for driver in institutional_drivers if driver in content
+            )
+            assert (
+                institutional_mentions >= 1
+            ), "Should mention institutional/ETF drivers"
 
             liquidation_drivers = ["whale", "liquidations", "cascade"]
-            liquidation_mentions = sum(1 for driver in liquidation_drivers if driver in content)
+            liquidation_mentions = sum(
+                1 for driver in liquidation_drivers if driver in content
+            )
             assert liquidation_mentions >= 1, "Should mention liquidation drivers"
 
             policy_drivers = ["fed", "policy", "federal", "reserve"]

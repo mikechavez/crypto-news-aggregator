@@ -1,6 +1,7 @@
 """
 Performance monitoring middleware for FastAPI application.
 """
+
 import time
 import logging
 from typing import Callable, Dict, Any
@@ -13,6 +14,7 @@ except ImportError:
     # Fallback for FastAPI versions that don't have BaseHTTPMiddleware
     class BaseHTTPMiddleware:
         """Fallback middleware base class."""
+
         def __init__(self, app):
             self.app = app
 
@@ -24,7 +26,9 @@ except ImportError:
             # Custom middleware logic would go here
             await self.app(scope, receive, send)
 
+
 logger = logging.getLogger(__name__)
+
 
 class PerformanceMonitoringMiddleware:
     """ASGI middleware for monitoring API performance and errors."""
@@ -75,25 +79,45 @@ class PerformanceMonitoringMiddleware:
         error_msg = str(error).lower()
 
         # Authentication errors (check first for specific patterns)
-        if any(keyword in error_msg for keyword in ['auth', 'token', 'unauthorized', 'forbidden', 'invalid', 'key']):
-            return 'authentication_error'
+        if any(
+            keyword in error_msg
+            for keyword in [
+                "auth",
+                "token",
+                "unauthorized",
+                "forbidden",
+                "invalid",
+                "key",
+            ]
+        ):
+            return "authentication_error"
         # LLM/AI errors (check before generic API errors)
-        elif any(keyword in error_msg for keyword in ['llm', 'ai', 'openai', 'model', 'generation']):
-            return 'llm_error'
+        elif any(
+            keyword in error_msg
+            for keyword in ["llm", "ai", "openai", "model", "generation"]
+        ):
+            return "llm_error"
         # Database errors
-        elif 'database' in error_msg or 'mongodb' in error_msg:
-            return 'database_error'
+        elif "database" in error_msg or "mongodb" in error_msg:
+            return "database_error"
         # External API errors
-        elif 'coingecko' in error_msg or 'api' in error_msg:
-            return 'external_api_error'
+        elif "coingecko" in error_msg or "api" in error_msg:
+            return "external_api_error"
         else:
-            return 'infrastructure_error'
+            return "infrastructure_error"
+
 
 class DatabaseErrorMonitor:
     """Monitor database operations and errors."""
 
     @staticmethod
-    def log_database_operation(operation: str, collection: str, success: bool, duration_ms: float, error: Exception = None):
+    def log_database_operation(
+        operation: str,
+        collection: str,
+        success: bool,
+        duration_ms: float,
+        error: Exception = None,
+    ):
         """Log database operation metrics."""
         if success:
             logger.info(
@@ -104,17 +128,25 @@ class DatabaseErrorMonitor:
                 f"DATABASE_OPERATION_ERROR: {operation} on {collection} failed after {duration_ms:.2f}ms - {type(error).__name__}: {str(error)}"
             )
 
+
 class LLMErrorMonitor:
     """Monitor LLM operations and errors."""
 
     @staticmethod
-    def log_llm_operation(provider: str, operation: str, success: bool, duration_ms: float, error: Exception = None, token_count: int = None):
+    def log_llm_operation(
+        provider: str,
+        operation: str,
+        success: bool,
+        duration_ms: float,
+        error: Exception = None,
+        token_count: int = None,
+    ):
         """Log LLM operation metrics."""
         extra_data = {
             "provider": provider,
             "operation": operation,
             "success": success,
-            "duration_ms": round(duration_ms, 2)
+            "duration_ms": round(duration_ms, 2),
         }
 
         if token_count is not None:
@@ -127,18 +159,31 @@ class LLMErrorMonitor:
             extra_data["error_message"] = str(error)
             logger.error(f"LLM_OPERATION_ERROR", extra=extra_data)
 
+
 class PerformanceMetrics:
     """Collect and log performance metrics."""
 
     @staticmethod
-    def log_api_performance(endpoint: str, method: str, duration_ms: float, status_code: int, cache_hit: bool = False):
+    def log_api_performance(
+        endpoint: str,
+        method: str,
+        duration_ms: float,
+        status_code: int,
+        cache_hit: bool = False,
+    ):
         """Log API performance metrics."""
         logger.info(
             f"API_PERFORMANCE: {method} {endpoint} {status_code} {duration_ms:.2f}ms {'CACHE_HIT' if cache_hit else 'FRESH'}"
         )
 
     @staticmethod
-    def log_external_api_call(service: str, endpoint: str, success: bool, duration_ms: float, error: Exception = None):
+    def log_external_api_call(
+        service: str,
+        endpoint: str,
+        success: bool,
+        duration_ms: float,
+        error: Exception = None,
+    ):
         """Log external API call metrics."""
         if success:
             logger.info(
@@ -148,6 +193,7 @@ class PerformanceMetrics:
             logger.error(
                 f"EXTERNAL_API_ERROR: {service} {endpoint} {type(error).__name__}: {str(error)} ({duration_ms:.2f}ms)"
             )
+
 
 def setup_performance_monitoring(app):
     """Add performance monitoring middleware to the FastAPI app."""

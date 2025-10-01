@@ -1,7 +1,9 @@
 """Core application dependencies."""
+
 from functools import lru_cache
 from fastapi.security import OAuth2PasswordBearer
 from .config import get_settings
+
 
 @lru_cache()
 def get_oauth2_scheme():
@@ -13,6 +15,5 @@ def get_oauth2_scheme():
     """
     settings = get_settings()
     return OAuth2PasswordBearer(
-        tokenUrl=f"{settings.API_V1_STR}/auth/login",
-        auto_error=False
+        tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False
     )

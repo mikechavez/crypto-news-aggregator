@@ -6,6 +6,7 @@ from .tracking import track_usage
 # Note: To use this provider, you need to install the 'openai' library.
 # You can add it to your pyproject.toml file.
 
+
 class OpenAIProvider(LLMProvider):
     """
     LLM provider for OpenAI's GPT-4 model.
@@ -64,7 +65,9 @@ class OpenAIProvider(LLMProvider):
         if sentiment_score > 0.6:
             insight += "The market sentiment is highly optimistic, driven by recent developments."
         elif sentiment_score < -0.6:
-            insight += "A strong negative sentiment prevails, likely due to market volatility."
+            insight += (
+                "A strong negative sentiment prevails, likely due to market volatility."
+            )
         else:
             insight += "The sentiment is cautiously optimistic, with some reservations."
 

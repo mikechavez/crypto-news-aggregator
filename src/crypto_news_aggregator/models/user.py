@@ -1,4 +1,5 @@
 """User-related Pydantic models."""
+
 from datetime import datetime
 from typing import Optional, List, Dict
 from enum import Enum
@@ -9,6 +10,7 @@ from ..db.mongodb import PyObjectId
 
 class UserSubscriptionPreferences(BaseModel):
     """User's email subscription preferences."""
+
     price_alerts: bool = True
     market_updates: bool = True
     newsletter: bool = True
@@ -23,6 +25,7 @@ class EmailVerificationStatus(str, Enum):
 
 class UserTrackingSettings(BaseModel):
     """User's email tracking settings."""
+
     track_opens: bool = True
     track_clicks: bool = True
     track_geo: bool = False
@@ -30,8 +33,14 @@ class UserTrackingSettings(BaseModel):
 
 class UserBase(BaseModel):
     """Base user model with common fields."""
-    username: str = Field(..., min_length=3, max_length=50, pattern=r'^[a-zA-Z0-9_]+$',
-                         description="Username must be 3-50 characters long and can only contain letters, numbers, and underscores")
+
+    username: str = Field(
+        ...,
+        min_length=3,
+        max_length=50,
+        pattern=r"^[a-zA-Z0-9_]+$",
+        description="Username must be 3-50 characters long and can only contain letters, numbers, and underscores",
+    )
     email: EmailStr
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
@@ -55,7 +64,7 @@ class UserBase(BaseModel):
     timezone: Optional[str] = "UTC"
     locale: Optional[str] = "en-US"
 
-    @field_validator('username')
+    @field_validator("username")
     @classmethod
     def username_to_lower(cls, v: str) -> str:
         """Convert username to lowercase for case-insensitive uniqueness."""
@@ -64,17 +73,27 @@ class UserBase(BaseModel):
 
 class UserCreate(BaseModel):
     """Model for creating a new user."""
-    username: str = Field(..., min_length=3, max_length=50, pattern=r'^[a-zA-Z0-9_]+$',
-                         description="Username must be 3-50 characters long and can only contain letters, numbers, and underscores")
+
+    username: str = Field(
+        ...,
+        min_length=3,
+        max_length=50,
+        pattern=r"^[a-zA-Z0-9_]+$",
+        description="Username must be 3-50 characters long and can only contain letters, numbers, and underscores",
+    )
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=100,
-                         description="Password must be at least 8 characters long")
+    password: str = Field(
+        ...,
+        min_length=8,
+        max_length=100,
+        description="Password must be at least 8 characters long",
+    )
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
     timezone: Optional[str] = "UTC"
     locale: Optional[str] = "en-US"
 
-    @field_validator('username')
+    @field_validator("username")
     @classmethod
     def username_to_lower(cls, v: str) -> str:
         """Convert username to lowercase for case-insensitive uniqueness."""
@@ -83,6 +102,7 @@ class UserCreate(BaseModel):
 
 class UserInDB(UserBase):
     """User model for database operations."""
+
     id: PyObjectId = Field(..., alias="_id")
     hashed_password: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -96,12 +116,13 @@ class UserInDB(UserBase):
 
 class UserUpdate(BaseModel):
     """Model for updating user profile."""
+
     username: Optional[str] = Field(
         None,
         min_length=3,
         max_length=50,
-        pattern=r'^[a-zA-Z0-9_]+$',
-        description="Username must be 3-50 characters long and can only contain letters, numbers, and underscores"
+        pattern=r"^[a-zA-Z0-9_]+$",
+        description="Username must be 3-50 characters long and can only contain letters, numbers, and underscores",
     )
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
@@ -110,7 +131,7 @@ class UserUpdate(BaseModel):
     subscription_preferences: Optional[UserSubscriptionPreferences] = None
     tracking_settings: Optional[UserTrackingSettings] = None
 
-    @field_validator('username')
+    @field_validator("username")
     @classmethod
     def username_to_lower(cls, v: Optional[str]) -> Optional[str]:
         """Convert username to lowercase for case-insensitive uniqueness."""
@@ -119,6 +140,7 @@ class UserUpdate(BaseModel):
 
 class User(UserBase):
     """User model for API responses."""
+
     id: str = Field(..., alias="_id")
     created_at: datetime
     updated_at: datetime
@@ -130,6 +152,7 @@ class User(UserBase):
 
 class UserResponse(BaseModel):
     """User response model with public profile information."""
+
     id: str = Field(..., alias="_id")
     username: str
     email: str
@@ -147,10 +170,12 @@ class UserResponse(BaseModel):
 
 class EmailVerificationRequest(BaseModel):
     """Model for email verification request."""
+
     token: str
 
 
 class UnsubscribeRequest(BaseModel):
     """Model for unsubscribe request."""
+
     token: str
     email_type: Optional[str] = None  # 'all' or specific type like 'price_alerts'

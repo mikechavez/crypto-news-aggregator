@@ -7,6 +7,6 @@ from .alert import (  # noqa: F401
     AlertInDB,
     AlertCreate,
     AlertUpdate,
-    AlertCondition
+    AlertCondition,
 )
 from .article import ArticleInDB, ArticleCreate  # noqa: F401

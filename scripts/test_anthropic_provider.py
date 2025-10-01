@@ -5,9 +5,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Add the project root to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.crypto_news_aggregator.llm.anthropic import AnthropicProvider
+
 
 def run_test():
     """
@@ -17,7 +18,9 @@ def run_test():
         provider = AnthropicProvider()
     except ValueError as e:
         print(f"Error: {e}")
-        print("Please make sure your ANTHROPIC_API_KEY is set in your environment variables.")
+        print(
+            "Please make sure your ANTHROPIC_API_KEY is set in your environment variables."
+        )
         return
 
     print(f"Using model: {provider.model_name}")
@@ -34,7 +37,7 @@ def run_test():
     sample_texts = [
         "Ethereum's upcoming Dencun upgrade is expected to lower gas fees significantly.",
         "Solana's ecosystem is growing, with many new DeFi projects launching.",
-        "The SEC is cracking down on unregistered crypto securities."
+        "The SEC is cracking down on unregistered crypto securities.",
     ]
     print(f"Extracting themes from texts:")
     for text in sample_texts:
@@ -44,13 +47,11 @@ def run_test():
 
     # Test insight generation
     print("\n--- Testing Insight Generation ---")
-    insight_data = {
-        "sentiment_score": sentiment,
-        "themes": themes
-    }
+    insight_data = {"sentiment_score": sentiment, "themes": themes}
     print(f"Generating insight with sentiment {sentiment} and themes {themes}")
     insight = provider.generate_insight(insight_data)
     print(f"Generated insight: {insight}")
+
 
 if __name__ == "__main__":
     run_test()

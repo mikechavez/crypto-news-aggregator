@@ -1,4 +1,5 @@
 """Tests for OpenAI compatibility endpoint."""
+
 import pytest
 import json
 from fastapi.testclient import TestClient
@@ -29,7 +30,7 @@ class TestOpenAICompatibility:
         request_data = {
             "model": "crypto-insight-agent",
             "messages": [{"role": "user", "content": "What is the price of Bitcoin?"}],
-            "stream": False
+            "stream": False,
         }
 
         response = self.client.post("/v1/chat/completions", json=request_data)
@@ -43,13 +44,13 @@ class TestOpenAICompatibility:
         request_data = {
             "model": "crypto-insight-agent",
             "messages": [{"role": "user", "content": "What is the price of Bitcoin?"}],
-            "stream": False
+            "stream": False,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=request_data,
-            headers={"X-API-Key": "invalid-key"}
+            headers={"X-API-Key": "invalid-key"},
         )
 
         # Should return 403 Forbidden with invalid API key
@@ -66,25 +67,30 @@ class TestOpenAICompatibility:
         request_data = {
             "model": "crypto-insight-agent",
             "messages": [{"role": "user", "content": "What is the price of Bitcoin?"}],
-            "stream": False
+            "stream": False,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=request_data,
-            headers={"X-API-Key": valid_api_keys[0]}
+            headers={"X-API-Key": valid_api_keys[0]},
         )
 
         # Should accept valid API key and process request
-        assert response.status_code in [200, 500]  # 500 might occur due to missing services in test env
+        assert response.status_code in [
+            200,
+            500,
+        ]  # 500 might occur due to missing services in test env
 
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_price_service')
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_correlation_service')
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_price_service")
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_correlation_service")
     def test_openai_price_inquiry(self, mock_correlation_service, mock_price_service):
         """Test price inquiry functionality."""
         # Mock price service
         mock_price_service_instance = AsyncMock()
-        mock_price_service_instance.generate_market_analysis_commentary.return_value = "Bitcoin is currently trading at $50,000 with strong upward momentum."
+        mock_price_service_instance.generate_market_analysis_commentary.return_value = (
+            "Bitcoin is currently trading at $50,000 with strong upward momentum."
+        )
         mock_price_service.return_value = mock_price_service_instance
 
         # Mock correlation service
@@ -99,14 +105,16 @@ class TestOpenAICompatibility:
 
         request_data = {
             "model": "crypto-insight-agent",
-            "messages": [{"role": "user", "content": "What is the current price of Bitcoin?"}],
-            "stream": False
+            "messages": [
+                {"role": "user", "content": "What is the current price of Bitcoin?"}
+            ],
+            "stream": False,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=request_data,
-            headers={"X-API-Key": valid_api_keys[0]}
+            headers={"X-API-Key": valid_api_keys[0]},
         )
 
         if response.status_code == 200:
@@ -119,13 +127,17 @@ class TestOpenAICompatibility:
             assert response_data["choices"][0]["message"]["role"] == "assistant"
             assert "finish_reason" in response_data["choices"][0]
 
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_price_service')
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_correlation_service')
-    def test_openai_sentiment_analysis(self, mock_correlation_service, mock_price_service):
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_price_service")
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_correlation_service")
+    def test_openai_sentiment_analysis(
+        self, mock_correlation_service, mock_price_service
+    ):
         """Test sentiment analysis functionality."""
         # Mock price service
         mock_price_service_instance = AsyncMock()
-        mock_price_service_instance.generate_market_analysis_commentary.return_value = "Market analysis data"
+        mock_price_service_instance.generate_market_analysis_commentary.return_value = (
+            "Market analysis data"
+        )
         mock_price_service.return_value = mock_price_service_instance
 
         # Mock correlation service
@@ -134,8 +146,13 @@ class TestOpenAICompatibility:
         mock_correlation_service.return_value = mock_correlation_service_instance
 
         # Mock article service sentiment
-        with patch('crypto_news_aggregator.api.openai_compatibility.article_service') as mock_article_service:
-            mock_article_service.get_average_sentiment_for_symbols.return_value = {"BTC": 0.3, "ETH": -0.1}
+        with patch(
+            "crypto_news_aggregator.api.openai_compatibility.article_service"
+        ) as mock_article_service:
+            mock_article_service.get_average_sentiment_for_symbols.return_value = {
+                "BTC": 0.3,
+                "ETH": -0.1,
+            }
 
             valid_api_keys = get_api_keys()
             if not valid_api_keys:
@@ -143,34 +160,49 @@ class TestOpenAICompatibility:
 
             request_data = {
                 "model": "crypto-insight-agent",
-                "messages": [{"role": "user", "content": "What is the sentiment around Bitcoin and Ethereum?"}],
-                "stream": False
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "What is the sentiment around Bitcoin and Ethereum?",
+                    }
+                ],
+                "stream": False,
             }
 
             response = self.client.post(
                 "/v1/chat/completions",
                 json=request_data,
-                headers={"X-API-Key": valid_api_keys[0]}
+                headers={"X-API-Key": valid_api_keys[0]},
             )
 
             if response.status_code == 200:
                 response_data = response.json()
                 assert "choices" in response_data
                 content = response_data["choices"][0]["message"]["content"].lower()
-                assert any(sentiment in content for sentiment in ["positive", "negative", "neutral", "sentiment"])
+                assert any(
+                    sentiment in content
+                    for sentiment in ["positive", "negative", "neutral", "sentiment"]
+                )
 
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_price_service')
-    @patch('crypto_news_aggregator.api.openai_compatibility.get_correlation_service')
-    def test_openai_correlation_analysis(self, mock_correlation_service, mock_price_service):
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_price_service")
+    @patch("crypto_news_aggregator.api.openai_compatibility.get_correlation_service")
+    def test_openai_correlation_analysis(
+        self, mock_correlation_service, mock_price_service
+    ):
         """Test correlation analysis functionality."""
         # Mock price service
         mock_price_service_instance = AsyncMock()
-        mock_price_service_instance.generate_market_analysis_commentary.return_value = "Market analysis data"
+        mock_price_service_instance.generate_market_analysis_commentary.return_value = (
+            "Market analysis data"
+        )
         mock_price_service.return_value = mock_price_service_instance
 
         # Mock correlation service
         mock_correlation_service_instance = AsyncMock()
-        mock_correlation_service_instance.calculate_correlation.return_value = {"ethereum": 0.85, "solana": 0.72}
+        mock_correlation_service_instance.calculate_correlation.return_value = {
+            "ethereum": 0.85,
+            "solana": 0.72,
+        }
         mock_correlation_service.return_value = mock_correlation_service_instance
 
         valid_api_keys = get_api_keys()
@@ -179,14 +211,19 @@ class TestOpenAICompatibility:
 
         request_data = {
             "model": "crypto-insight-agent",
-            "messages": [{"role": "user", "content": "How correlated is Bitcoin with other cryptocurrencies?"}],
-            "stream": False
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "How correlated is Bitcoin with other cryptocurrencies?",
+                }
+            ],
+            "stream": False,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=request_data,
-            headers={"X-API-Key": valid_api_keys[0]}
+            headers={"X-API-Key": valid_api_keys[0]},
         )
 
         if response.status_code == 200:
@@ -204,13 +241,13 @@ class TestOpenAICompatibility:
         request_data = {
             "model": "crypto-insight-agent",
             "messages": [{"role": "user", "content": "Hello"}],
-            "stream": False
+            "stream": False,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=request_data,
-            headers={"X-API-Key": valid_api_keys[0]}
+            headers={"X-API-Key": valid_api_keys[0]},
         )
 
         if response.status_code == 200:
@@ -242,18 +279,21 @@ class TestOpenAICompatibility:
         request_data = {
             "model": "crypto-insight-agent",
             "messages": [{"role": "user", "content": "Tell me about Bitcoin"}],
-            "stream": True
+            "stream": True,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=request_data,
-            headers={"X-API-Key": valid_api_keys[0]}
+            headers={"X-API-Key": valid_api_keys[0]},
         )
 
         if response.status_code == 200:
             # Check that it's a streaming response
-            assert response.headers.get("content-type") == "text/event-stream; charset=utf-8"
+            assert (
+                response.headers.get("content-type")
+                == "text/event-stream; charset=utf-8"
+            )
 
             # Read the streaming content
             content = response.content.decode()
@@ -270,13 +310,13 @@ class TestOpenAICompatibility:
         request_data = {
             "model": "gpt-4",  # Different model name
             "messages": [{"role": "user", "content": "Hello"}],
-            "stream": False
+            "stream": False,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=request_data,
-            headers={"X-API-Key": valid_api_keys[0]}
+            headers={"X-API-Key": valid_api_keys[0]},
         )
 
         # Should work regardless of model name
@@ -294,15 +334,15 @@ class TestOpenAICompatibility:
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": "What is Bitcoin?"},
                 {"role": "assistant", "content": "Bitcoin is a cryptocurrency."},
-                {"role": "user", "content": "Tell me more about it."}
+                {"role": "user", "content": "Tell me more about it."},
             ],
-            "stream": False
+            "stream": False,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=request_data,
-            headers={"X-API-Key": valid_api_keys[0]}
+            headers={"X-API-Key": valid_api_keys[0]},
         )
 
         # Should handle conversation history
@@ -319,20 +359,20 @@ class TestOpenAICompatibility:
             "How is Bitcoin doing today?",
             "Tell me about ETH and SOL",
             "What about ethereum and dogecoin?",
-            "ADA is looking good"
+            "ADA is looking good",
         ]
 
         for content in test_cases:
             request_data = {
                 "model": "crypto-insight-agent",
                 "messages": [{"role": "user", "content": content}],
-                "stream": False
+                "stream": False,
             }
 
             response = self.client.post(
                 "/v1/chat/completions",
                 json=request_data,
-                headers={"X-API-Key": valid_api_keys[0]}
+                headers={"X-API-Key": valid_api_keys[0]},
             )
 
             # Should process the request without error
@@ -348,13 +388,13 @@ class TestOpenAICompatibility:
         request_data = {
             "model": "crypto-insight-agent",
             "messages": [],
-            "stream": False
+            "stream": False,
         }
 
         response = self.client.post(
             "/v1/chat/completions",
             json=request_data,
-            headers={"X-API-Key": valid_api_keys[0]}
+            headers={"X-API-Key": valid_api_keys[0]},
         )
 
         # Should handle gracefully
@@ -364,7 +404,7 @@ class TestOpenAICompatibility:
         response = self.client.post(
             "/v1/chat/completions",
             data="invalid json",
-            headers={"X-API-Key": valid_api_keys[0]}
+            headers={"X-API-Key": valid_api_keys[0]},
         )
 
         # Should return 422 Unprocessable Entity
@@ -377,14 +417,14 @@ class TestOpenAICompatibility:
         request_data = {
             "model": "crypto-insight-agent",
             "messages": [{"role": "user", "content": "Hello"}],
-            "stream": False
+            "stream": False,
         }
 
         # Test with Bearer token (will fail auth but should not fail on format)
         response = self.client.post(
             "/v1/chat/completions",
             json=request_data,
-            headers={"Authorization": "Bearer invalid-token"}
+            headers={"Authorization": "Bearer invalid-token"},
         )
 
         # Should fail with auth error, not format error

@@ -38,17 +38,21 @@ NAME_TO_SYMBOL_MAP = {
     "chainlink": "LINK",
 }
 
+
 # 1. Required Models
 class ChatMessage(BaseModel):
     role: str
     content: str
+
 
 class OpenAIChatRequest(BaseModel):
     model: str = "crypto-insight-agent"
     messages: List[ChatMessage]
     stream: Optional[bool] = False
 
+
 # 2. Service-Connected & Placeholder Functions
+
 
 def _get_sentiment_label(score: Optional[float]) -> str:
     if score is None:
@@ -59,20 +63,30 @@ def _get_sentiment_label(score: Optional[float]) -> str:
         return "negative"
     return "neutral"
 
+
 async def get_market_sentiment(symbols: List[str]) -> Dict:
     """Gets market sentiment from the article service."""
     try:
         logger.info(f"Fetching market sentiment for symbols: {symbols}")
         # Fetch average sentiment scores
-        sentiment_scores = await article_service.get_average_sentiment_for_symbols(symbols)
+        sentiment_scores = await article_service.get_average_sentiment_for_symbols(
+            symbols
+        )
 
         # Convert scores to labels
-        sentiment_labels = {symbol: _get_sentiment_label(score) for symbol, score in sentiment_scores.items()}
+        sentiment_labels = {
+            symbol: _get_sentiment_label(score)
+            for symbol, score in sentiment_scores.items()
+        }
 
         return {"sentiment": sentiment_labels}
     except Exception as e:
         logger.error(f"Error fetching market sentiment: {e}", exc_info=True)
-        raise HTTPException(status_code=503, detail="Could not fetch market sentiment due to a service error.")
+        raise HTTPException(
+            status_code=503,
+            detail="Could not fetch market sentiment due to a service error.",
+        )
+
 
 async def analyze_price_correlation(symbol: str, correlation_service) -> Dict:
     """Analyzes price correlation using the correlation service."""
@@ -83,26 +97,32 @@ async def analyze_price_correlation(symbol: str, correlation_service) -> Dict:
     # Correlate against a predefined list of major coins
     target_symbols = ["BTC", "ETH", "SOL"]
     target_coin_ids = [
-        SYMBOL_TO_ID_MAP.get(s) for s in target_symbols 
+        SYMBOL_TO_ID_MAP.get(s)
+        for s in target_symbols
         if s.upper() in SYMBOL_TO_ID_MAP and s.upper() != symbol.upper()
     ]
 
     if not target_coin_ids:
         return {"correlation": {}}
 
-    correlation_data = await correlation_service.calculate_correlation(base_coin_id, target_coin_ids)
+    correlation_data = await correlation_service.calculate_correlation(
+        base_coin_id, target_coin_ids
+    )
 
     id_to_symbol_map = {v: k for k, v in SYMBOL_TO_ID_MAP.items()}
-    
+
     # Format the response with symbols and rounded correlation values
     formatted_correlation = {
-        id_to_symbol_map.get(coin_id): round(corr, 2) 
-        for coin_id, corr in correlation_data.items() if corr is not None
+        id_to_symbol_map.get(coin_id): round(corr, 2)
+        for coin_id, corr in correlation_data.items()
+        if corr is not None
     }
 
     return {"correlation": formatted_correlation}
 
+
 # 3. Query Processing and Endpoint
+
 
 def extract_symbols(text: str) -> List[str]:
     """Extracts crypto symbols (e.g., BTC, ETH) and names (e.g., Bitcoin) from text."""
@@ -112,7 +132,7 @@ def extract_symbols(text: str) -> List[str]:
     # 1. Extract direct symbols like BTC, ETH
     # Create a regex pattern for all known symbols
     symbol_keys = "|".join(SYMBOL_TO_ID_MAP.keys())
-    direct_symbols = re.findall(rf'\b({symbol_keys})\b', text, re.IGNORECASE)
+    direct_symbols = re.findall(rf"\b({symbol_keys})\b", text, re.IGNORECASE)
     for symbol in direct_symbols:
         found_symbols.add(symbol.upper())
 
@@ -120,8 +140,9 @@ def extract_symbols(text: str) -> List[str]:
     for name, symbol in NAME_TO_SYMBOL_MAP.items():
         if name in text:
             found_symbols.add(symbol)
-            
+
     return list(found_symbols)
+
 
 def classify_intent(text: str) -> str:
     """Classifies user intent from the message content."""
@@ -134,18 +155,36 @@ def classify_intent(text: str) -> str:
         return "price_inquiry"
     return "price_inquiry"  # Default to price inquiry
 
-async def stream_response(response_generator: AsyncGenerator[str, None]) -> AsyncGenerator[str, None]:
+
+async def stream_response(
+    response_generator: AsyncGenerator[str, None],
+) -> AsyncGenerator[str, None]:
     async for chunk in response_generator:
         yield f"data: {json.dumps(chunk)}\n\n"
     yield "data: [DONE]\n\n"
 
 
-async def generate_response_content(intent: str, symbols: List[str], price_service: CoinGeckoPriceService, correlation_service, last_message: str = "") -> str:
+async def generate_response_content(
+    intent: str,
+    symbols: List[str],
+    price_service: CoinGeckoPriceService,
+    correlation_service,
+    last_message: str = "",
+) -> str:
     """Generates a response based on intent and symbols."""
     # Handle general market queries (e.g., "Why is crypto crashing?") even without specific symbols
     if not symbols:
         # Check if this is a general market analysis query
-        general_market_terms = ["crypto", "cryptocurrency", "market", "crash", "dump", "bear", "bull", "volatility"]
+        general_market_terms = [
+            "crypto",
+            "cryptocurrency",
+            "market",
+            "crash",
+            "dump",
+            "bear",
+            "bull",
+            "volatility",
+        ]
         message_lower = last_message.lower()
 
         # If general market terms are found, default to Bitcoin analysis
@@ -156,7 +195,11 @@ async def generate_response_content(intent: str, symbols: List[str], price_servi
         return "I can provide information about cryptocurrencies. Please specify a symbol like BTC or ETH."
 
     if intent == "price_inquiry":
-        coin_ids = [SYMBOL_TO_ID_MAP.get(s.upper()) for s in symbols if s.upper() in SYMBOL_TO_ID_MAP]
+        coin_ids = [
+            SYMBOL_TO_ID_MAP.get(s.upper())
+            for s in symbols
+            if s.upper() in SYMBOL_TO_ID_MAP
+        ]
         if not coin_ids:
             return "Could not find the specified cryptocurrencies."
 
@@ -165,13 +208,21 @@ async def generate_response_content(intent: str, symbols: List[str], price_servi
             coin_id = SYMBOL_TO_ID_MAP.get(symbol.upper())
             if coin_id:
                 try:
-                    analysis = await price_service.generate_market_analysis_commentary(coin_id)
+                    analysis = await price_service.generate_market_analysis_commentary(
+                        coin_id
+                    )
                     responses.append(analysis)
                 except Exception as e:
-                    logger.error(f"Error generating analysis for {symbol}: {e}", exc_info=True)
-                    responses.append(f"An error occurred while analyzing {symbol.upper()}.")
+                    logger.error(
+                        f"Error generating analysis for {symbol}: {e}", exc_info=True
+                    )
+                    responses.append(
+                        f"An error occurred while analyzing {symbol.upper()}."
+                    )
             else:
-                responses.append(f"I could not retrieve market data for {symbol.upper()}.")
+                responses.append(
+                    f"I could not retrieve market data for {symbol.upper()}."
+                )
 
         return " ".join(responses)
 
@@ -179,7 +230,12 @@ async def generate_response_content(intent: str, symbols: List[str], price_servi
         try:
             data = await get_market_sentiment(symbols)
             sentiments = data.get("sentiment", {})
-            return ", ".join([f"The current market sentiment for {s} is {sent}" for s, sent in sentiments.items()])
+            return ", ".join(
+                [
+                    f"The current market sentiment for {s} is {sent}"
+                    for s, sent in sentiments.items()
+                ]
+            )
         except HTTPException as e:
             return f"An error occurred while fetching market sentiment: {e.detail}"
 
@@ -193,22 +249,20 @@ async def generate_response_content(intent: str, symbols: List[str], price_servi
 
     return "I'm not sure how to help with that."
 
+
 @router.post("/completions")
 async def chat_completions(
     request: OpenAIChatRequest,
     price_service: CoinGeckoPriceService = Depends(get_price_service),
-    correlation_service = Depends(get_correlation_service),
-    api_key: str = Depends(get_api_key)
+    correlation_service=Depends(get_correlation_service),
+    api_key: str = Depends(get_api_key),
 ):
     """OpenAI-compatible chat completions endpoint."""
     logger.info("Received chat completion request")
 
     # Check if messages list is empty
     if not request.messages:
-        raise HTTPException(
-            status_code=400,
-            detail="Messages list cannot be empty"
-        )
+        raise HTTPException(status_code=400, detail="Messages list cannot be empty")
 
     last_message = request.messages[-1].content
     symbols = extract_symbols(last_message)
@@ -219,13 +273,16 @@ async def chat_completions(
         logger.info("Performing sentiment analysis query.")
 
     if request.stream:
+
         async def response_generator():
-            content = await generate_response_content(intent, symbols, price_service, correlation_service, last_message)
+            content = await generate_response_content(
+                intent, symbols, price_service, correlation_service, last_message
+            )
             response_chunk = {
                 "choices": [
                     {
                         "delta": {"role": "assistant", "content": content},
-                        "finish_reason": "stop"
+                        "finish_reason": "stop",
                     }
                 ]
             }
@@ -240,20 +297,27 @@ async def chat_completions(
 
     else:
         try:
-            content = await generate_response_content(intent, symbols, price_service, correlation_service, last_message)
+            content = await generate_response_content(
+                intent, symbols, price_service, correlation_service, last_message
+            )
             response = {
                 "choices": [
                     {
                         "message": {"role": "assistant", "content": content},
-                        "finish_reason": "stop"
+                        "finish_reason": "stop",
                     }
                 ]
             }
             return response
         except HTTPException as e:
-            logger.error(f"HTTPException in chat_completions: {e.detail}", exc_info=True)
+            logger.error(
+                f"HTTPException in chat_completions: {e.detail}", exc_info=True
+            )
             raise
         except Exception as e:
-            logger.error(f"An unexpected error occurred in chat_completions: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail="An internal server error occurred.")
-
+            logger.error(
+                f"An unexpected error occurred in chat_completions: {e}", exc_info=True
+            )
+            raise HTTPException(
+                status_code=500, detail="An internal server error occurred."
+            )

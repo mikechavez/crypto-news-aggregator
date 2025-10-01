@@ -31,7 +31,15 @@ def create_crash_articles() -> List[Dict[str, Any]]:
             "source": "The Block",
             "sentiment_score": -0.6,
             "sentiment_label": "negative",
-            "keywords": ["BTC", "bitcoin", "whale", "liquidations", "cascade", "selling", "crypto"],
+            "keywords": [
+                "BTC",
+                "bitcoin",
+                "whale",
+                "liquidations",
+                "cascade",
+                "selling",
+                "crypto",
+            ],
             "published_at": datetime.now(timezone.utc).isoformat(),
         },
         {
@@ -39,9 +47,17 @@ def create_crash_articles() -> List[Dict[str, Any]]:
             "source": "Reuters",
             "sentiment_score": -0.3,
             "sentiment_label": "negative",
-            "keywords": ["BTC", "bitcoin", "federal reserve", "policy", "hawkish", "crypto", "turmoil"],
+            "keywords": [
+                "BTC",
+                "bitcoin",
+                "federal reserve",
+                "policy",
+                "hawkish",
+                "crypto",
+                "turmoil",
+            ],
             "published_at": datetime.now(timezone.utc).isoformat(),
-        }
+        },
     ]
 
 
@@ -64,45 +80,55 @@ def test_context_owl_fix_debug():
     print(f"🧪 Testing query: {query}")
 
     # Test with real implementation and detailed mocking
-    with patch('crypto_news_aggregator.services.price_service.article_service') as mock_article_service:
+    with patch(
+        "crypto_news_aggregator.services.price_service.article_service"
+    ) as mock_article_service:
         # Mock the article service to return crash articles
-        mock_article_service.get_top_articles_for_symbols.return_value = create_crash_articles()
-        mock_article_service.get_average_sentiment_for_symbols.return_value = {"BTC": -0.45}
+        mock_article_service.get_top_articles_for_symbols.return_value = (
+            create_crash_articles()
+        )
+        mock_article_service.get_average_sentiment_for_symbols.return_value = {
+            "BTC": -0.45
+        }
 
         # Mock market data
-        with patch('crypto_news_aggregator.services.price_service.CoinGeckoPriceService.get_global_market_data') as mock_get_data:
+        with patch(
+            "crypto_news_aggregator.services.price_service.CoinGeckoPriceService.get_global_market_data"
+        ) as mock_get_data:
             mock_get_data.return_value = {
-                'bitcoin': {
-                    'current_price': 60250,  # Realistic Bitcoin price
-                    'price_change_percentage_1h_in_currency': -1.2,
-                    'price_change_percentage_24h_in_currency': -2.7,
-                    'price_change_percentage_7d_in_currency': -8.5,
-                    'market_cap_rank': 1,
-                    'total_volume': 25000000000,
-                    'market_cap': 1180000000000,  # ~$1.18T market cap
-                    'name': 'Bitcoin'
+                "bitcoin": {
+                    "current_price": 60250,  # Realistic Bitcoin price
+                    "price_change_percentage_1h_in_currency": -1.2,
+                    "price_change_percentage_24h_in_currency": -2.7,
+                    "price_change_percentage_7d_in_currency": -8.5,
+                    "market_cap_rank": 1,
+                    "total_volume": 25000000000,
+                    "market_cap": 1180000000000,  # ~$1.18T market cap
+                    "name": "Bitcoin",
                 },
-                'ethereum': {
-                    'current_price': 2300,
-                    'price_change_percentage_24h_in_currency': -6.5,
-                    'name': 'Ethereum'
-                }
+                "ethereum": {
+                    "current_price": 2300,
+                    "price_change_percentage_24h_in_currency": -6.5,
+                    "name": "Ethereum",
+                },
             }
 
             # Mock the _fetch_related_news method to ensure it returns our crash articles
-            with patch('crypto_news_aggregator.services.price_service.CoinGeckoPriceService._fetch_related_news') as mock_fetch_news:
+            with patch(
+                "crypto_news_aggregator.services.price_service.CoinGeckoPriceService._fetch_related_news"
+            ) as mock_fetch_news:
                 mock_fetch_news.return_value = create_crash_articles()
 
                 request_data = {
                     "model": "crypto-insight-agent",
                     "messages": [{"role": "user", "content": query}],
-                    "stream": False
+                    "stream": False,
                 }
 
                 response = client.post(
                     "/v1/chat/completions",
                     json=request_data,
-                    headers={"X-API-Key": valid_api_keys[0]}
+                    headers={"X-API-Key": valid_api_keys[0]},
                 )
 
                 if response.status_code != 200:
@@ -117,14 +143,22 @@ def test_context_owl_fix_debug():
 
                 # Check if we got the sophisticated analysis
                 if "No high-signal news to analyze yet" in content:
-                    print("❌ ISSUE: Still getting fallback message instead of sophisticated analysis")
-                    print("   This means _fetch_related_news is returning empty or _analyze_developing_narratives is not working")
+                    print(
+                        "❌ ISSUE: Still getting fallback message instead of sophisticated analysis"
+                    )
+                    print(
+                        "   This means _fetch_related_news is returning empty or _analyze_developing_narratives is not working"
+                    )
                     return False
                 elif "ETF outflows creating selling pressure" in content:
-                    print("✅ SUCCESS: Got sophisticated crash analysis with key drivers!")
+                    print(
+                        "✅ SUCCESS: Got sophisticated crash analysis with key drivers!"
+                    )
                     return True
                 else:
-                    print("⚠️  PARTIAL: Got some analysis but missing crash-specific themes")
+                    print(
+                        "⚠️  PARTIAL: Got some analysis but missing crash-specific themes"
+                    )
                     return False
 
 
