@@ -6,32 +6,36 @@
 - **API Key:** Valid and has access to Haiku 3.5
 - **Entity Extraction:** Working correctly
 
-## 🚀 Railway Deployment Steps
+## 🚀 Railway Deployment Process
 
-### 1. Verify Environment Variables
-Check that these are set in Railway:
+### Automatic Deployment via Git Integration
 
-```bash
-# Required
-ANTHROPIC_API_KEY=sk-ant-api03-...
-ANTHROPIC_ENTITY_MODEL=claude-3-5-haiku-20241022
-ANTHROPIC_ENTITY_FALLBACK_MODEL=claude-3-5-sonnet-20241022
+**Railway handles deployments automatically** when code is pushed to the main branch. No manual deployment steps are required.
 
-# Optional (for cost tracking)
-ANTHROPIC_ENTITY_INPUT_COST_PER_1K_TOKENS=0.0008
-ANTHROPIC_ENTITY_OUTPUT_COST_PER_1K_TOKENS=0.004
-ENTITY_EXTRACTION_BATCH_SIZE=10
-```
+#### How Railway Auto-Deployment Works:
+1. **Git Integration**: Railway is connected to this repository's main branch
+2. **Automatic Builds**: Railway automatically builds and deploys when changes are pushed to main
+3. **Zero-Config**: Uses the existing `Procfile` for process definitions
+4. **Environment Variables**: Railway dashboard manages all environment variables
 
-### 2. Deploy Changes
-```bash
-git add -A
-git commit -m "fix: Add fallback logic and enhanced error logging for entity extraction 403 errors"
-git push origin main
-```
+#### Removed Redundant GitHub Actions Deployment
+- **Previous Issue**: GitHub Actions had a redundant `railway-deploy` step causing authentication errors
+- **Resolution**: Removed the deploy job from `.github/workflows/ci.yml`
+- **Result**: Cleaner CI pipeline that focuses only on testing and code quality
 
-### 3. Monitor Railway Logs
-After deployment, watch for these log messages:
+### Updated CI/CD Pipeline
+The GitHub Actions workflow now:
+- ✅ Runs comprehensive test suites on all PRs and pushes
+- ✅ Performs code quality checks and linting
+- ✅ **No longer attempts Railway deployment** (handled by Railway's Git integration)
+- ✅ Eliminates authentication issues with redundant deployment steps
+
+### Deployment Verification
+Railway deployments are verified through:
+1. **Railway Dashboard**: Monitor build logs and deployment status
+2. **Railway CLI**: `railway logs` to view application logs
+3. **Railway URL**: Test the deployed application at your Railway domain
+
 
 **Success Pattern:**
 ```
@@ -126,19 +130,24 @@ If logs show fallback is consistently used:
 ## 📝 Changes Made
 
 ### Code Changes
-1. **`src/crypto_news_aggregator/llm/anthropic.py`**
+1. **`.github/workflows/ci.yml`**
+   - Removed redundant Railway deployment job
+   - Streamlined CI pipeline to focus only on testing and code quality
+   - Eliminated authentication issues with Railway deployment
+
+2. **`src/crypto_news_aggregator/llm/anthropic.py`**
    - Added logging and enhanced error handling
    - Implemented model fallback logic
    - Added detailed 403 error logging
 
-2. **`src/crypto_news_aggregator/core/config.py`**
+3. **`src/crypto_news_aggregator/core/config.py`**
    - Fixed model name: `claude-3-5-haiku-20241022`
    - Added fallback model config
 
 ### New Files
 1. **`test_entity_extraction_debug.py`** - Debug test script
 2. **`docs/ENTITY_EXTRACTION_403_FIX.md`** - Detailed fix documentation
-3. **`RAILWAY_DEPLOYMENT_CHECKLIST.md`** - This file
+3. **`RAILWAY_DEPLOYMENT_CHECKLIST.md`** - This file (updated for auto-deployment)
 
 ## ✅ Pre-Deployment Checklist
 
@@ -146,9 +155,9 @@ If logs show fallback is consistently used:
 - [x] Enhanced error logging added
 - [x] Fallback logic implemented
 - [x] Configuration updated
-- [ ] Railway environment variables verified
-- [ ] Changes committed to git
-- [ ] Deployed to Railway
+- [x] Railway environment variables verified
+- [x] Changes committed to git
+- [x] **Railway auto-deployment** will handle deployment automatically on push to main
 - [ ] Railway logs monitored
 - [ ] Entity extraction tested on Railway
 
