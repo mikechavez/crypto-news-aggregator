@@ -39,7 +39,7 @@ def mock_llm_client():
             }
         ],
         "usage": {
-            "model": "claude-haiku-3-5-20241022",
+            "model": "claude-3-5-haiku-20241022",
             "input_tokens": 1500,
             "output_tokens": 300,
             "total_tokens": 1800,
@@ -142,7 +142,7 @@ async def test_entity_extraction_cost_tracking(mock_llm_client, sample_articles)
     result = await _process_entity_extraction_batch(sample_articles, mock_llm_client)
     
     usage = result["usage"]
-    assert usage["model"] == "claude-haiku-3-5-20241022"
+    assert usage["model"] == "claude-3-5-haiku-20241022"
     assert usage["input_tokens"] == 1500
     assert usage["output_tokens"] == 300
     assert usage["total_tokens"] == 1800
@@ -207,7 +207,7 @@ async def test_entity_model_configuration():
     
     # Verify the model setting exists
     assert hasattr(settings, "ANTHROPIC_ENTITY_MODEL")
-    assert settings.ANTHROPIC_ENTITY_MODEL == "claude-haiku-3-5-20241022"
+    assert settings.ANTHROPIC_ENTITY_MODEL == "claude-3-5-haiku-20241022"
 
 
 @pytest.mark.asyncio

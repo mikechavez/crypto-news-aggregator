@@ -1,9 +1,12 @@
 import os
 import json
+import logging
 from typing import List, Dict, Any
 import httpx
 from .base import LLMProvider
 from .tracking import track_usage
+
+logger = logging.getLogger(__name__)
 
 class AnthropicProvider(LLMProvider):
     """
@@ -87,7 +90,7 @@ class AnthropicProvider(LLMProvider):
 
     def extract_entities_batch(self, articles: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Extracts entities from a batch of articles using Claude Haiku.
+        Extracts entities from a batch of articles using Claude Haiku with fallback to Sonnet.
         Returns structured data with entities for each article and usage metrics.
         """
         from ..core.config import settings
@@ -127,65 +130,111 @@ Articles:
 
 Return ONLY the JSON array, no other text."""
 
-        # Use entity extraction model from config
-        entity_model = settings.ANTHROPIC_ENTITY_MODEL
-        headers = {
-            "x-api-key": self.api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        }
-        payload = {
-            "model": entity_model,
-            "max_tokens": 4096,
-            "messages": [{"role": "user", "content": prompt}],
-        }
+        # Try with Haiku 3.5 first, fallback to Sonnet if unavailable
+        models_to_try = [
+            (settings.ANTHROPIC_ENTITY_MODEL, "Haiku 3.5"),
+            (settings.ANTHROPIC_ENTITY_FALLBACK_MODEL, "Sonnet 3.5 (Fallback)"),
+            ("claude-3-5-sonnet-20240620", "Sonnet 3.5 (June)"),
+        ]
         
-        try:
-            with httpx.Client() as client:
-                response = client.post(self.API_URL, headers=headers, json=payload, timeout=60)
-                response.raise_for_status()
-                data = response.json()
-                
-                # Extract response text
-                response_text = data.get("content", [{}])[0].get("text", "")
-                
-                # Extract usage metrics
-                usage = data.get("usage", {})
-                input_tokens = usage.get("input_tokens", 0)
-                output_tokens = usage.get("output_tokens", 0)
-                
-                # Calculate costs
-                input_cost = (input_tokens / 1000) * settings.ANTHROPIC_ENTITY_INPUT_COST_PER_1K_TOKENS
-                output_cost = (output_tokens / 1000) * settings.ANTHROPIC_ENTITY_OUTPUT_COST_PER_1K_TOKENS
-                total_cost = input_cost + output_cost
-                
-                # Parse JSON response
-                import re
-                # Try to extract JSON array from response
-                json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
-                if json_match:
-                    results = json.loads(json_match.group(0))
-                else:
-                    results = json.loads(response_text)
-                
-                return {
-                    "results": results,
-                    "usage": {
-                        "model": entity_model,
-                        "input_tokens": input_tokens,
-                        "output_tokens": output_tokens,
-                        "total_tokens": input_tokens + output_tokens,
-                        "input_cost": input_cost,
-                        "output_cost": output_cost,
-                        "total_cost": total_cost,
+        last_error = None
+        
+        for entity_model, model_label in models_to_try:
+            headers = {
+                "x-api-key": self.api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            }
+            payload = {
+                "model": entity_model,
+                "max_tokens": 4096,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+            
+            try:
+                logger.info(f"Attempting entity extraction with {model_label} ({entity_model})")
+                with httpx.Client() as client:
+                    response = client.post(self.API_URL, headers=headers, json=payload, timeout=60)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    # Extract response text
+                    response_text = data.get("content", [{}])[0].get("text", "")
+                    
+                    # Extract usage metrics
+                    usage = data.get("usage", {})
+                    input_tokens = usage.get("input_tokens", 0)
+                    output_tokens = usage.get("output_tokens", 0)
+                    
+                    # Calculate costs (use Haiku pricing as baseline)
+                    input_cost = (input_tokens / 1000) * settings.ANTHROPIC_ENTITY_INPUT_COST_PER_1K_TOKENS
+                    output_cost = (output_tokens / 1000) * settings.ANTHROPIC_ENTITY_OUTPUT_COST_PER_1K_TOKENS
+                    total_cost = input_cost + output_cost
+                    
+                    # Parse JSON response
+                    import re
+                    # Try to extract JSON array from response
+                    json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
+                    if json_match:
+                        results = json.loads(json_match.group(0))
+                    else:
+                        results = json.loads(response_text)
+                    
+                    logger.info(f"Successfully extracted entities using {model_label}")
+                    return {
+                        "results": results,
+                        "usage": {
+                            "model": entity_model,
+                            "input_tokens": input_tokens,
+                            "output_tokens": output_tokens,
+                            "total_tokens": input_tokens + output_tokens,
+                            "input_cost": input_cost,
+                            "output_cost": output_cost,
+                            "total_cost": total_cost,
+                        }
                     }
+            except httpx.HTTPStatusError as e:
+                error_detail = {
+                    "status_code": e.response.status_code,
+                    "response_text": e.response.text,
+                    "model": entity_model,
+                    "model_label": model_label
                 }
-        except httpx.HTTPStatusError as e:
-            print(f"Anthropic API request failed with status {e.response.status_code}: {e.response.text}")
-            return {"results": [], "usage": {}}
-        except json.JSONDecodeError as e:
-            print(f"Failed to parse JSON response: {e}")
-            return {"results": [], "usage": {}}
-        except Exception as e:
-            print(f"Entity extraction failed: {e}")
-            return {"results": [], "usage": {}}
+                
+                # Log detailed error information
+                logger.error(
+                    f"Anthropic API request failed for {model_label} ({entity_model}): "
+                    f"Status {e.response.status_code}, Response: {e.response.text}"
+                )
+                
+                # Parse error response for more details
+                try:
+                    error_json = e.response.json()
+                    error_type = error_json.get("error", {}).get("type", "unknown")
+                    error_message = error_json.get("error", {}).get("message", "unknown")
+                    logger.error(f"Error type: {error_type}, Message: {error_message}")
+                except:
+                    pass
+                
+                last_error = error_detail
+                
+                # If 403, try next model in fallback list
+                if e.response.status_code == 403:
+                    logger.warning(f"403 Forbidden for {model_label}, trying fallback model...")
+                    continue
+                else:
+                    # For other HTTP errors, don't try fallback
+                    break
+                    
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON response from {model_label}: {e}")
+                last_error = {"error": "json_decode", "message": str(e), "model": entity_model}
+                break
+            except Exception as e:
+                logger.error(f"Entity extraction failed for {model_label}: {e}")
+                last_error = {"error": "exception", "message": str(e), "model": entity_model}
+                break
+        
+        # All models failed
+        logger.error(f"All entity extraction models failed. Last error: {last_error}")
+        return {"results": [], "usage": {}}
