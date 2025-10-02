@@ -26,6 +26,7 @@ from . import tasks
 from .endpoints import price
 from .endpoints import emails
 from .endpoints import auth
+from .endpoints import signals
 
 
 # Import test endpoints only when explicitly enabled
@@ -56,6 +57,7 @@ protected_router.include_router(sources.router, prefix="/sources", tags=["source
 # API key protected routes (no JWT required)
 api_key_router = APIRouter()
 api_key_router.include_router(price.router, prefix="/price", tags=["price"])
+api_key_router.include_router(signals.router, prefix="/signals", tags=["signals"])
 
 # Include test endpoints only when explicitly enabled
 if _enable_test_endpoints():
