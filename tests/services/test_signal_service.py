@@ -1,0 +1,225 @@
+"""
+Tests for signal detection service.
+"""
+
+import pytest
+import pytest_asyncio
+from datetime import datetime, timezone, timedelta
+from crypto_news_aggregator.services.signal_service import (
+    calculate_velocity,
+    calculate_source_diversity,
+    calculate_sentiment_metrics,
+    calculate_signal_score,
+)
+from crypto_news_aggregator.db.mongodb import mongo_manager
+from crypto_news_aggregator.db.operations.entity_mentions import create_entity_mention
+
+
+@pytest.mark.asyncio
+async def test_calculate_velocity_no_mentions(mongo_db):
+    """Test velocity calculation with no mentions."""
+    velocity = await calculate_velocity("NONEXISTENT_ENTITY")
+    assert velocity == 0.0
+
+
+@pytest.mark.asyncio
+async def test_calculate_velocity_with_mentions(mongo_db):
+    """Test velocity calculation with recent mentions."""
+    collection = mongo_db.entity_mentions
+    
+    # Clean up test data
+    await collection.delete_many({"entity": "TEST_VELOCITY"})
+    
+    now = datetime.now(timezone.utc)
+    
+    # Create mentions: 5 in last hour, 10 in last 24 hours
+    for i in range(5):
+        await create_entity_mention(
+            entity="TEST_VELOCITY",
+            entity_type="ticker",
+            article_id=f"article_{i}",
+            sentiment="neutral",
+        )
+    
+    # Create older mentions (2-24 hours ago)
+    for i in range(5, 10):
+        older_time = now - timedelta(hours=2 + i)
+        await collection.insert_one({
+            "entity": "TEST_VELOCITY",
+            "entity_type": "ticker",
+            "article_id": f"article_{i}",
+            "sentiment": "neutral",
+            "timestamp": older_time,
+            "created_at": older_time,
+        })
+    
+    velocity = await calculate_velocity("TEST_VELOCITY")
+    
+    # Expected: 5 / (10 / 24) = 5 / 0.417 = ~12
+    assert velocity > 0
+    
+    # Clean up
+    await collection.delete_many({"entity": "TEST_VELOCITY"})
+
+
+@pytest.mark.asyncio
+async def test_calculate_source_diversity(mongo_db):
+    """Test source diversity calculation."""
+    entity_mentions_collection = mongo_db.entity_mentions
+    articles_collection = mongo_db.articles
+    
+    # Clean up test data
+    await entity_mentions_collection.delete_many({"entity": "TEST_DIVERSITY"})
+    await articles_collection.delete_many({"_id": {"$in": ["art1", "art2", "art3"]}})
+    
+    # Create test articles from different sources
+    await articles_collection.insert_many([
+        {"_id": "art1", "source": "source_a", "title": "Test 1"},
+        {"_id": "art2", "source": "source_b", "title": "Test 2"},
+        {"_id": "art3", "source": "source_a", "title": "Test 3"},
+    ])
+    
+    # Create entity mentions for these articles
+    await create_entity_mention(
+        entity="TEST_DIVERSITY",
+        entity_type="project",
+        article_id="art1",
+        sentiment="positive",
+    )
+    await create_entity_mention(
+        entity="TEST_DIVERSITY",
+        entity_type="project",
+        article_id="art2",
+        sentiment="positive",
+    )
+    await create_entity_mention(
+        entity="TEST_DIVERSITY",
+        entity_type="project",
+        article_id="art3",
+        sentiment="neutral",
+    )
+    
+    diversity = await calculate_source_diversity("TEST_DIVERSITY")
+    
+    # Should have 2 unique sources (source_a and source_b)
+    assert diversity == 2
+    
+    # Clean up
+    await entity_mentions_collection.delete_many({"entity": "TEST_DIVERSITY"})
+    await articles_collection.delete_many({"_id": {"$in": ["art1", "art2", "art3"]}})
+
+
+@pytest.mark.asyncio
+async def test_calculate_sentiment_metrics(mongo_db):
+    """Test sentiment metrics calculation."""
+    collection = mongo_db.entity_mentions
+    
+    # Clean up test data
+    await collection.delete_many({"entity": "TEST_SENTIMENT"})
+    
+    # Create mentions with different sentiments
+    await create_entity_mention(
+        entity="TEST_SENTIMENT",
+        entity_type="ticker",
+        article_id="art1",
+        sentiment="positive",
+    )
+    await create_entity_mention(
+        entity="TEST_SENTIMENT",
+        entity_type="ticker",
+        article_id="art2",
+        sentiment="positive",
+    )
+    await create_entity_mention(
+        entity="TEST_SENTIMENT",
+        entity_type="ticker",
+        article_id="art3",
+        sentiment="negative",
+    )
+    await create_entity_mention(
+        entity="TEST_SENTIMENT",
+        entity_type="ticker",
+        article_id="art4",
+        sentiment="neutral",
+    )
+    
+    metrics = await calculate_sentiment_metrics("TEST_SENTIMENT")
+    
+    # Check structure
+    assert "avg" in metrics
+    assert "min" in metrics
+    assert "max" in metrics
+    assert "divergence" in metrics
+    
+    # Check values (2 positive, 1 negative, 1 neutral = avg of 0.5)
+    # positive=1.0, negative=-1.0, neutral=0.0
+    # avg = (1.0 + 1.0 + (-1.0) + 0.0) / 4 = 0.25
+    assert metrics["avg"] == pytest.approx(0.25, abs=0.01)
+    assert metrics["min"] == -1.0
+    assert metrics["max"] == 1.0
+    assert metrics["divergence"] > 0  # Should have some variance
+    
+    # Clean up
+    await collection.delete_many({"entity": "TEST_SENTIMENT"})
+
+
+@pytest.mark.asyncio
+async def test_calculate_signal_score(mongo_db):
+    """Test overall signal score calculation."""
+    entity_mentions_collection = mongo_db.entity_mentions
+    articles_collection = mongo_db.articles
+    
+    # Clean up test data
+    await entity_mentions_collection.delete_many({"entity": "TEST_SIGNAL"})
+    await articles_collection.delete_many({"_id": {"$in": ["sig1", "sig2"]}})
+    
+    # Create test articles
+    await articles_collection.insert_many([
+        {"_id": "sig1", "source": "source_x", "title": "Test Signal 1"},
+        {"_id": "sig2", "source": "source_y", "title": "Test Signal 2"},
+    ])
+    
+    # Create entity mentions
+    for i in range(3):
+        await create_entity_mention(
+            entity="TEST_SIGNAL",
+            entity_type="ticker",
+            article_id="sig1",
+            sentiment="positive",
+        )
+    
+    await create_entity_mention(
+        entity="TEST_SIGNAL",
+        entity_type="ticker",
+        article_id="sig2",
+        sentiment="positive",
+    )
+    
+    signal_data = await calculate_signal_score("TEST_SIGNAL")
+    
+    # Check structure
+    assert "score" in signal_data
+    assert "velocity" in signal_data
+    assert "source_count" in signal_data
+    assert "sentiment" in signal_data
+    
+    # Check score is in valid range
+    assert 0 <= signal_data["score"] <= 10
+    assert signal_data["source_count"] == 2
+    assert signal_data["velocity"] > 0
+    
+    # Clean up
+    await entity_mentions_collection.delete_many({"entity": "TEST_SIGNAL"})
+    await articles_collection.delete_many({"_id": {"$in": ["sig1", "sig2"]}})
+
+
+@pytest.mark.asyncio
+async def test_calculate_signal_score_no_data(mongo_db):
+    """Test signal score calculation with no data."""
+    signal_data = await calculate_signal_score("NONEXISTENT_SIGNAL")
+    
+    # Should return valid structure with zero values
+    assert signal_data["score"] == 0.0
+    assert signal_data["velocity"] == 0.0
+    assert signal_data["source_count"] == 0
+    assert signal_data["sentiment"]["avg"] == 0.0

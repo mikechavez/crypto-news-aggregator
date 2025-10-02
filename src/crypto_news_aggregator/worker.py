@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime, timezone, timedelta
 
 import os
 import sys
@@ -10,11 +11,106 @@ from crypto_news_aggregator.tasks.price_monitor import get_price_monitor
 from crypto_news_aggregator.background.rss_fetcher import schedule_rss_fetch
 from crypto_news_aggregator.core.config import get_settings
 from crypto_news_aggregator.db.mongodb import initialize_mongodb, mongo_manager
+from crypto_news_aggregator.services.signal_service import calculate_signal_score
+from crypto_news_aggregator.db.operations.signal_scores import upsert_signal_score
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+
+
+async def update_signal_scores():
+    """
+    Update signal scores for trending entities.
+    
+    Runs every 2 minutes to calculate signal scores for entities
+    mentioned in the last 30 minutes.
+    """
+    logger.info("Starting signal score update task")
+    
+    while True:
+        try:
+            db = await mongo_manager.get_async_database()
+            entity_mentions_collection = db.entity_mentions
+            
+            # Get entities mentioned in the last 30 minutes
+            thirty_min_ago = datetime.now(timezone.utc) - timedelta(minutes=30)
+            
+            pipeline = [
+                {"$match": {"timestamp": {"$gte": thirty_min_ago}}},
+                {"$group": {
+                    "_id": {
+                        "entity": "$entity",
+                        "entity_type": "$entity_type"
+                    }
+                }},
+                {"$limit": 100}  # Limit to prevent overload
+            ]
+            
+            entities_to_score = []
+            async for result in entity_mentions_collection.aggregate(pipeline):
+                entity_info = result["_id"]
+                entities_to_score.append(entity_info)
+            
+            if not entities_to_score:
+                logger.debug("No recent entities to score")
+                await asyncio.sleep(120)  # 2 minutes
+                continue
+            
+            # Calculate scores for each entity
+            scored_entities = []
+            for entity_info in entities_to_score:
+                entity = entity_info["entity"]
+                entity_type = entity_info["entity_type"]
+                
+                try:
+                    signal_data = await calculate_signal_score(entity)
+                    
+                    # Get first_seen timestamp
+                    first_mention = await entity_mentions_collection.find_one(
+                        {"entity": entity},
+                        sort=[("timestamp", 1)]
+                    )
+                    first_seen = first_mention["timestamp"] if first_mention else datetime.now(timezone.utc)
+                    
+                    # Store the signal score
+                    await upsert_signal_score(
+                        entity=entity,
+                        entity_type=entity_type,
+                        score=signal_data["score"],
+                        velocity=signal_data["velocity"],
+                        source_count=signal_data["source_count"],
+                        sentiment=signal_data["sentiment"],
+                        first_seen=first_seen,
+                    )
+                    
+                    scored_entities.append({
+                        "entity": entity,
+                        "score": signal_data["score"]
+                    })
+                    
+                except Exception as exc:
+                    logger.error(f"Failed to score entity {entity}: {exc}")
+            
+            # Sort by score and log top entity
+            if scored_entities:
+                scored_entities.sort(key=lambda x: x["score"], reverse=True)
+                top_entity = scored_entities[0]
+                
+                logger.info(
+                    f"Signal scores updated: {len(scored_entities)} entities scored, "
+                    f"top entity: {top_entity['entity']} (score {top_entity['score']})"
+                )
+            
+        except asyncio.CancelledError:
+            logger.info("Signal score update task cancelled")
+            raise
+        except Exception as exc:
+            logger.exception(f"Error in signal score update: {exc}")
+        
+        # Wait 2 minutes before next update
+        await asyncio.sleep(120)
 
 
 async def main():
@@ -35,6 +131,10 @@ async def main():
         logger.info("Starting RSS ingestion schedule (every %s seconds)", rss_interval)
         tasks.append(asyncio.create_task(schedule_rss_fetch(rss_interval)))
         logger.info("RSS ingestion task created.")
+        
+        logger.info("Starting signal score update task (every 2 minutes)...")
+        tasks.append(asyncio.create_task(update_signal_scores()))
+        logger.info("Signal score update task created.")
 
     if not tasks:
         logger.warning("No background tasks to run. Worker will exit.")
