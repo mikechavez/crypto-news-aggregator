@@ -15,6 +15,7 @@ from crypto_news_aggregator.services.signal_service import calculate_signal_scor
 from crypto_news_aggregator.db.operations.signal_scores import upsert_signal_score
 from crypto_news_aggregator.services.narrative_service import detect_narratives
 from crypto_news_aggregator.db.operations.narratives import upsert_narrative
+from crypto_news_aggregator.services.entity_alert_service import detect_alerts
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -159,6 +160,39 @@ async def schedule_narrative_updates(interval_seconds: int) -> None:
         await asyncio.sleep(interval_seconds)
 
 
+async def check_alerts():
+    """
+    Check for entity alerts based on trending signals.
+    
+    Runs alert detection and creates new alerts in the database.
+    Scheduled to run every 2 minutes.
+    """
+    try:
+        logger.info("Starting alert detection cycle...")
+        triggered_alerts = await detect_alerts()
+        
+        if triggered_alerts:
+            logger.info(f"Triggered {len(triggered_alerts)} new alerts")
+        else:
+            logger.info("No new alerts triggered in this cycle")
+    except Exception as e:
+        logger.exception(f"Error checking alerts: {e}")
+
+
+async def schedule_alert_checks(interval_seconds: int) -> None:
+    """Continuously run alert checks on a fixed interval."""
+    logger.info("Starting alert check schedule with interval %s seconds", interval_seconds)
+    while True:
+        try:
+            await check_alerts()
+        except asyncio.CancelledError:
+            logger.info("Alert check schedule cancelled")
+            raise
+        except Exception as exc:
+            logger.exception("Alert check cycle failed: %s", exc)
+        await asyncio.sleep(interval_seconds)
+
+
 async def main():
     """Initializes and runs all background tasks."""
     logger.info("--- Starting background worker process ---")
@@ -186,6 +220,11 @@ async def main():
         logger.info("Starting narrative update schedule (every %s seconds)", narrative_interval)
         tasks.append(asyncio.create_task(schedule_narrative_updates(narrative_interval)))
         logger.info("Narrative update task created.")
+        
+        alert_interval = 60 * 2  # 2 minutes
+        logger.info("Starting alert check schedule (every %s seconds)", alert_interval)
+        tasks.append(asyncio.create_task(schedule_alert_checks(alert_interval)))
+        logger.info("Alert check task created.")
 
     if not tasks:
         logger.warning("No background tasks to run. Worker will exit.")
