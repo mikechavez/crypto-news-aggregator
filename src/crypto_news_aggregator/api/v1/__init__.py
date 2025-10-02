@@ -27,7 +27,7 @@ from .endpoints import price
 from .endpoints import emails
 from .endpoints import auth
 from .endpoints import signals
-
+from .endpoints import narratives
 
 # Import test endpoints only when explicitly enabled
 def _enable_test_endpoints() -> bool:
@@ -58,6 +58,7 @@ protected_router.include_router(sources.router, prefix="/sources", tags=["source
 api_key_router = APIRouter()
 api_key_router.include_router(price.router, prefix="/price", tags=["price"])
 api_key_router.include_router(signals.router, prefix="/signals", tags=["signals"])
+api_key_router.include_router(narratives.router, prefix="/narratives", tags=["narratives"])
 
 # Include test endpoints only when explicitly enabled
 if _enable_test_endpoints():

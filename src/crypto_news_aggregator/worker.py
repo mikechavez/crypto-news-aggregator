@@ -13,6 +13,8 @@ from crypto_news_aggregator.core.config import get_settings
 from crypto_news_aggregator.db.mongodb import initialize_mongodb, mongo_manager
 from crypto_news_aggregator.services.signal_service import calculate_signal_score
 from crypto_news_aggregator.db.operations.signal_scores import upsert_signal_score
+from crypto_news_aggregator.services.narrative_service import detect_narratives
+from crypto_news_aggregator.db.operations.narratives import upsert_narrative
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -113,6 +115,50 @@ async def update_signal_scores():
         await asyncio.sleep(120)
 
 
+
+async def update_narratives():
+    """
+    Update narrative clusters from trending entities.
+    
+    Runs narrative detection and upserts results to the database.
+    Scheduled to run every 10 minutes.
+    """
+    try:
+        logger.info("Starting narrative update cycle...")
+        narratives = await detect_narratives(min_score=5.0, max_narratives=5)
+        
+        if not narratives:
+            logger.info("No narratives detected in this cycle")
+            return
+        
+        # Upsert each narrative to database
+        for narrative in narratives:
+            await upsert_narrative(
+                theme=narrative["theme"],
+                entities=narrative["entities"],
+                story=narrative["story"],
+                article_count=narrative["article_count"]
+            )
+        
+        logger.info(f"Updated {len(narratives)} narratives")
+    except Exception as e:
+        logger.exception(f"Error updating narratives: {e}")
+
+
+async def schedule_narrative_updates(interval_seconds: int) -> None:
+    """Continuously run narrative updates on a fixed interval."""
+    logger.info("Starting narrative update schedule with interval %s seconds", interval_seconds)
+    while True:
+        try:
+            await update_narratives()
+        except asyncio.CancelledError:
+            logger.info("Narrative update schedule cancelled")
+            raise
+        except Exception as exc:
+            logger.exception("Narrative update cycle failed: %s", exc)
+        await asyncio.sleep(interval_seconds)
+
+
 async def main():
     """Initializes and runs all background tasks."""
     logger.info("--- Starting background worker process ---")
@@ -135,6 +181,11 @@ async def main():
         logger.info("Starting signal score update task (every 2 minutes)...")
         tasks.append(asyncio.create_task(update_signal_scores()))
         logger.info("Signal score update task created.")
+        
+        narrative_interval = 60 * 10  # 10 minutes
+        logger.info("Starting narrative update schedule (every %s seconds)", narrative_interval)
+        tasks.append(asyncio.create_task(schedule_narrative_updates(narrative_interval)))
+        logger.info("Narrative update task created.")
 
     if not tasks:
         logger.warning("No background tasks to run. Worker will exit.")
