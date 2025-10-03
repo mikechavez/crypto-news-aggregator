@@ -47,18 +47,18 @@ export function EntityDetail() {
           <CardContent>
             {data.signals.length > 0 ? (
               <div className="space-y-4">
-                {data.signals.map((signal) => (
-                  <div key={signal.id} className="border-b border-gray-200 pb-3 last:border-0">
+                {data.signals.map((signal, index) => (
+                  <div key={`${signal.entity}-${index}`} className="border-b border-gray-200 pb-3 last:border-0">
                     <div className="flex items-start justify-between mb-2">
                       <span className="text-sm font-medium text-gray-900 capitalize">
-                        {signal.signal_type.replace(/_/g, ' ')}
+                        {signal.entity_type.replace(/_/g, ' ')}
                       </span>
-                      <span className={`text-sm font-semibold ${getSignalStrengthColor(signal.strength)}`}>
-                        {formatPercentage(signal.strength, 0)}
+                      <span className={`text-sm font-semibold ${getSignalStrengthColor(signal.signal_score)}`}>
+                        {formatPercentage(signal.signal_score, 0)}
                       </span>
                     </div>
                     <p className="text-xs text-gray-500">
-                      {formatRelativeTime(signal.detected_at)}
+                      {formatRelativeTime(signal.last_updated)}
                     </p>
                   </div>
                 ))}
