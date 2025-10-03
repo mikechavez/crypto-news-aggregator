@@ -1,5 +1,13 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const API_KEY = import.meta.env.VITE_API_KEY || '';
+const API_URL = import.meta.env.VITE_API_URL;
+const API_KEY = import.meta.env.VITE_API_KEY;
+
+if (!API_URL || !API_KEY) {
+  console.error('❌ Missing required environment variables:');
+  if (!API_URL) console.error('  - VITE_API_URL is not set');
+  if (!API_KEY) console.error('  - VITE_API_KEY is not set');
+  console.error('  - Check your .env file and restart the dev server');
+  throw new Error('Application configuration error. Check console for details.');
+}
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | string[] | undefined>;
