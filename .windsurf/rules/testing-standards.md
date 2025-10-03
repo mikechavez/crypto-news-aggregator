@@ -30,3 +30,16 @@ trigger: always_on
 2. Integration tests in tests/integration/
 3. API tests in tests/api/
 4. Background worker tests in tests/background/
+
+## UI Testing Standards (Phase 2+):
+1. Critical user flows must have integration tests
+2. Test accessibility: keyboard navigation, ARIA labels
+3. Test error states: network failures, empty states
+4. Visual tests for key components (Storybook or Chromatic)
+
+## Manual Testing Checklist:
+- [ ] Test on mobile viewport (375px width)
+- [ ] Test with slow 3G network throttling
+- [ ] Test with browser extensions disabled
+- [ ] Verify API key authentication works
+- [ ] Check browser console for errors
