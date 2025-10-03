@@ -29,6 +29,24 @@ trigger: always_on
    - Dependency upgrades
    - Complex integrations
 
+## UI Development Branch Strategy:
+1. **Component library work** → feature branches:
+   - New reusable components
+   - Styling system changes
+   - Design system updates
+
+2. **Page implementations** → feature branches (unless trivial):
+   - New routes/pages
+   - Complex interactions
+   - Integration with new API endpoints
+
+3. **Minor UI tweaks** → can commit directly to main:
+   - Copy changes
+   - Button color adjustments
+   - Spacing/padding fixes
+   - Bug fixes in existing components
+
+
 ## Pre-Deployment Rules:
 1. MANDATORY: Run full test suite locally before any deployment
 2. MANDATORY: Test local server startup and verify API endpoints respond
