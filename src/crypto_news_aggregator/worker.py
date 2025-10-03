@@ -23,14 +23,21 @@ logging.basicConfig(
 )
 
 
-async def update_signal_scores():
+async def update_signal_scores(run_immediately: bool = False):
     """
     Update signal scores for trending entities.
     
     Runs every 2 minutes to calculate signal scores for entities
     mentioned in the last 30 minutes.
+    
+    Args:
+        run_immediately: If True, run first update immediately on startup
     """
     logger.info("Starting signal score update task")
+    
+    if not run_immediately:
+        # Wait before first run if not immediate
+        await asyncio.sleep(120)
     
     while True:
         try:
@@ -146,18 +153,31 @@ async def update_narratives():
         logger.exception(f"Error updating narratives: {e}")
 
 
-async def schedule_narrative_updates(interval_seconds: int) -> None:
-    """Continuously run narrative updates on a fixed interval."""
+async def schedule_narrative_updates(interval_seconds: int, run_immediately: bool = False) -> None:
+    """Continuously run narrative updates on a fixed interval.
+    
+    Args:
+        interval_seconds: Time to wait between narrative update cycles
+        run_immediately: If True, run first update immediately on startup
+    """
     logger.info("Starting narrative update schedule with interval %s seconds", interval_seconds)
+    
+    if run_immediately:
+        logger.info("Running initial narrative detection on startup...")
+        try:
+            await update_narratives()
+        except Exception as exc:
+            logger.exception("Initial narrative update failed: %s", exc)
+    
     while True:
         try:
+            await asyncio.sleep(interval_seconds)
             await update_narratives()
         except asyncio.CancelledError:
             logger.info("Narrative update schedule cancelled")
             raise
         except Exception as exc:
             logger.exception("Narrative update cycle failed: %s", exc)
-        await asyncio.sleep(interval_seconds)
 
 
 async def check_alerts():
@@ -179,18 +199,31 @@ async def check_alerts():
         logger.exception(f"Error checking alerts: {e}")
 
 
-async def schedule_alert_checks(interval_seconds: int) -> None:
-    """Continuously run alert checks on a fixed interval."""
+async def schedule_alert_checks(interval_seconds: int, run_immediately: bool = False) -> None:
+    """Continuously run alert checks on a fixed interval.
+    
+    Args:
+        interval_seconds: Time to wait between alert check cycles
+        run_immediately: If True, run first check immediately on startup
+    """
     logger.info("Starting alert check schedule with interval %s seconds", interval_seconds)
+    
+    if run_immediately:
+        logger.info("Running initial alert check on startup...")
+        try:
+            await check_alerts()
+        except Exception as exc:
+            logger.exception("Initial alert check failed: %s", exc)
+    
     while True:
         try:
+            await asyncio.sleep(interval_seconds)
             await check_alerts()
         except asyncio.CancelledError:
             logger.info("Alert check schedule cancelled")
             raise
         except Exception as exc:
             logger.exception("Alert check cycle failed: %s", exc)
-        await asyncio.sleep(interval_seconds)
 
 
 async def main():
