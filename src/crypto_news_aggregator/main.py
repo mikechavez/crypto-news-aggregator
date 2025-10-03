@@ -100,6 +100,7 @@ async def lifespan(app: FastAPI):
             schedule_narrative_updates,
             schedule_alert_checks
         )
+        # Lazy import to avoid triggering tasks/__init__.py which imports celery
         from .tasks.price_monitor import get_price_monitor
         
         # Create background tasks with immediate execution for data availability

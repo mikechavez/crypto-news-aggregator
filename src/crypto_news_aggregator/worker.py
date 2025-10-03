@@ -7,7 +7,6 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from crypto_news_aggregator.tasks.price_monitor import get_price_monitor
 from crypto_news_aggregator.background.rss_fetcher import schedule_rss_fetch
 from crypto_news_aggregator.core.config import get_settings
 from crypto_news_aggregator.db.mongodb import initialize_mongodb, mongo_manager
@@ -235,6 +234,9 @@ async def main():
 
     tasks = []
     if not settings.TESTING:
+        # Lazy import to avoid triggering tasks/__init__.py which imports celery
+        from crypto_news_aggregator.tasks.price_monitor import get_price_monitor
+        
         price_monitor = get_price_monitor()
         logger.info("Starting price monitor task...")
         tasks.append(asyncio.create_task(price_monitor.start()))
