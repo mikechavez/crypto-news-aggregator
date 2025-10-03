@@ -6,7 +6,9 @@ aiosqlite==0.21.0
 alembic==1.16.4
 amqp==5.3.1
 annotated-types==0.7.0
+anthropic==0.25.0
 anyio==4.10.0
+async-lru==2.0.4
 asyncpg==0.30.0
 attrs==25.3.0
 bcrypt==4.3.0
@@ -26,6 +28,7 @@ dnspython==2.7.0
 ecdsa==0.19.1
 email_validator==2.2.0
 fastapi==0.115.14
+feedparser==6.0.12
 frozenlist==1.7.0
 greenlet==3.2.4
 gunicorn==23.0.0
@@ -45,7 +48,10 @@ multidict==6.6.4
 newsapi-python==0.2.7
 nltk==3.9.1
 numpy==1.26.4
+oauthlib==3.2.2
+openai==1.14.2
 packaging==25.0
+pandas==2.2.2
 passlib==1.7.4
 pluggy==1.6.0
 prompt_toolkit==3.0.51
@@ -79,6 +85,7 @@ SQLAlchemy==2.0.43
 starlette==0.46.2
 textblob==0.19.0
 tqdm==4.67.1
+tweepy==4.14.0
 typing-inspection==0.4.1
 typing_extensions==4.15.0
 tzdata==2025.2
