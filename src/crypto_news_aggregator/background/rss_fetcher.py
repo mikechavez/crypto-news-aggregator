@@ -573,13 +573,28 @@ async def process_new_articles_from_mongodb():
     return processed
 
 
-async def schedule_rss_fetch(interval_seconds: int) -> None:
-    """Continuously run the RSS fetcher on a fixed interval."""
+async def schedule_rss_fetch(interval_seconds: int, run_immediately: bool = False) -> None:
+    """Continuously run the RSS fetcher on a fixed interval.
+    
+    Args:
+        interval_seconds: Time to wait between RSS fetch cycles
+        run_immediately: If True, run first fetch immediately on startup
+    """
     logger.info(
         "Starting RSS fetcher schedule with interval %s seconds", interval_seconds
     )
+    
+    if run_immediately:
+        logger.info("Running initial RSS fetch on startup...")
+        try:
+            await fetch_and_process_rss_feeds()
+            logger.info("Initial RSS ingestion cycle completed")
+        except Exception as exc:
+            logger.exception("Initial RSS ingestion cycle failed: %s", exc)
+    
     while True:
         try:
+            await asyncio.sleep(interval_seconds)
             await fetch_and_process_rss_feeds()
             logger.info("RSS ingestion cycle completed")
         except asyncio.CancelledError:
@@ -587,4 +602,3 @@ async def schedule_rss_fetch(interval_seconds: int) -> None:
             raise
         except Exception as exc:
             logger.exception("RSS ingestion cycle failed: %s", exc)
-        await asyncio.sleep(interval_seconds)
