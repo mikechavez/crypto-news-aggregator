@@ -8,7 +8,7 @@ import { formatRelativeTime, formatNumber } from '../lib/formatters';
 export function Narratives() {
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['narratives'],
-    queryFn: () => narrativesAPI.getNarratives({ limit: 50 }),
+    queryFn: () => narrativesAPI.getNarratives(),
     refetchInterval: 60000, // 60 seconds
   });
 
