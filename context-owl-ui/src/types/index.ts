@@ -17,13 +17,14 @@ export interface EntityMention {
 
 // Signal types
 export interface Signal {
-  id: number;
-  entity_id: number;
-  signal_type: string;
-  strength: number;
-  context: Record<string, any>;
-  detected_at: string;
-  entity?: Entity;
+  entity: string;              // Entity name (e.g., "Solana")
+  entity_type: string;         // Type (e.g., "cryptocurrency")
+  signal_score: number;        // Overall signal strength
+  velocity: number;            // Mentions per hour
+  source_count: number;        // Number of sources
+  sentiment: number;           // Sentiment score (-1 to 1)
+  first_seen: string;          // ISO timestamp
+  last_updated: string;        // ISO timestamp
 }
 
 export interface SignalScore {
@@ -37,13 +38,11 @@ export interface SignalScore {
 
 // Narrative types
 export interface Narrative {
-  id: number;
-  title: string;
-  description: string | null;
-  keywords: string[];
-  article_count: number;
-  created_at: string;
-  updated_at: string;
+  theme: string;              // Short title for the narrative
+  entities: string[];         // List of entities in this narrative
+  story: string;              // 1-2 sentence summary of the narrative
+  article_count: number;      // Number of articles supporting this narrative
+  updated_at: string;         // ISO timestamp of last update
 }
 
 export interface NarrativeArticle {
@@ -80,10 +79,8 @@ export interface SignalsResponse {
   total: number;
 }
 
-export interface NarrativesResponse {
-  narratives: Narrative[];
-  total: number;
-}
+// Backend returns array directly, not wrapped in object
+export type NarrativesResponse = Narrative[];
 
 export interface EntityDetailResponse {
   entity: Entity;
@@ -103,7 +100,6 @@ export interface SignalFilters extends Record<string, string | number | boolean 
 
 export interface NarrativeFilters extends Record<string, string | number | boolean | string[] | undefined> {
   min_articles?: number;
-  keywords?: string[];
   limit?: number;
   offset?: number;
 }
