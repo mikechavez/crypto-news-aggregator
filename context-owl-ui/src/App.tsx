@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Signals } from './pages/Signals';
 import { Narratives } from './pages/Narratives';
-import { EntityDetail } from './pages/EntityDetail';
+// import { EntityDetail } from './pages/EntityDetail';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,7 +23,8 @@ function App() {
           <Routes>
             <Route path="/" element={<Signals />} />
             <Route path="/narratives" element={<Narratives />} />
-            <Route path="/entity/:id" element={<EntityDetail />} />
+            {/* TODO: Uncomment when backend /api/v1/entities endpoints are implemented */}
+            {/* <Route path="/entity/:id" element={<EntityDetail />} /> */}
           </Routes>
         </Layout>
       </BrowserRouter>
