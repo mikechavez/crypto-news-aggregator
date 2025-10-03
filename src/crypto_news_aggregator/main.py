@@ -83,13 +83,49 @@ async def lifespan(app: FastAPI):
     """Manage lifespan events for the web server.
 
     - Initializes MongoDB connection on startup.
+    - Starts background worker tasks.
     - Closes MongoDB connection on shutdown.
     """
     logger.info("--- Web Server Lifespan Startup ---")
     await initialize_mongodb()
     logger.info("Web server workers connected to MongoDB.")
+    
+    # Start background worker tasks
+    background_tasks = []
+    if not settings.TESTING:
+        logger.info("Starting background worker tasks...")
+        from .background.rss_fetcher import schedule_rss_fetch
+        from .worker import (
+            update_signal_scores,
+            schedule_narrative_updates,
+            schedule_alert_checks
+        )
+        from .tasks.price_monitor import get_price_monitor
+        
+        # Create background tasks
+        price_monitor = get_price_monitor()
+        background_tasks.extend([
+            asyncio.create_task(price_monitor.start(), name="price_monitor"),
+            asyncio.create_task(schedule_rss_fetch(1800), name="rss_fetcher"),
+            asyncio.create_task(update_signal_scores(), name="signal_scores"),
+            asyncio.create_task(schedule_narrative_updates(600), name="narratives"),
+            asyncio.create_task(schedule_alert_checks(120), name="alerts")
+        ])
+        logger.info(f"Started {len(background_tasks)} background worker tasks")
+    
     yield
+    
+    # Shutdown
     logger.info("--- Web Server Lifespan Shutdown ---")
+    
+    # Cancel background tasks
+    if background_tasks:
+        logger.info(f"Cancelling {len(background_tasks)} background tasks...")
+        for task in background_tasks:
+            task.cancel()
+        await asyncio.gather(*background_tasks, return_exceptions=True)
+        logger.info("Background tasks cancelled")
+    
     await mongo_manager.aclose()
     logger.info("Web server MongoDB connections closed.")
     await price_service.close()
