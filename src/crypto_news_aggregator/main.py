@@ -149,7 +149,8 @@ app = FastAPI(
 origins = [
     "http://localhost:5173",  # Local Vite dev server
     "http://localhost:3000",  # Alternative local dev port
-    "https://context-owl-ui.vercel.app",  # Production frontend
+    "https://context-owl-ui.vercel.app",  # Production frontend (if assigned)
+    "https://context-owl-5zwt1nrjk-mikes-projects-92d90cb6.vercel.app",  # Actual Vercel deployment URL
     "*"  # Permissive for development, restrict in production
 ]
 
