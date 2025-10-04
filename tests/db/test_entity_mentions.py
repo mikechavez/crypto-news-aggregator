@@ -22,7 +22,8 @@ async def test_create_entity_mention(mongo_db):
         article_id="article_123",
         sentiment="positive",
         confidence=0.95,
-        metadata={"source": "test"},
+        source="CoinDesk",
+        metadata={"test": "value"},
     )
 
     assert mention_id is not None
@@ -35,6 +36,7 @@ async def test_create_entity_mention(mongo_db):
     assert mention["article_id"] == "article_123"
     assert mention["sentiment"] == "positive"
     assert mention["confidence"] == 0.95
+    assert mention["source"] == "CoinDesk"
 
 
 @pytest.mark.asyncio
@@ -47,6 +49,7 @@ async def test_create_entity_mentions_batch(mongo_db):
             "article_id": "article_1",
             "sentiment": "positive",
             "confidence": 0.95,
+            "source": "CoinDesk",
         },
         {
             "entity": "$ETH",
@@ -54,6 +57,7 @@ async def test_create_entity_mentions_batch(mongo_db):
             "article_id": "article_2",
             "sentiment": "neutral",
             "confidence": 0.90,
+            "source": "Cointelegraph",
         },
         {
             "entity": "Bitcoin",
@@ -61,6 +65,7 @@ async def test_create_entity_mentions_batch(mongo_db):
             "article_id": "article_1",
             "sentiment": "positive",
             "confidence": 0.95,
+            "source": "CoinDesk",
         },
     ]
 
@@ -300,6 +305,7 @@ async def test_entity_mention_timestamps(mongo_db):
         entity_type="ticker",
         article_id="article_1",
         sentiment="positive",
+        source="CoinDesk",
     )
 
     collection = mongo_db.entity_mentions
@@ -325,6 +331,7 @@ async def test_entity_mention_metadata(mongo_db):
         entity_type="ticker",
         article_id="article_1",
         sentiment="positive",
+        source="CoinDesk",
         metadata=metadata,
     )
 
