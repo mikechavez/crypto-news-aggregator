@@ -146,7 +146,12 @@ app = FastAPI(
 )
 
 # CORS middleware configuration
-origins = ["*"]  # In production, replace with specific origins
+origins = [
+    "http://localhost:5173",  # Local Vite dev server
+    "http://localhost:3000",  # Alternative local dev port
+    "https://context-owl-ui.vercel.app",  # Production frontend
+    "*"  # Permissive for development, restrict in production
+]
 
 app.add_middleware(
     CORSMiddleware,
