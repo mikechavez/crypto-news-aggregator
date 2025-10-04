@@ -3,6 +3,9 @@ Classify all existing entities in entity_mentions collection that don't have ent
 Uses Claude Haiku to batch-classify entities based on their names.
 """
 
+from dotenv import load_dotenv
+load_dotenv()  # Load environment variables from .env file
+
 import asyncio
 import os
 import json
