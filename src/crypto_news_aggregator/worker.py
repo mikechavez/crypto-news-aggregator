@@ -41,7 +41,10 @@ async def update_signal_scores():
             thirty_min_ago = datetime.now(timezone.utc) - timedelta(minutes=30)
             
             pipeline = [
-                {"$match": {"timestamp": {"$gte": thirty_min_ago}}},
+                {"$match": {
+                    "timestamp": {"$gte": thirty_min_ago},
+                    "is_primary": True  # Only score primary entities
+                }},
                 {"$group": {
                     "_id": {
                         "entity": "$entity",
@@ -70,9 +73,9 @@ async def update_signal_scores():
                 try:
                     signal_data = await calculate_signal_score(entity)
                     
-                    # Get first_seen timestamp
+                    # Get first_seen timestamp (primary mentions only)
                     first_mention = await entity_mentions_collection.find_one(
-                        {"entity": entity},
+                        {"entity": entity, "is_primary": True},
                         sort=[("timestamp", 1)]
                     )
                     first_seen = first_mention["timestamp"] if first_mention else datetime.now(timezone.utc)

@@ -39,6 +39,7 @@ async def test_calculate_velocity_with_mentions(mongo_db):
             entity_type="ticker",
             article_id=f"article_{i}",
             sentiment="neutral",
+            is_primary=True,
         )
     
     # Create older mentions (2-24 hours ago)
@@ -49,6 +50,7 @@ async def test_calculate_velocity_with_mentions(mongo_db):
             "entity_type": "ticker",
             "article_id": f"article_{i}",
             "sentiment": "neutral",
+            "is_primary": True,
             "timestamp": older_time,
             "created_at": older_time,
         })
@@ -85,18 +87,21 @@ async def test_calculate_source_diversity(mongo_db):
         entity_type="project",
         article_id="art1",
         sentiment="positive",
+        is_primary=True,
     )
     await create_entity_mention(
         entity="TEST_DIVERSITY",
         entity_type="project",
         article_id="art2",
         sentiment="positive",
+        is_primary=True,
     )
     await create_entity_mention(
         entity="TEST_DIVERSITY",
         entity_type="project",
         article_id="art3",
         sentiment="neutral",
+        is_primary=True,
     )
     
     diversity = await calculate_source_diversity("TEST_DIVERSITY")
@@ -123,24 +128,28 @@ async def test_calculate_sentiment_metrics(mongo_db):
         entity_type="ticker",
         article_id="art1",
         sentiment="positive",
+        is_primary=True,
     )
     await create_entity_mention(
         entity="TEST_SENTIMENT",
         entity_type="ticker",
         article_id="art2",
         sentiment="positive",
+        is_primary=True,
     )
     await create_entity_mention(
         entity="TEST_SENTIMENT",
         entity_type="ticker",
         article_id="art3",
         sentiment="negative",
+        is_primary=True,
     )
     await create_entity_mention(
         entity="TEST_SENTIMENT",
         entity_type="ticker",
         article_id="art4",
         sentiment="neutral",
+        is_primary=True,
     )
     
     metrics = await calculate_sentiment_metrics("TEST_SENTIMENT")
@@ -186,6 +195,7 @@ async def test_calculate_signal_score(mongo_db):
             entity_type="ticker",
             article_id="sig1",
             sentiment="positive",
+            is_primary=True,
         )
     
     await create_entity_mention(
@@ -193,6 +203,7 @@ async def test_calculate_signal_score(mongo_db):
         entity_type="ticker",
         article_id="sig2",
         sentiment="positive",
+        is_primary=True,
     )
     
     signal_data = await calculate_signal_score("TEST_SIGNAL")
