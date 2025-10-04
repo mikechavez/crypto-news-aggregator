@@ -9,8 +9,8 @@ load_dotenv()  # Load environment variables from .env file
 import asyncio
 import os
 import json
+import httpx
 from motor.motor_asyncio import AsyncIOMotorClient
-from anthropic import Anthropic
 
 
 async def main():
@@ -34,7 +34,9 @@ async def main():
     
     print(f"Classifying {len(entities)} entities...")
     
-    anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    # Setup Anthropic API
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_url = "https://api.anthropic.com/v1/messages"
     
     # Process in batches of 50
     for i in range(0, len(entities), 50):
@@ -63,14 +65,25 @@ Return format:
 Only include entities from the input list. Confidence should be 0.80-1.00."""
 
         try:
-            response = anthropic_client.messages.create(
-                model="claude-haiku-3-5-20241022",
-                max_tokens=3000,
-                messages=[{"role": "user", "content": prompt}]
-            )
+            # Use httpx directly to avoid Anthropic client initialization issues
+            headers = {
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            }
+            payload = {
+                "model": "claude-haiku-3-5-20241022",
+                "max_tokens": 3000,
+                "messages": [{"role": "user", "content": prompt}]
+            }
+            
+            with httpx.Client() as http_client:
+                response = http_client.post(api_url, headers=headers, json=payload, timeout=60)
+                response.raise_for_status()
+                data = response.json()
             
             # Parse JSON response (handle markdown wrapping)
-            text = response.content[0].text
+            text = data.get("content", [{}])[0].get("text", "")
             text = text.replace("```json\n", "").replace("```json", "").replace("\n```", "").replace("```", "").strip()
             classifications = json.loads(text)
             
