@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Signals } from './pages/Signals';
 import { Narratives } from './pages/Narratives';
@@ -21,7 +21,8 @@ function App() {
       <BrowserRouter>
         <Layout>
           <Routes>
-            <Route path="/" element={<Signals />} />
+            <Route path="/" element={<Navigate to="/signals" replace />} />
+            <Route path="/signals" element={<Signals />} />
             <Route path="/narratives" element={<Narratives />} />
             {/* TODO: Uncomment when backend /api/v1/entities endpoints are implemented */}
             {/* <Route path="/entity/:id" element={<EntityDetail />} /> */}

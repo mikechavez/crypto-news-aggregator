@@ -26,6 +26,7 @@ var/
 *.egg
 
 # Poetry
+# poetry.lock should be committed to ensure consistent dependencies
 
 # Virtual environments
 .venv/
