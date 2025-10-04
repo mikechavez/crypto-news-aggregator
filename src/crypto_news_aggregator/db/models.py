@@ -21,7 +21,7 @@ from .base import Base
 class EntityType(str, Enum):
     """Entity type classification for entity mentions.
     
-    Primary entities are the main subjects of articles (cryptocurrency, protocol, company, blockchain).
+    Primary entities are the main subjects of articles (cryptocurrency, protocol, company, blockchain, organization).
     Context entities provide additional context (event, concept, person, location).
     """
     # Primary entities - main subjects
@@ -29,6 +29,7 @@ class EntityType(str, Enum):
     PROTOCOL = "protocol"
     COMPANY = "company"
     BLOCKCHAIN = "blockchain"
+    ORGANIZATION = "organization"  # Government agencies, NGOs, regulatory bodies
     
     # Context entities - supporting information
     EVENT = "event"
@@ -39,7 +40,13 @@ class EntityType(str, Enum):
     @classmethod
     def is_primary(cls, entity_type: str) -> bool:
         """Check if an entity type is a primary entity."""
-        primary_types = {cls.CRYPTOCURRENCY, cls.PROTOCOL, cls.COMPANY, cls.BLOCKCHAIN}
+        primary_types = {
+            cls.CRYPTOCURRENCY,
+            cls.PROTOCOL,
+            cls.COMPANY,
+            cls.BLOCKCHAIN,
+            cls.ORGANIZATION,
+        }
         return entity_type in {t.value for t in primary_types}
 
 

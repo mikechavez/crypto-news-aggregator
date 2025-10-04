@@ -32,7 +32,9 @@ async def calculate_velocity(entity: str, timeframe_hours: int = 24) -> float:
     db = await mongo_manager.get_async_database()
     collection = db.entity_mentions
     
-    now = datetime.now(timezone.utc)
+    # MongoDB stores datetimes as UTC but returns them as naive
+    # Use naive datetimes for comparison
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     one_hour_ago = now - timedelta(hours=1)
     timeframe_ago = now - timedelta(hours=timeframe_hours)
     
@@ -40,14 +42,14 @@ async def calculate_velocity(entity: str, timeframe_hours: int = 24) -> float:
     mentions_1h = await collection.count_documents({
         "entity": entity,
         "is_primary": True,
-        "timestamp": {"$gte": one_hour_ago}
+        "created_at": {"$gte": one_hour_ago}
     })
     
     # Count mentions in full timeframe (primary entities only)
     mentions_timeframe = await collection.count_documents({
         "entity": entity,
         "is_primary": True,
-        "timestamp": {"$gte": timeframe_ago}
+        "created_at": {"$gte": timeframe_ago}
     })
     
     # Calculate velocity
@@ -71,7 +73,8 @@ async def calculate_source_diversity(entity: str) -> int:
     """
     Calculate source diversity for an entity.
     
-    Counts the number of unique RSS sources that have mentioned this entity.
+    Counts the number of unique sources that have mentioned this entity.
+    Entity mentions have a 'source' field directly.
     
     Args:
         entity: The entity to calculate diversity for
@@ -81,32 +84,14 @@ async def calculate_source_diversity(entity: str) -> int:
     """
     db = await mongo_manager.get_async_database()
     entity_mentions_collection = db.entity_mentions
-    articles_collection = db.articles
     
-    # Get all article IDs that mention this entity (primary mentions only)
-    pipeline = [
-        {"$match": {"entity": entity, "is_primary": True}},
-        {"$group": {"_id": "$article_id"}},
-    ]
+    # Get unique sources directly from entity mentions (primary mentions only)
+    sources = await entity_mentions_collection.distinct(
+        "source",
+        {"entity": entity, "is_primary": True}
+    )
     
-    article_ids = []
-    async for result in entity_mentions_collection.aggregate(pipeline):
-        article_ids.append(result["_id"])
-    
-    if not article_ids:
-        return 0
-    
-    # Count unique sources from these articles
-    source_pipeline = [
-        {"$match": {"_id": {"$in": article_ids}}},
-        {"$group": {"_id": "$source"}},
-    ]
-    
-    unique_sources = 0
-    async for _ in articles_collection.aggregate(source_pipeline):
-        unique_sources += 1
-    
-    return unique_sources
+    return len(sources)
 
 
 async def calculate_sentiment_metrics(entity: str) -> Dict[str, float]:

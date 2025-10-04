@@ -70,13 +70,12 @@ class RSSService:
                 if hasattr(entry, "author") and entry.author
                 else None
             )
-
             article = ArticleCreate(
                 title=entry.title,
                 text=entry.summary,
                 url=str(entry.link),
                 source_id=entry.link,  # Use link as a unique ID for RSS
-                source="rss",
+                source=source,  # Use the actual feed name (coindesk, cointelegraph, etc.)
                 author=author,
                 published_at=published_date,
                 metrics=ArticleMetrics(),
@@ -84,9 +83,6 @@ class RSSService:
             )
             articles.append(article)
         return articles
-
-
-from crypto_news_aggregator.db.operations.articles import create_or_update_articles
 
 
 async def main():
