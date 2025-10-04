@@ -19,9 +19,9 @@ async def main():
     client = AsyncIOMotorClient(mongo_uri)
     db = client[os.getenv("MONGODB_DB_NAME", "crypto_news_db")]
     
-    # Get unique entities that need classification (where entity_type is missing)
+    # Get ALL unique entities for reclassification with new system
     pipeline = [
-        {"$match": {"entity_type": {"$exists": False}}},
+        {"$match": {}},  # Get ALL entities regardless of existing entity_type
         {"$group": {"_id": "$entity"}},
         {"$project": {"entity": "$_id", "_id": 0}}
     ]
@@ -29,7 +29,7 @@ async def main():
     entities = [doc["entity"] for doc in result]
     
     if not entities:
-        print("No entities need classification. All done!")
+        print("No entities found in database!")
         return
     
     print(f"Classifying {len(entities)} entities...")
