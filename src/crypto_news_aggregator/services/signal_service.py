@@ -36,15 +36,17 @@ async def calculate_velocity(entity: str, timeframe_hours: int = 24) -> float:
     one_hour_ago = now - timedelta(hours=1)
     timeframe_ago = now - timedelta(hours=timeframe_hours)
     
-    # Count mentions in last hour
+    # Count mentions in last hour (primary entities only)
     mentions_1h = await collection.count_documents({
         "entity": entity,
+        "is_primary": True,
         "timestamp": {"$gte": one_hour_ago}
     })
     
-    # Count mentions in full timeframe
+    # Count mentions in full timeframe (primary entities only)
     mentions_timeframe = await collection.count_documents({
         "entity": entity,
+        "is_primary": True,
         "timestamp": {"$gte": timeframe_ago}
     })
     
@@ -81,9 +83,9 @@ async def calculate_source_diversity(entity: str) -> int:
     entity_mentions_collection = db.entity_mentions
     articles_collection = db.articles
     
-    # Get all article IDs that mention this entity
+    # Get all article IDs that mention this entity (primary mentions only)
     pipeline = [
-        {"$match": {"entity": entity}},
+        {"$match": {"entity": entity, "is_primary": True}},
         {"$group": {"_id": "$article_id"}},
     ]
     
@@ -127,8 +129,8 @@ async def calculate_sentiment_metrics(entity: str) -> Dict[str, float]:
         "negative": -1.0,
     }
     
-    # Get all mentions with sentiment
-    cursor = collection.find({"entity": entity})
+    # Get all mentions with sentiment (primary mentions only)
+    cursor = collection.find({"entity": entity, "is_primary": True})
     
     sentiment_scores = []
     async for mention in cursor:
