@@ -1,6 +1,7 @@
 from typing import List, Dict, Any
 from datetime import datetime, timezone
 from crypto_news_aggregator.db.mongodb import mongo_manager
+from crypto_news_aggregator.db.models import EntityType
 
 
 async def create_entity_mention(
@@ -9,6 +10,7 @@ async def create_entity_mention(
     article_id: str,
     sentiment: str,
     confidence: float = 1.0,
+    is_primary: bool = None,
     metadata: Dict[str, Any] = None,
 ) -> str:
     """
@@ -16,10 +18,11 @@ async def create_entity_mention(
 
     Args:
         entity: The entity name/value (e.g., "$BTC", "Bitcoin", "regulation")
-        entity_type: Type of entity (ticker, project, event)
+        entity_type: Type of entity (one of EntityType values)
         article_id: ID of the article where entity was mentioned
         sentiment: Sentiment of the mention (positive, negative, neutral)
         confidence: Confidence score of the extraction (0.0-1.0)
+        is_primary: Whether this is a primary entity (auto-determined if None)
         metadata: Additional metadata about the mention
 
     Returns:
@@ -28,12 +31,17 @@ async def create_entity_mention(
     db = await mongo_manager.get_async_database()
     collection = db.entity_mentions
 
+    # Auto-determine is_primary if not provided
+    if is_primary is None:
+        is_primary = EntityType.is_primary(entity_type)
+
     mention_data = {
         "entity": entity,
         "entity_type": entity_type,
         "article_id": article_id,
         "sentiment": sentiment,
         "confidence": confidence,
+        "is_primary": is_primary,
         "timestamp": datetime.now(timezone.utc),
         "created_at": datetime.now(timezone.utc),
         "metadata": metadata or {},
@@ -48,7 +56,7 @@ async def create_entity_mentions_batch(mentions: List[Dict[str, Any]]) -> List[s
     Creates multiple entity mention records in a single batch operation.
 
     Args:
-        mentions: List of mention dicts with keys: entity, entity_type, article_id, sentiment, confidence
+        mentions: List of mention dicts with keys: entity, entity_type, article_id, sentiment, confidence, is_primary (optional)
 
     Returns:
         List of created mention IDs
@@ -60,12 +68,19 @@ async def create_entity_mentions_batch(mentions: List[Dict[str, Any]]) -> List[s
     mention_docs = []
 
     for mention in mentions:
+        entity_type = mention["entity_type"]
+        # Auto-determine is_primary if not provided
+        is_primary = mention.get("is_primary")
+        if is_primary is None:
+            is_primary = EntityType.is_primary(entity_type)
+
         mention_doc = {
             "entity": mention["entity"],
-            "entity_type": mention["entity_type"],
+            "entity_type": entity_type,
             "article_id": mention["article_id"],
             "sentiment": mention.get("sentiment", "neutral"),
             "confidence": mention.get("confidence", 1.0),
+            "is_primary": is_primary,
             "timestamp": now,
             "created_at": now,
             "metadata": mention.get("metadata", {}),
@@ -83,6 +98,7 @@ async def get_entity_mentions(
     entity_type: str = None,
     article_id: str = None,
     sentiment: str = None,
+    is_primary: bool = None,
     limit: int = 100,
 ) -> List[Dict[str, Any]]:
     """
@@ -93,6 +109,7 @@ async def get_entity_mentions(
         entity_type: Filter by entity type
         article_id: Filter by article ID
         sentiment: Filter by sentiment
+        is_primary: Filter by primary entity flag
         limit: Maximum number of results
 
     Returns:
@@ -110,6 +127,8 @@ async def get_entity_mentions(
         query["article_id"] = article_id
     if sentiment:
         query["sentiment"] = sentiment
+    if is_primary is not None:
+        query["is_primary"] = is_primary
 
     cursor = collection.find(query).sort("timestamp", -1).limit(limit)
     mentions = []

@@ -12,9 +12,35 @@ from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
+from enum import Enum
 
 # Import the Base class
 from .base import Base
+
+
+class EntityType(str, Enum):
+    """Entity type classification for entity mentions.
+    
+    Primary entities are the main subjects of articles (cryptocurrency, protocol, company, blockchain).
+    Context entities provide additional context (event, concept, person, location).
+    """
+    # Primary entities - main subjects
+    CRYPTOCURRENCY = "cryptocurrency"
+    PROTOCOL = "protocol"
+    COMPANY = "company"
+    BLOCKCHAIN = "blockchain"
+    
+    # Context entities - supporting information
+    EVENT = "event"
+    CONCEPT = "concept"
+    PERSON = "person"
+    LOCATION = "location"
+    
+    @classmethod
+    def is_primary(cls, entity_type: str) -> bool:
+        """Check if an entity type is a primary entity."""
+        primary_types = {cls.CRYPTOCURRENCY, cls.PROTOCOL, cls.COMPANY, cls.BLOCKCHAIN}
+        return entity_type in {t.value for t in primary_types}
 
 
 class Source(Base):

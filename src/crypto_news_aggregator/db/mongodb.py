@@ -139,6 +139,34 @@ PRICE_HISTORY_INDEXES = [
     },
 ]
 
+ENTITY_MENTIONS_INDEXES = [
+    {
+        "keys": [("entity_type", 1)],
+        "name": "entity_type_idx",
+        "background": True,
+    },
+    {
+        "keys": [("is_primary", 1)],
+        "name": "is_primary_idx",
+        "background": True,
+    },
+    {
+        "keys": [("is_primary", 1), ("entity", 1)],
+        "name": "is_primary_entity_compound",
+        "background": True,
+    },
+    {
+        "keys": [("article_id", 1)],
+        "name": "article_id_idx",
+        "background": True,
+    },
+    {
+        "keys": [("entity", 1), ("timestamp", -1)],
+        "name": "entity_timestamp_compound",
+        "background": True,
+    },
+]
+
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +182,7 @@ COLLECTION_TRENDS = "trends"
 COLLECTION_ALERTS = "alerts"
 COLLECTION_PRICE_HISTORY = "price_history"
 COLLECTION_TWEETS = "tweets"
+COLLECTION_ENTITY_MENTIONS = "entity_mentions"
 
 # Database name
 DB_NAME = "crypto_news"
@@ -415,11 +444,15 @@ class MongoManager:
         # Create price history collection indexes
         price_history_col = await self.get_async_collection(COLLECTION_PRICE_HISTORY)
 
+        # Create entity mentions collection indexes
+        entity_mentions_col = await self.get_async_collection(COLLECTION_ENTITY_MENTIONS)
+
         # Drop existing indexes if force_recreate is True
         if force_recreate:
             await articles_col.drop_indexes()
             await alerts_col.drop_indexes()
             await price_history_col.drop_indexes()
+            await entity_mentions_col.drop_indexes()
             tweets_col_for_reset = await self.get_async_collection(COLLECTION_TWEETS)
             await tweets_col_for_reset.drop_indexes()
 
@@ -452,6 +485,13 @@ class MongoManager:
             keys = index_options.pop("keys")
             if not await self._has_index(tweets_col, index_options.get("name")):
                 await tweets_col.create_index(keys, **index_options)
+
+        # Create indexes for entity mentions collection
+        for index_info in ENTITY_MENTIONS_INDEXES:
+            index_options = index_info.copy()
+            keys = index_options.pop("keys")
+            if not await self._has_index(entity_mentions_col, index_options.get("name")):
+                await entity_mentions_col.create_index(keys, **index_options)
 
         logger.info("MongoDB indexes initialized successfully")
         self._indexes_created = True
