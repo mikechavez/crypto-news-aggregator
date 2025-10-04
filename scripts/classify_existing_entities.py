@@ -128,7 +128,7 @@ Only include entities from the input list. Confidence should be 0.80-1.00."""
         primary_label = "PRIMARY" if is_primary else "context"
         print(f"  {type_name:15} ({primary_label:8}): {count:4} mentions")
     
-    await client.close()
+    client.close()
 
 
 if __name__ == "__main__":
