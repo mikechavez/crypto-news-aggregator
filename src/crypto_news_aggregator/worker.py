@@ -44,11 +44,12 @@ async def update_signal_scores(run_immediately: bool = False):
             entity_mentions_collection = db.entity_mentions
             
             # Get entities mentioned in the last 30 minutes
-            thirty_min_ago = datetime.now(timezone.utc) - timedelta(minutes=30)
+            # Use naive datetime to match MongoDB storage
+            thirty_min_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=30)
             
             pipeline = [
                 {"$match": {
-                    "timestamp": {"$gte": thirty_min_ago},
+                    "created_at": {"$gte": thirty_min_ago},
                     "is_primary": True  # Only score primary entities
                 }},
                 {"$group": {
@@ -82,9 +83,9 @@ async def update_signal_scores(run_immediately: bool = False):
                     # Get first_seen timestamp (primary mentions only)
                     first_mention = await entity_mentions_collection.find_one(
                         {"entity": entity, "is_primary": True},
-                        sort=[("timestamp", 1)]
+                        sort=[("created_at", 1)]
                     )
-                    first_seen = first_mention["timestamp"] if first_mention else datetime.now(timezone.utc)
+                    first_seen = first_mention["created_at"] if first_mention else datetime.now(timezone.utc)
                     
                     # Store the signal score
                     await upsert_signal_score(

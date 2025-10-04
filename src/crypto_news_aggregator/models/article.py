@@ -36,9 +36,17 @@ class ArticleBase(BaseModel):
         unique=True,
         description="The unique ID of the article from its source (e.g., tweet ID).",
     )
-    source: Literal["twitter", "telegram", "rss", "reddit", "chaingpt"] = Field(
-        ..., description="The source of the article."
-    )
+    source: Literal[
+        "twitter",
+        "telegram",
+        "rss",
+        "reddit",
+        "chaingpt",
+        "coindesk",
+        "cointelegraph",
+        "decrypt",
+        "bitcoinmagazine",
+    ] = Field(..., description="The source of the article.")
     text: str
     author: Optional[ArticleAuthor] = None
     url: str

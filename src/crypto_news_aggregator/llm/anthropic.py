@@ -124,6 +124,7 @@ PRIMARY entities (trackable/investable):
 - blockchain: Ethereum, Solana, Avalanche (as platforms)
 - protocol: Uniswap, Aave, Lido (DeFi protocols)
 - company: Circle, Coinbase, MicroStrategy, BlackRock (crypto-related companies)
+- organization: SEC, Federal Reserve, IMF, World Bank, CFTC (government/regulatory/NGO)
 
 CONTEXT entities (for enrichment):
 - event: launch, hack, upgrade, halving, rally, approval
