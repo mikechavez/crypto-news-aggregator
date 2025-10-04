@@ -117,22 +117,37 @@ class AnthropicProvider(LLMProvider):
 
         combined_articles = "\n---\n".join(articles_text)
 
-        prompt = f"""Analyze the following {len(articles)} cryptocurrency news articles and extract entities from each.
+        prompt = f"""Extract entities from these {len(articles)} crypto news articles. Return ONLY valid JSON with no markdown.
 
-For each article, identify:
-1. Ticker symbols (e.g., $BTC, $ETH, $SOL) - include the $ prefix
-2. Project names (e.g., Bitcoin, Ethereum, Solana, Aster Protocol)
-3. Event types (choose from: launch, hack, partnership, regulation, upgrade, acquisition, listing, delisting, airdrop, other)
-4. Sentiment (positive, negative, or neutral)
+PRIMARY entities (trackable/investable):
+- cryptocurrency: Bitcoin, Ethereum, Litecoin, Solana (include ticker like $BTC if mentioned)
+- blockchain: Ethereum, Solana, Avalanche (as platforms)
+- protocol: Uniswap, Aave, Lido (DeFi protocols)
+- company: Circle, Coinbase, MicroStrategy, BlackRock (crypto-related companies)
 
-Return ONLY a valid JSON array with one object per article, in the same order as provided. Each object must have this exact structure:
+CONTEXT entities (for enrichment):
+- event: launch, hack, upgrade, halving, rally, approval
+- concept: DeFi, regulation, staking, altcoin, ETF, NFT
+- person: Vitalik Buterin, Michael Saylor, Donald Trump, Gary Gensler
+- location: New York, Abu Dhabi, Dubai, El Salvador
+
+Rules:
+- Confidence must be > 0.80
+- Tickers must be $SYMBOL format (2-5 uppercase letters)
+- Generic phrases like 'Pilot Program' are concepts
+- Return valid JSON only, no markdown formatting
+
+Return ONLY a JSON array with one object per article:
 {{
   "article_index": 0,
   "article_id": "the_id_from_input",
-  "entities": [
-    {{"type": "ticker", "value": "$BTC", "confidence": 0.95}},
-    {{"type": "project", "value": "Bitcoin", "confidence": 0.95}},
-    {{"type": "event", "value": "regulation", "confidence": 0.85}}
+  "primary_entities": [
+    {{"name": "Bitcoin", "type": "cryptocurrency", "ticker": "$BTC", "confidence": 0.95}},
+    {{"name": "Circle", "type": "company", "confidence": 0.90}}
+  ],
+  "context_entities": [
+    {{"name": "regulation", "type": "concept", "confidence": 0.85}},
+    {{"name": "Michael Saylor", "type": "person", "confidence": 0.88}}
   ],
   "sentiment": "positive"
 }}

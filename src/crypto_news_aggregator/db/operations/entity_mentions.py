@@ -11,6 +11,7 @@ async def create_entity_mention(
     sentiment: str,
     confidence: float = 1.0,
     is_primary: bool = None,
+    source: str = None,
     metadata: Dict[str, Any] = None,
 ) -> str:
     """
@@ -23,6 +24,7 @@ async def create_entity_mention(
         sentiment: Sentiment of the mention (positive, negative, neutral)
         confidence: Confidence score of the extraction (0.0-1.0)
         is_primary: Whether this is a primary entity (auto-determined if None)
+        source: Source of the article (e.g., "CoinDesk", "Cointelegraph")
         metadata: Additional metadata about the mention
 
     Returns:
@@ -42,6 +44,7 @@ async def create_entity_mention(
         "sentiment": sentiment,
         "confidence": confidence,
         "is_primary": is_primary,
+        "source": source or "unknown",
         "timestamp": datetime.now(timezone.utc),
         "created_at": datetime.now(timezone.utc),
         "metadata": metadata or {},
@@ -56,7 +59,7 @@ async def create_entity_mentions_batch(mentions: List[Dict[str, Any]]) -> List[s
     Creates multiple entity mention records in a single batch operation.
 
     Args:
-        mentions: List of mention dicts with keys: entity, entity_type, article_id, sentiment, confidence, is_primary (optional)
+        mentions: List of mention dicts with keys: entity, entity_type, article_id, sentiment, confidence, source (optional), is_primary (optional)
 
     Returns:
         List of created mention IDs
@@ -81,6 +84,7 @@ async def create_entity_mentions_batch(mentions: List[Dict[str, Any]]) -> List[s
             "sentiment": mention.get("sentiment", "neutral"),
             "confidence": mention.get("confidence", 1.0),
             "is_primary": is_primary,
+            "source": mention.get("source", "unknown"),
             "timestamp": now,
             "created_at": now,
             "metadata": mention.get("metadata", {}),

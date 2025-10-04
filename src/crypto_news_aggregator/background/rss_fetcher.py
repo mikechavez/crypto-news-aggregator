@@ -512,8 +512,29 @@ async def process_new_articles_from_mongodb():
             # Get entity extraction results for this article
             article_id_str = str(article_id)
             entity_data = entity_extraction_results.get(article_id_str, {})
-            entities = entity_data.get("entities", [])
+            
+            # Parse new structured entity format
+            primary_entities = entity_data.get("primary_entities", [])
+            context_entities = entity_data.get("context_entities", [])
             entity_sentiment = entity_data.get("sentiment", sentiment_label)
+            
+            # Combine all entities for storage in article document
+            all_entities = []
+            for entity in primary_entities:
+                all_entities.append({
+                    "name": entity.get("name"),
+                    "type": entity.get("type"),
+                    "ticker": entity.get("ticker"),
+                    "confidence": entity.get("confidence", 1.0),
+                    "is_primary": True,
+                })
+            for entity in context_entities:
+                all_entities.append({
+                    "name": entity.get("name"),
+                    "type": entity.get("type"),
+                    "confidence": entity.get("confidence", 1.0),
+                    "is_primary": False,
+                })
 
             update_operations = {
                 "$set": {
@@ -523,7 +544,7 @@ async def process_new_articles_from_mongodb():
                     "sentiment": sentiment_payload,
                     "themes": themes,
                     "keywords": keywords,
-                    "entities": entities,
+                    "entities": all_entities,
                     "updated_at": datetime.now(timezone.utc),
                 }
             }
@@ -531,22 +552,73 @@ async def process_new_articles_from_mongodb():
             await collection.update_one({"_id": article_id}, update_operations)
 
             # Create entity mentions for tracking
-            if entities:
+            article_source = article.get("source") or article.get("source_id") or "unknown"
+            
+            if primary_entities or context_entities:
                 mentions_to_create = []
-                for entity in entities:
-                    mentions_to_create.append(
-                        {
-                            "entity": entity.get("value"),
-                            "entity_type": entity.get("type"),
-                            "article_id": article_id_str,
-                            "sentiment": entity_sentiment,
-                            "confidence": entity.get("confidence", 1.0),
-                            "metadata": {
-                                "article_title": title,
-                                "extraction_batch": True,
-                            },
-                        }
-                    )
+                
+                # Process primary entities
+                for entity in primary_entities:
+                    entity_name = entity.get("name")
+                    entity_type = entity.get("type")
+                    ticker = entity.get("ticker")
+                    
+                    # Create mention for the entity name
+                    if entity_name:
+                        mentions_to_create.append(
+                            {
+                                "entity": entity_name,
+                                "entity_type": entity_type,
+                                "article_id": article_id_str,
+                                "sentiment": entity_sentiment,
+                                "confidence": entity.get("confidence", 1.0),
+                                "source": article_source,
+                                "metadata": {
+                                    "article_title": title,
+                                    "extraction_batch": True,
+                                    "ticker": ticker,
+                                },
+                            }
+                        )
+                    
+                    # Also create a separate mention for the ticker if present
+                    if ticker and ticker != entity_name:
+                        mentions_to_create.append(
+                            {
+                                "entity": ticker,
+                                "entity_type": entity_type,
+                                "article_id": article_id_str,
+                                "sentiment": entity_sentiment,
+                                "confidence": entity.get("confidence", 1.0),
+                                "source": article_source,
+                                "metadata": {
+                                    "article_title": title,
+                                    "extraction_batch": True,
+                                    "primary_name": entity_name,
+                                },
+                            }
+                        )
+                
+                # Process context entities
+                for entity in context_entities:
+                    entity_name = entity.get("name")
+                    entity_type = entity.get("type")
+                    
+                    if entity_name:
+                        mentions_to_create.append(
+                            {
+                                "entity": entity_name,
+                                "entity_type": entity_type,
+                                "article_id": article_id_str,
+                                "sentiment": entity_sentiment,
+                                "confidence": entity.get("confidence", 1.0),
+                                "source": article_source,
+                                "metadata": {
+                                    "article_title": title,
+                                    "extraction_batch": True,
+                                },
+                            }
+                        )
 
                 try:
                     await create_entity_mentions_batch(mentions_to_create)
