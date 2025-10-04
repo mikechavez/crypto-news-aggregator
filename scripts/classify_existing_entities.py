@@ -72,7 +72,7 @@ Only include entities from the input list. Confidence should be 0.80-1.00."""
                 "content-type": "application/json",
             }
             payload = {
-                "model": "claude-haiku-3-5-20241022",
+                "model": "claude-3-5-haiku-20241022",
                 "max_tokens": 3000,
                 "messages": [{"role": "user", "content": prompt}]
             }
@@ -123,7 +123,7 @@ Only include entities from the input list. Confidence should be 0.80-1.00."""
     print("\nSummary:")
     for item in summary:
         type_name = item["_id"]["type"] or "unclassified"
-        is_primary = item["_id"]["is_primary"]
+        is_primary = item["_id"].get("is_primary", False)
         count = item["count"]
         primary_label = "PRIMARY" if is_primary else "context"
         print(f"  {type_name:15} ({primary_label:8}): {count:4} mentions")
