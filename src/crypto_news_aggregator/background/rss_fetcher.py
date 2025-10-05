@@ -12,6 +12,7 @@ from ..db.operations.entity_mentions import create_entity_mentions_batch
 from ..llm.factory import get_llm_provider
 from ..db.mongodb import mongo_manager
 from ..core.config import settings
+from ..services.entity_normalization import normalize_entity_name
 
 logger = logging.getLogger(__name__)
 
@@ -587,7 +588,14 @@ async def process_new_articles_from_mongodb():
                     entity_type = entity.get("type")
                     ticker = entity.get("ticker")
                     
-                    # Create mention for the entity name
+                    # Ensure entity name is normalized (defense in depth)
+                    if entity_name:
+                        normalized_name = normalize_entity_name(entity_name)
+                        if normalized_name != entity_name:
+                            logger.info(f"Entity mention normalized: '{entity_name}' → '{normalized_name}'")
+                            entity_name = normalized_name
+                    
+                    # Create mention for the entity name (already normalized by LLM + double-check above)
                     if entity_name:
                         mentions_to_create.append(
                             {
@@ -597,6 +605,7 @@ async def process_new_articles_from_mongodb():
                                 "sentiment": entity_sentiment,
                                 "confidence": entity.get("confidence", 1.0),
                                 "source": article_source,
+                                "is_primary": True,
                                 "metadata": {
                                     "article_title": title,
                                     "extraction_batch": True,
@@ -605,28 +614,19 @@ async def process_new_articles_from_mongodb():
                             }
                         )
                     
-                    # Also create a separate mention for the ticker if present
-                    if ticker and ticker != entity_name:
-                        mentions_to_create.append(
-                            {
-                                "entity": ticker,
-                                "entity_type": entity_type,
-                                "article_id": article_id_str,
-                                "sentiment": entity_sentiment,
-                                "confidence": entity.get("confidence", 1.0),
-                                "source": article_source,
-                                "metadata": {
-                                    "article_title": title,
-                                    "extraction_batch": True,
-                                    "primary_name": entity_name,
-                                },
-                            }
-                        )
+                    # DO NOT create separate ticker mentions - they're already normalized to entity_name
                 
                 # Process context entities
                 for entity in context_entities:
                     entity_name = entity.get("name")
                     entity_type = entity.get("type")
+                    
+                    # Normalize context entities if they're crypto-related
+                    if entity_name and entity_type in ["cryptocurrency", "blockchain"]:
+                        normalized_name = normalize_entity_name(entity_name)
+                        if normalized_name != entity_name:
+                            logger.info(f"Context entity normalized: '{entity_name}' → '{normalized_name}'")
+                            entity_name = normalized_name
                     
                     if entity_name:
                         mentions_to_create.append(
@@ -637,6 +637,7 @@ async def process_new_articles_from_mongodb():
                                 "sentiment": entity_sentiment,
                                 "confidence": entity.get("confidence", 1.0),
                                 "source": article_source,
+                                "is_primary": False,
                                 "metadata": {
                                     "article_title": title,
                                     "extraction_batch": True,
