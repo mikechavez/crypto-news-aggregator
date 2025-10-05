@@ -38,6 +38,7 @@ class Settings(BaseSettings):
 
     # API Keys (these will be loaded from environment variables)
     LLM_PROVIDER: str = "openai"  # Default provider, will be overridden by .env
+    OPENAI_API_KEY: str = ""  # OpenAI API key for LLM operations
     NEWS_API_KEY: str = ""  # Kept for backward compatibility
     TWITTER_BEARER_TOKEN: str = ""
     ANTHROPIC_API_KEY: str = ""
