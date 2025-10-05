@@ -406,6 +406,21 @@ async def process_new_articles_from_mongodb():
         )
 
         extraction_result = await _process_entity_extraction_batch(batch, llm_client)
+        
+        # Log what was returned from LLM
+        results_count = len(extraction_result.get("results", []))
+        logger.info(f"Entity extraction returned {results_count} results for batch")
+        
+        # Log detailed entity counts
+        total_primary = 0
+        total_context = 0
+        for result in extraction_result.get("results", []):
+            primary_count = len(result.get("primary_entities", []))
+            context_count = len(result.get("context_entities", []))
+            total_primary += primary_count
+            total_context += context_count
+        
+        logger.info(f"Batch entity breakdown: {total_primary} primary entities, {total_context} context entities")
 
         # Log usage stats and metrics
         usage = extraction_result.get("usage", {})
@@ -518,6 +533,14 @@ async def process_new_articles_from_mongodb():
             context_entities = entity_data.get("context_entities", [])
             entity_sentiment = entity_data.get("sentiment", sentiment_label)
             
+            # Log entity extraction for this article
+            if primary_entities or context_entities:
+                logger.info(
+                    f"Article {article_id_str}: {len(primary_entities)} primary, {len(context_entities)} context entities"
+                )
+            else:
+                logger.warning(f"Article {article_id_str}: No entities extracted")
+            
             # Combine all entities for storage in article document
             all_entities = []
             for entity in primary_entities:
@@ -556,6 +579,7 @@ async def process_new_articles_from_mongodb():
             
             if primary_entities or context_entities:
                 mentions_to_create = []
+                logger.info(f"Preparing to create entity mentions for article {article_id_str}")
                 
                 # Process primary entities
                 for entity in primary_entities:
@@ -621,9 +645,11 @@ async def process_new_articles_from_mongodb():
                         )
 
                 try:
+                    logger.info(f"Attempting to save {len(mentions_to_create)} entity mentions to database")
                     await create_entity_mentions_batch(mentions_to_create)
+                    logger.info(f"Successfully saved {len(mentions_to_create)} entity mentions")
                 except Exception as exc:
-                    logger.warning(
+                    logger.error(
                         "Failed to create entity mentions for article %s: %s",
                         article_id,
                         exc,

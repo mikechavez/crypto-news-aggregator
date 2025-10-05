@@ -192,6 +192,9 @@ Return ONLY the JSON array, no other text."""
 
                     # Extract response text
                     response_text = data.get("content", [{}])[0].get("text", "")
+                    
+                    # Log raw response for debugging
+                    logger.info(f"Raw Anthropic response (first 500 chars): {response_text[:500]}")
 
                     # Extract usage metrics
                     usage = data.get("usage", {})
@@ -216,6 +219,19 @@ Return ONLY the JSON array, no other text."""
                         results = json.loads(json_match.group(0))
                     else:
                         results = json.loads(response_text)
+                    
+                    # Log parsed results for debugging
+                    logger.info(f"Parsed {len(results)} article results from LLM")
+                    if results:
+                        # Log first result structure
+                        first_result = results[0]
+                        primary_count = len(first_result.get("primary_entities", []))
+                        context_count = len(first_result.get("context_entities", []))
+                        logger.info(f"Sample result structure - primary_entities: {primary_count}, context_entities: {context_count}")
+                        if primary_count > 0:
+                            logger.info(f"Sample primary entities: {first_result.get('primary_entities', [])[:3]}")
+                        if context_count > 0:
+                            logger.info(f"Sample context entities: {first_result.get('context_entities', [])[:3]}")
 
                     logger.info(f"Successfully extracted entities using {model_label}")
                     return {
