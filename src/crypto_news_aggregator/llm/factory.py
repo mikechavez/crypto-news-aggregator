@@ -3,13 +3,11 @@ from typing import List, Optional
 from .base import LLMProvider
 from .sentient import SentientProvider
 from .anthropic import AnthropicProvider
-from .openai import OpenAIProvider
 from ..core.config import get_settings
 
 PROVIDER_MAP = {
     "sentient": SentientProvider,
     "anthropic": AnthropicProvider,
-    "openai": OpenAIProvider,
 }
 
 
@@ -22,7 +20,7 @@ def get_llm_provider() -> LLMProvider:
     :return: An instance of the LLM provider.
     """
     settings = get_settings()
-    provider_name = getattr(settings, "LLM_PROVIDER", "openai").lower()
+    provider_name = getattr(settings, "LLM_PROVIDER", "anthropic").lower()
     providers_to_try = [provider_name]
 
     last_exception = None
@@ -33,8 +31,9 @@ def get_llm_provider() -> LLMProvider:
                 api_key = None
                 if name == "anthropic":
                     api_key = settings.ANTHROPIC_API_KEY
-                elif name == "openai":
-                    api_key = settings.OPENAI_API_KEY
+                elif name == "sentient":
+                    # Sentient provider may have its own API key handling
+                    api_key = getattr(settings, "SENTIENT_API_KEY", None)
 
                 return provider_class(api_key=api_key)
             except Exception as e:

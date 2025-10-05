@@ -37,8 +37,8 @@ class Settings(BaseSettings):
     DATABASE_URL: Optional[str] = None
 
     # API Keys (these will be loaded from environment variables)
-    LLM_PROVIDER: str = "openai"  # Default provider, will be overridden by .env
-    OPENAI_API_KEY: str = ""  # OpenAI API key for LLM operations
+    LLM_PROVIDER: str = "anthropic"  # Default provider, will be overridden by .env
+    OPENAI_API_KEY: str = ""  # OpenAI API key for LLM operations (deprecated)
     NEWS_API_KEY: str = ""  # Kept for backward compatibility
     TWITTER_BEARER_TOKEN: str = ""
     ANTHROPIC_API_KEY: str = ""
