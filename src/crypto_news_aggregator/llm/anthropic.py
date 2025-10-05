@@ -5,6 +5,7 @@ from typing import List, Dict, Any
 import httpx
 from .base import LLMProvider
 from .tracking import track_usage
+from ..services.entity_normalization import normalize_entity_name
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +221,26 @@ Return ONLY the JSON array, no other text."""
                     else:
                         results = json.loads(response_text)
                     
+                    # Apply entity normalization to all extracted entities
+                    for article_result in results:
+                        # Normalize primary entities
+                        for entity in article_result.get("primary_entities", []):
+                            original_name = entity.get("name")
+                            if original_name:
+                                normalized_name = normalize_entity_name(original_name)
+                                entity["name"] = normalized_name
+                                # Also normalize ticker if present
+                                ticker = entity.get("ticker")
+                                if ticker:
+                                    entity["ticker"] = normalize_entity_name(ticker)
+                        
+                        # Normalize context entities (only if they're cryptocurrency-related)
+                        for entity in article_result.get("context_entities", []):
+                            original_name = entity.get("name")
+                            if original_name and entity.get("type") in ["cryptocurrency", "blockchain"]:
+                                normalized_name = normalize_entity_name(original_name)
+                                entity["name"] = normalized_name
+                    
                     # Log parsed results for debugging
                     logger.info(f"Parsed {len(results)} article results from LLM")
                     if results:
@@ -229,7 +250,7 @@ Return ONLY the JSON array, no other text."""
                         context_count = len(first_result.get("context_entities", []))
                         logger.info(f"Sample result structure - primary_entities: {primary_count}, context_entities: {context_count}")
                         if primary_count > 0:
-                            logger.info(f"Sample primary entities: {first_result.get('primary_entities', [])[:3]}")
+                            logger.info(f"Sample primary entities (normalized): {first_result.get('primary_entities', [])[:3]}")
                         if context_count > 0:
                             logger.info(f"Sample context entities: {first_result.get('context_entities', [])[:3]}")
 
