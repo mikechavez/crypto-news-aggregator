@@ -5,12 +5,16 @@ This service calculates signal scores based on:
 - Velocity: Rate of mentions over time
 - Source diversity: Number of unique sources mentioning the entity
 - Sentiment metrics: Average sentiment and divergence
+
+Note: All entity queries use the entity name as stored in entity_mentions,
+which should already be normalized to canonical form by the RSS fetcher.
 """
 
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 from crypto_news_aggregator.db.mongodb import mongo_manager
+from crypto_news_aggregator.services.entity_normalization import normalize_entity_name
 
 logger = logging.getLogger(__name__)
 
@@ -156,15 +160,20 @@ async def calculate_signal_score(entity: str) -> Dict[str, Any]:
     Normalized to 0-10 scale.
     
     Args:
-        entity: The entity to score
+        entity: The entity to score (will be normalized to canonical form)
     
     Returns:
         Dict with score and component metrics
     """
-    # Get all component metrics
-    velocity = await calculate_velocity(entity)
-    diversity = await calculate_source_diversity(entity)
-    sentiment_metrics = await calculate_sentiment_metrics(entity)
+    # Normalize entity name to canonical form (defensive measure)
+    canonical_entity = normalize_entity_name(entity)
+    if canonical_entity != entity:
+        logger.info(f"Signal score calculation: normalized '{entity}' -> '{canonical_entity}'")
+    
+    # Get all component metrics using canonical name
+    velocity = await calculate_velocity(canonical_entity)
+    diversity = await calculate_source_diversity(canonical_entity)
+    sentiment_metrics = await calculate_sentiment_metrics(canonical_entity)
     
     sentiment_avg = sentiment_metrics["avg"]
     
