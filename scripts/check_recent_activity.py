@@ -14,48 +14,57 @@ async def main():
     
     print("Checking recent database activity...\n")
     
-    # Check recent articles (last 10 minutes)
-    ten_min_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=10)
+    # Check recent articles and mentions (last 2 hours)
+    two_hours_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=2)
     
     recent_articles = await db.articles.count_documents({
-        'created_at': {'$gte': ten_min_ago}
+        'created_at': {'$gte': two_hours_ago}
     })
     
     recent_mentions = await db.entity_mentions.count_documents({
-        'created_at': {'$gte': ten_min_ago}
+        'created_at': {'$gte': two_hours_ago}
     })
     
-    print(f"📰 Articles created in last 10 min: {recent_articles}")
-    print(f"🏷️  Entity mentions created in last 10 min: {recent_mentions}")
+    print(f"Articles in last 2 hours: {recent_articles}")
+    print(f"Entity mentions in last 2 hours: {recent_mentions}")
     
-    if recent_articles > 0:
-        print("\n✅ RSS fetch is working - new articles are being created!")
-        
-        # Show sample
-        sample = await db.articles.find_one({'created_at': {'$gte': ten_min_ago}})
-        if sample:
-            print(f"\nSample article:")
-            print(f"  Title: {sample.get('title', 'N/A')[:80]}...")
-            print(f"  Source: {sample.get('source', 'N/A')}")
-            print(f"  Created: {sample.get('created_at', 'N/A')}")
-    
+    # Get sample mentions with entity name and timestamp
     if recent_mentions > 0:
-        print("\n✅ Entity extraction is working - new mentions are being created!")
-        
-        # Show sample entities
         mentions = await db.entity_mentions.find({
-            'created_at': {'$gte': ten_min_ago},
-            'is_primary': True
-        }).limit(5).to_list(5)
+            'created_at': {'$gte': two_hours_ago}
+        }).sort('created_at', -1).limit(5).to_list(5)
         
-        if mentions:
-            print(f"\nSample entities extracted:")
-            for m in mentions:
-                print(f"  - {m.get('entity')} ({m.get('entity_type')}) - {m.get('sentiment')}")
+        print("\nSample mentions:")
+        for m in mentions:
+            entity_name = m.get('entity', 'N/A')
+            created_at = m.get('created_at', 'N/A')
+            entity_type = m.get('entity_type', 'N/A')
+            is_primary = m.get('is_primary', False)
+            print(f"  - {entity_name} ({entity_type}, primary={is_primary}) at {created_at}")
+    else:
+        print("\nSample mentions: []")
     
-    if recent_articles == 0 and recent_mentions == 0:
-        print("\n⏳ No recent activity yet. RSS fetch may still be in progress...")
-        print("   Or all articles may be duplicates (already in database)")
+    # Show sample articles
+    if recent_articles > 0:
+        print("\nSample articles:")
+        articles = await db.articles.find({
+            'created_at': {'$gte': two_hours_ago}
+        }).sort('created_at', -1).limit(3).to_list(3)
+        
+        for article in articles:
+            print(f"  - {article.get('title', 'N/A')[:80]}")
+            print(f"    Source: {article.get('source', 'N/A')}, Created: {article.get('created_at', 'N/A')}")
+    
+    # Status summary
+    print("\n" + "="*60)
+    if recent_articles > 0 and recent_mentions > 0:
+        print("✅ RSS fetcher is working AND entity extraction is running")
+    elif recent_articles > 0 and recent_mentions == 0:
+        print("⚠️  RSS fetcher is working but NO entity mentions created")
+        print("   This suggests entity extraction may be stuck or disabled")
+    elif recent_articles == 0:
+        print("❌ No new articles in last 2 hours")
+        print("   RSS fetcher may be stuck or all articles are duplicates")
     
     client.close()
 
