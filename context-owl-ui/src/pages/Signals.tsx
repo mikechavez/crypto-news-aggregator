@@ -3,7 +3,7 @@ import { signalsAPI } from '../api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { formatRelativeTime, getSignalStrengthColor, formatPercentage, formatSentiment, getSentimentColor } from '../lib/formatters';
+import { formatRelativeTime, getSignalStrengthColor, formatPercentage, formatSentiment, getSentimentColor, formatEntityType, getEntityTypeColor } from '../lib/formatters';
 
 export function Signals() {
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
@@ -55,8 +55,8 @@ export function Signals() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-500">Type:</span>
-                  <span className="font-medium text-gray-900 capitalize">
-                    {signal.entity_type.replace(/_/g, ' ')}
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getEntityTypeColor(signal.entity_type)}`}>
+                    {formatEntityType(signal.entity_type)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
