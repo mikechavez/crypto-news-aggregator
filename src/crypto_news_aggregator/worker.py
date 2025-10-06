@@ -16,6 +16,7 @@ from crypto_news_aggregator.services.narrative_service import detect_narratives
 from crypto_news_aggregator.db.operations.narratives import upsert_narrative
 from crypto_news_aggregator.services.entity_alert_service import detect_alerts
 from crypto_news_aggregator.services.entity_normalization import normalize_entity_name
+from crypto_news_aggregator.services.narrative_deduplication import deduplicate_narratives
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -142,7 +143,8 @@ async def update_narratives():
     """
     Update narrative clusters from trending entities.
     
-    Runs narrative detection and upserts results to the database.
+    Runs narrative detection, deduplicates similar narratives,
+    and upserts results to the database.
     Scheduled to run every 10 minutes.
     """
     try:
@@ -153,8 +155,14 @@ async def update_narratives():
             logger.info("No narratives detected in this cycle")
             return
         
-        # Upsert each narrative to database
-        for narrative in narratives:
+        # Deduplicate similar narratives
+        deduplicated_narratives, num_merged = deduplicate_narratives(narratives, threshold=0.7)
+        
+        if num_merged > 0:
+            logger.info(f"Merged {num_merged} duplicate narratives")
+        
+        # Upsert each deduplicated narrative to database
+        for narrative in deduplicated_narratives:
             await upsert_narrative(
                 theme=narrative["theme"],
                 entities=narrative["entities"],
@@ -162,7 +170,7 @@ async def update_narratives():
                 article_count=narrative["article_count"]
             )
         
-        logger.info(f"Updated {len(narratives)} narratives")
+        logger.info(f"Updated {len(deduplicated_narratives)} narratives")
     except Exception as e:
         logger.exception(f"Error updating narratives: {e}")
 
