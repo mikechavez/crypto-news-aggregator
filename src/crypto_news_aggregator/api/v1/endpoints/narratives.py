@@ -20,20 +20,28 @@ router = APIRouter()
 
 class NarrativeResponse(BaseModel):
     """Response model for a narrative."""
-    theme: str = Field(..., description="Short title for the narrative")
+    theme: str = Field(..., description="Theme category (e.g., regulatory, defi_adoption)")
+    title: str = Field(..., description="Generated narrative title")
+    summary: str = Field(..., description="AI-generated narrative summary")
     entities: List[str] = Field(..., description="List of entities in this narrative")
-    story: str = Field(..., description="1-2 sentence summary of the narrative")
     article_count: int = Field(..., description="Number of articles supporting this narrative")
-    updated_at: str = Field(..., description="ISO timestamp of last update")
+    mention_velocity: float = Field(..., description="Articles per day rate")
+    lifecycle: str = Field(..., description="Lifecycle stage: emerging, hot, mature, declining")
+    first_seen: str = Field(..., description="ISO timestamp when narrative was first detected")
+    last_updated: str = Field(..., description="ISO timestamp of last update")
     
     class Config:
         json_schema_extra = {
             "example": {
-                "theme": "Bitcoin ETF Approval",
-                "entities": ["Bitcoin", "SEC", "ETF"],
-                "story": "Multiple articles discuss the SEC's consideration of Bitcoin ETF applications and their potential market impact.",
+                "theme": "regulatory",
+                "title": "SEC crypto enforcement actions intensify",
+                "summary": "The SEC has ramped up enforcement actions against major crypto exchanges, with new lawsuits and regulatory guidance affecting the industry.",
+                "entities": ["SEC", "Coinbase", "Binance", "Gary Gensler"],
                 "article_count": 15,
-                "updated_at": "2025-10-01T19:30:00Z"
+                "mention_velocity": 3.1,
+                "lifecycle": "hot",
+                "first_seen": "2025-10-01T19:30:00Z",
+                "last_updated": "2025-10-06T14:20:00Z"
             }
         }
 
@@ -86,18 +94,28 @@ async def get_active_narratives_endpoint(
         response_data = []
         for narrative in narratives:
             # Convert datetime to ISO string
-            updated_at = narrative.get("updated_at")
-            if updated_at:
-                updated_at_str = updated_at.isoformat() if hasattr(updated_at, 'isoformat') else str(updated_at)
+            last_updated = narrative.get("last_updated")
+            if last_updated:
+                last_updated_str = last_updated.isoformat() if hasattr(last_updated, 'isoformat') else str(last_updated)
             else:
-                updated_at_str = ""
+                last_updated_str = ""
+            
+            first_seen = narrative.get("first_seen")
+            if first_seen:
+                first_seen_str = first_seen.isoformat() if hasattr(first_seen, 'isoformat') else str(first_seen)
+            else:
+                first_seen_str = ""
             
             response_data.append({
                 "theme": narrative.get("theme", ""),
+                "title": narrative.get("title", ""),
+                "summary": narrative.get("summary", ""),
                 "entities": narrative.get("entities", []),
-                "story": narrative.get("story", ""),
                 "article_count": narrative.get("article_count", 0),
-                "updated_at": updated_at_str
+                "mention_velocity": narrative.get("mention_velocity", 0.0),
+                "lifecycle": narrative.get("lifecycle", "emerging"),
+                "first_seen": first_seen_str,
+                "last_updated": last_updated_str
             })
         
         # Cache the results for 10 minutes (600 seconds)
