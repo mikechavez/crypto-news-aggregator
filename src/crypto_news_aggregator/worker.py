@@ -15,6 +15,7 @@ from crypto_news_aggregator.db.operations.signal_scores import upsert_signal_sco
 from crypto_news_aggregator.services.narrative_service import detect_narratives
 from crypto_news_aggregator.db.operations.narratives import upsert_narrative
 from crypto_news_aggregator.services.entity_alert_service import detect_alerts
+from crypto_news_aggregator.services.entity_normalization import normalize_entity_name
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -47,24 +48,34 @@ async def update_signal_scores(run_immediately: bool = False):
             # Use naive datetime to match MongoDB storage
             thirty_min_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=30)
             
-            pipeline = [
-                {"$match": {
-                    "created_at": {"$gte": thirty_min_ago},
-                    "is_primary": True  # Only score primary entities
-                }},
-                {"$group": {
-                    "_id": {
-                        "entity": "$entity",
-                        "entity_type": "$entity_type"
-                    }
-                }},
-                {"$limit": 100}  # Limit to prevent overload
-            ]
+            # Fetch all recent primary entity mentions
+            cursor = entity_mentions_collection.find({
+                "created_at": {"$gte": thirty_min_ago},
+                "is_primary": True
+            })
             
-            entities_to_score = []
-            async for result in entity_mentions_collection.aggregate(pipeline):
-                entity_info = result["_id"]
-                entities_to_score.append(entity_info)
+            # Normalize entities and group by canonical name
+            entity_map = {}  # canonical_name -> entity_type
+            async for mention in cursor:
+                raw_entity = mention.get("entity")
+                entity_type = mention.get("entity_type")
+                
+                # Normalize to canonical name
+                canonical_entity = normalize_entity_name(raw_entity)
+                
+                # Track unique canonical entities
+                if canonical_entity not in entity_map:
+                    entity_map[canonical_entity] = entity_type
+                    
+                    # Log normalization for debugging
+                    if canonical_entity != raw_entity:
+                        logger.debug(f"Signal calculation: normalized '{raw_entity}' -> '{canonical_entity}'")
+            
+            # Convert to list format expected by downstream code
+            entities_to_score = [
+                {"entity": entity, "entity_type": entity_type}
+                for entity, entity_type in list(entity_map.items())[:100]  # Limit to 100
+            ]
             
             if not entities_to_score:
                 logger.debug("No recent entities to score")
