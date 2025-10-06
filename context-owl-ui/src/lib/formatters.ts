@@ -92,3 +92,46 @@ export function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength) + '...';
 }
+
+/**
+ * Format entity type for display
+ * Maps technical entity types to user-friendly labels
+ */
+export function formatEntityType(entityType: string): string {
+  const typeMap: Record<string, string> = {
+    'cryptocurrency': 'Cryptocurrency',
+    'blockchain': 'Blockchain',
+    'protocol': 'Protocol',
+    'company': 'Company',
+    'organization': 'Organization',
+    'event': 'Event',
+    'concept': 'Concept',
+    'person': 'Person',
+    'location': 'Location',
+    'ticker': 'Ticker',
+    'project': 'Project',
+  };
+
+  return typeMap[entityType.toLowerCase()] || entityType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+/**
+ * Get color class for entity type
+ */
+export function getEntityTypeColor(entityType: string): string {
+  const colorMap: Record<string, string> = {
+    'cryptocurrency': 'text-blue-600 bg-blue-50',
+    'blockchain': 'text-purple-600 bg-purple-50',
+    'protocol': 'text-indigo-600 bg-indigo-50',
+    'company': 'text-green-600 bg-green-50',
+    'organization': 'text-orange-600 bg-orange-50',
+    'event': 'text-red-600 bg-red-50',
+    'concept': 'text-gray-600 bg-gray-50',
+    'person': 'text-pink-600 bg-pink-50',
+    'location': 'text-teal-600 bg-teal-50',
+    'ticker': 'text-blue-600 bg-blue-50',
+    'project': 'text-indigo-600 bg-indigo-50',
+  };
+
+  return colorMap[entityType.toLowerCase()] || 'text-gray-600 bg-gray-50';
+}
