@@ -101,3 +101,6 @@ config.ini
 .env
 .env.*
 .env
+
+# Vercel
+.vercel/
