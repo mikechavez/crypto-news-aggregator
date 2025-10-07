@@ -168,7 +168,7 @@ async def update_narratives():
             await upsert_narrative(
                 theme=narrative["theme"],
                 entities=narrative["entities"],
-                story=narrative["story"],
+                story=narrative.get("summary") or narrative.get("story", ""),
                 article_count=narrative["article_count"]
             )
         

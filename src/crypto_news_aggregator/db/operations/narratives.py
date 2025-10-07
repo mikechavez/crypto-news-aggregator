@@ -54,6 +54,9 @@ def _calculate_days_active(first_seen: datetime) -> int:
         Number of days (minimum 1)
     """
     now = datetime.now(timezone.utc)
+    # Ensure first_seen is timezone-aware
+    if first_seen.tzinfo is None:
+        first_seen = first_seen.replace(tzinfo=timezone.utc)
     delta = now - first_seen
     return max(1, delta.days + 1)  # +1 to count partial days
 
