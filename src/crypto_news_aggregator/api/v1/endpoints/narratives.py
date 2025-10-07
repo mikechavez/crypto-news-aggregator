@@ -25,7 +25,7 @@ async def get_articles_for_narrative(article_ids: List[str], limit: int = 20) ->
     Fetch article details for a list of article IDs.
     
     Args:
-        article_ids: List of article source IDs
+        article_ids: List of article MongoDB ObjectIds (as strings)
         limit: Maximum number of articles to return (default 20)
     
     Returns:
@@ -37,9 +37,23 @@ async def get_articles_for_narrative(article_ids: List[str], limit: int = 20) ->
     db = await mongo_manager.get_async_database()
     articles_collection = db.articles
     
-    # Fetch articles by source_id
+    # Convert string IDs to ObjectIds
+    object_ids = []
+    for article_id in article_ids[:limit]:
+        try:
+            if isinstance(article_id, str):
+                object_ids.append(ObjectId(article_id))
+            else:
+                object_ids.append(article_id)
+        except Exception:
+            continue
+    
+    if not object_ids:
+        return []
+    
+    # Fetch articles by _id
     cursor = articles_collection.find(
-        {"source_id": {"$in": article_ids[:limit]}}
+        {"_id": {"$in": object_ids}}
     ).sort("published_at", -1).limit(limit)
     
     articles = []

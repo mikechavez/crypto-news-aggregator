@@ -64,29 +64,36 @@ async def get_recent_articles_for_entity(entity: str, limit: int = 5) -> List[Di
     """
     db = await mongo_manager.get_async_database()
     
-    # First, get article IDs from entity_mentions
+    # First, get article IDs from entity_mentions (these are MongoDB ObjectIds)
     mentions_collection = db.entity_mentions
     cursor = mentions_collection.find(
         {"entity": entity}
     ).sort("timestamp", -1).limit(limit * 2)  # Get more mentions to ensure we have enough unique articles
     
-    article_ids = []
+    article_object_ids = []
     seen_ids = set()
     async for mention in cursor:
         article_id = mention.get("article_id")
         if article_id and article_id not in seen_ids:
-            article_ids.append(article_id)
-            seen_ids.add(article_id)
-            if len(article_ids) >= limit:
-                break
+            try:
+                # Convert string to ObjectId if needed
+                if isinstance(article_id, str):
+                    article_object_ids.append(ObjectId(article_id))
+                else:
+                    article_object_ids.append(article_id)
+                seen_ids.add(article_id)
+                if len(article_object_ids) >= limit:
+                    break
+            except Exception:
+                continue
     
-    if not article_ids:
+    if not article_object_ids:
         return []
     
-    # Fetch article details
+    # Fetch article details using _id field
     articles_collection = db.articles
     cursor = articles_collection.find(
-        {"source_id": {"$in": article_ids}}
+        {"_id": {"$in": article_object_ids}}
     ).sort("published_at", -1).limit(limit)
     
     articles = []
