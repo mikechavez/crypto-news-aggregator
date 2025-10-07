@@ -6,6 +6,37 @@ import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { formatRelativeTime, getSignalStrengthColor, formatPercentage, formatSentiment, getSentimentColor, formatEntityType, getEntityTypeColor, formatTheme, getThemeColor } from '../lib/formatters';
 
+/**
+ * Safely parse date values to ISO string format
+ * Handles null, undefined, invalid dates, and various date formats
+ */
+const parseDateSafe = (dateValue: any): string => {
+  // Handle null, undefined, or empty values
+  if (!dateValue) return new Date().toISOString();
+  
+  // If it's already a Date object, convert to ISO string
+  if (dateValue instanceof Date) {
+    return isNaN(dateValue.getTime()) ? new Date().toISOString() : dateValue.toISOString();
+  }
+  
+  // If it's a string, validate it can be parsed
+  if (typeof dateValue === 'string') {
+    // Return as-is if it's already a valid date string
+    const date = new Date(dateValue);
+    if (!isNaN(date.getTime())) {
+      return dateValue;
+    }
+  }
+  
+  // Try to convert any other type to a date
+  try {
+    const date = new Date(dateValue);
+    return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+};
+
 export function Signals() {
   const navigate = useNavigate();
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
@@ -26,7 +57,7 @@ export function Signals() {
         </p>
         {dataUpdatedAt && (
           <p className="text-sm text-gray-500 mt-2">
-            Last updated: {formatRelativeTime(new Date(dataUpdatedAt).toISOString())}
+            Last updated: {formatRelativeTime(parseDateSafe(dataUpdatedAt))}
           </p>
         )}
       </div>
@@ -82,7 +113,7 @@ export function Signals() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-500">Last Updated:</span>
                   <span className="text-gray-700">
-                    {formatRelativeTime(signal.last_updated)}
+                    {formatRelativeTime(parseDateSafe(signal.last_updated))}
                   </span>
                 </div>
                 

@@ -12,6 +12,37 @@ import {
   formatPercentage,
 } from '../lib/formatters';
 
+/**
+ * Safely parse date values to ISO string format
+ * Handles null, undefined, invalid dates, and various date formats
+ */
+const parseDateSafe = (dateValue: any): string => {
+  // Handle null, undefined, or empty values
+  if (!dateValue) return new Date().toISOString();
+  
+  // If it's already a Date object, convert to ISO string
+  if (dateValue instanceof Date) {
+    return isNaN(dateValue.getTime()) ? new Date().toISOString() : dateValue.toISOString();
+  }
+  
+  // If it's a string, validate it can be parsed
+  if (typeof dateValue === 'string') {
+    // Return as-is if it's already a valid date string
+    const date = new Date(dateValue);
+    if (!isNaN(date.getTime())) {
+      return dateValue;
+    }
+  }
+  
+  // Try to convert any other type to a date
+  try {
+    const date = new Date(dateValue);
+    return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+};
+
 export function EntityDetail() {
   const { id } = useParams<{ id: string }>();
   const entityId = parseInt(id || '0', 10);
@@ -58,7 +89,7 @@ export function EntityDetail() {
                       </span>
                     </div>
                     <p className="text-xs text-gray-500">
-                      {formatRelativeTime(signal.last_updated)}
+                      {formatRelativeTime(parseDateSafe(signal.last_updated))}
                     </p>
                   </div>
                 ))}
@@ -90,7 +121,7 @@ export function EntityDetail() {
                       )}
                     </div>
                     <p className="text-xs text-gray-500">
-                      {formatRelativeTime(mention.created_at)}
+                      {formatRelativeTime(parseDateSafe(mention.created_at))}
                     </p>
                   </div>
                 ))}
@@ -126,7 +157,7 @@ export function EntityDetail() {
                     )}
                     <div className="flex items-center justify-between text-xs text-gray-500">
                       <span>{article.source}</span>
-                      <span>{formatRelativeTime(article.published_at)}</span>
+                      <span>{formatRelativeTime(parseDateSafe(article.published_at))}</span>
                     </div>
                   </div>
                 ))}

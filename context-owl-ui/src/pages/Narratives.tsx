@@ -10,18 +10,30 @@ import { formatRelativeTime, formatNumber } from '../lib/formatters';
  * Handles null, undefined, invalid dates, and various date formats
  */
 const parseNarrativeDate = (dateValue: any): string => {
+  // Handle null, undefined, or empty values
   if (!dateValue) return new Date().toISOString();
-  if (dateValue instanceof Date) return dateValue.toISOString();
   
-  // If it's already a string, try to parse it
-  if (typeof dateValue === 'string') {
-    const date = new Date(dateValue);
-    return isNaN(date.getTime()) ? new Date().toISOString() : dateValue;
+  // If it's already a Date object, convert to ISO string
+  if (dateValue instanceof Date) {
+    return isNaN(dateValue.getTime()) ? new Date().toISOString() : dateValue.toISOString();
   }
   
-  // Try to convert to date
-  const date = new Date(dateValue);
-  return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+  // If it's a string, validate it can be parsed
+  if (typeof dateValue === 'string') {
+    // Return as-is if it's already a valid date string
+    const date = new Date(dateValue);
+    if (!isNaN(date.getTime())) {
+      return dateValue;
+    }
+  }
+  
+  // Try to convert any other type to a date
+  try {
+    const date = new Date(dateValue);
+    return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
 };
 
 export function Narratives() {
@@ -45,7 +57,7 @@ export function Narratives() {
         </p>
         {dataUpdatedAt && (
           <p className="text-sm text-gray-500 mt-2">
-            Last updated: {formatRelativeTime(new Date(dataUpdatedAt).toISOString())}
+            Last updated: {formatRelativeTime(parseNarrativeDate(dataUpdatedAt))}
           </p>
         )}
       </div>
