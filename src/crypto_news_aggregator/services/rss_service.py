@@ -16,11 +16,26 @@ class RSSService:
     def __init__(self):
         settings = get_settings()
         self.feed_urls = {
+            # Original 4 feeds
             # "chaingpt": settings.CHAINGPT_RSS_URL,  # Removed - returns 404
             "coindesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
             "cointelegraph": "https://cointelegraph.com/rss",
             "decrypt": "https://decrypt.co/feed",
             "bitcoinmagazine": "https://bitcoinmagazine.com/.rss/full/",
+            
+            # News & General (4 new sources)
+            "theblock": "https://www.theblock.co/rss.xml",
+            "cryptoslate": "https://cryptoslate.com/feed/",
+            "benzinga": "https://www.benzinga.com/feed",
+            "bitcoincom": "https://news.bitcoin.com/feed/",
+            
+            # Research & Analysis (1 working source)
+            "glassnode": "https://insights.glassnode.com/feed/",
+            # Note: messari, delphidigital, bankless, galaxy feeds have technical issues (SSL/XML)
+            
+            # DeFi-Focused (1 working source)
+            "thedefiant": "https://thedefiant.io/feed",
+            # Note: defillama returns HTML, dune has malformed XML
         }
 
     async def fetch_feed(self, url: str) -> Optional[feedparser.FeedParserDict]:

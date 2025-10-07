@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import pytest
 
 from src.crypto_news_aggregator.background import rss_fetcher
+from src.crypto_news_aggregator.services.rss_service import RSSService
 from src.crypto_news_aggregator.models.article import (
     ArticleCreate,
     ArticleMetrics,
@@ -124,3 +125,31 @@ async def test_fetch_and_process_rss_feeds_persists_and_enriches(mongo_db, monke
     assert stored["sentiment_score"] == pytest.approx(0.6)
     assert stored["sentiment_label"] == "positive"
     assert stored["themes"] == ["ETFs", "Institutional"]
+
+
+def test_rss_service_has_correct_feed_count():
+    """Verify that RSSService has the expected number of RSS feeds configured."""
+    rss_service = RSSService()
+    
+    # Should have 10 total feeds:
+    # - 4 original (coindesk, cointelegraph, decrypt, bitcoinmagazine)
+    # - 4 News & General (theblock, cryptoslate, benzinga, bitcoincom)
+    # - 1 Research & Analysis (glassnode)
+    # - 1 DeFi-Focused (thedefiant)
+    assert len(rss_service.feed_urls) == 10, f"Expected 10 RSS feeds, got {len(rss_service.feed_urls)}"
+    
+    # Verify key sources are present
+    expected_sources = [
+        "coindesk", "cointelegraph", "decrypt", "bitcoinmagazine",  # Original
+        "theblock", "cryptoslate", "benzinga", "bitcoincom",  # News & General
+        "glassnode",  # Research
+        "thedefiant",  # DeFi
+    ]
+    
+    for source in expected_sources:
+        assert source in rss_service.feed_urls, f"Expected source '{source}' not found in feed_urls"
+    
+    # Verify all URLs are valid strings
+    for source, url in rss_service.feed_urls.items():
+        assert isinstance(url, str), f"URL for {source} is not a string"
+        assert url.startswith("http"), f"URL for {source} does not start with http"
