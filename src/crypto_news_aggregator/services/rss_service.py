@@ -23,12 +23,13 @@ class RSSService:
             "decrypt": "https://decrypt.co/feed",
             "bitcoinmagazine": "https://bitcoinmagazine.com/.rss/full/",
             
-            # News & General (5 new sources)
+            # News & General (6 new sources)
             "theblock": "https://www.theblock.co/rss.xml",
             "cryptoslate": "https://cryptoslate.com/feed/",
             "benzinga": "https://www.benzinga.com/feed",
             "bitcoincom": "https://news.bitcoin.com/feed/",
             "dlnews": "https://www.dlnews.com/arc/outboundfeeds/rss/",
+            "watcherguru": "https://watcher.guru/news/feed",
             
             # Research & Analysis (2 working sources)
             "glassnode": "https://insights.glassnode.com/feed/",
