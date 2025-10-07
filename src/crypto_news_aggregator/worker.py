@@ -107,6 +107,8 @@ async def update_signal_scores(run_immediately: bool = False):
                         velocity=signal_data["velocity"],
                         source_count=signal_data["source_count"],
                         sentiment=signal_data["sentiment"],
+                        narrative_ids=signal_data.get("narrative_ids", []),
+                        is_emerging=signal_data.get("is_emerging", False),
                         first_seen=first_seen,
                     )
                     
