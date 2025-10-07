@@ -151,7 +151,7 @@ async def update_narratives():
     """
     try:
         logger.info("Starting narrative update cycle...")
-        narratives = await detect_narratives(min_score=5.0, max_narratives=5)
+        narratives = await detect_narratives()
         
         if not narratives:
             logger.info("No narratives detected in this cycle")
