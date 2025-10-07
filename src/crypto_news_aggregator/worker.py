@@ -167,9 +167,14 @@ async def update_narratives():
         for narrative in deduplicated_narratives:
             await upsert_narrative(
                 theme=narrative["theme"],
+                title=narrative["title"],
+                summary=narrative["summary"],
                 entities=narrative["entities"],
-                story=narrative.get("summary") or narrative.get("story", ""),
-                article_count=narrative["article_count"]
+                article_ids=narrative["article_ids"],
+                article_count=narrative["article_count"],
+                mention_velocity=narrative["mention_velocity"],
+                lifecycle=narrative["lifecycle"],
+                first_seen=narrative.get("first_seen")
             )
         
         logger.info(f"Updated {len(deduplicated_narratives)} narratives")
