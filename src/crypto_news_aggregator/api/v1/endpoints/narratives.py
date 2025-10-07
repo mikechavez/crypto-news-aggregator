@@ -6,16 +6,31 @@ Provides access to detected narrative clusters from co-occurring entities.
 
 import json
 import logging
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel, Field
 
-from ....db.operations.narratives import get_active_narratives
+from ....db.operations.narratives import get_active_narratives, get_narrative_timeline
 from ....core.redis_rest_client import redis_client
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+class TimelineSnapshot(BaseModel):
+    """Timeline snapshot for a single day."""
+    date: str = Field(..., description="Date in ISO format (YYYY-MM-DD)")
+    article_count: int = Field(..., description="Number of articles on this day")
+    entities: List[str] = Field(..., description="Top entities mentioned on this day")
+    velocity: float = Field(..., description="Articles per day rate")
+
+
+class PeakActivity(BaseModel):
+    """Peak activity metrics for a narrative."""
+    date: str = Field(..., description="Date of peak activity")
+    article_count: int = Field(..., description="Number of articles at peak")
+    velocity: float = Field(..., description="Velocity at peak")
 
 
 class NarrativeResponse(BaseModel):
@@ -29,6 +44,8 @@ class NarrativeResponse(BaseModel):
     lifecycle: str = Field(..., description="Lifecycle stage: emerging, hot, mature, declining")
     first_seen: str = Field(..., description="ISO timestamp when narrative was first detected")
     last_updated: str = Field(..., description="ISO timestamp of last update")
+    days_active: int = Field(default=1, description="Number of days narrative has been active")
+    peak_activity: Optional[PeakActivity] = Field(default=None, description="Peak activity metrics")
     
     class Config:
         json_schema_extra = {
@@ -41,7 +58,13 @@ class NarrativeResponse(BaseModel):
                 "mention_velocity": 3.1,
                 "lifecycle": "hot",
                 "first_seen": "2025-10-01T19:30:00Z",
-                "last_updated": "2025-10-06T14:20:00Z"
+                "last_updated": "2025-10-06T14:20:00Z",
+                "days_active": 6,
+                "peak_activity": {
+                    "date": "2025-10-05",
+                    "article_count": 18,
+                    "velocity": 4.2
+                }
             }
         }
 
@@ -112,6 +135,10 @@ async def get_active_narratives_endpoint(
             # Handle both old (story) and new (summary) field names
             summary = narrative.get("summary") or narrative.get("story", "")
             
+            # Get timeline tracking fields
+            days_active = narrative.get("days_active", 1)
+            peak_activity = narrative.get("peak_activity")
+            
             response_data.append({
                 "theme": narrative.get("theme", ""),
                 "title": narrative.get("title", narrative.get("theme", "")),  # Fallback to theme if no title
@@ -122,6 +149,8 @@ async def get_active_narratives_endpoint(
                 "lifecycle": narrative.get("lifecycle", "emerging"),
                 "first_seen": first_seen_str,
                 "last_updated": last_updated_str,
+                "days_active": days_active,
+                "peak_activity": peak_activity,
                 # Add backward compatibility fields for old UI
                 "updated_at": last_updated_str,
                 "story": summary
@@ -142,3 +171,38 @@ async def get_active_narratives_endpoint(
     except Exception as e:
         logger.exception(f"Error fetching active narratives: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch narratives")
+
+
+@router.get("/{narrative_id}/timeline", response_model=List[TimelineSnapshot])
+async def get_narrative_timeline_endpoint(narrative_id: str):
+    """
+    Get timeline data for a specific narrative.
+    
+    Returns daily snapshots showing how the narrative evolved over time,
+    including article counts, entities, and velocity metrics.
+    
+    This data is suitable for charting narrative growth and activity patterns.
+    
+    Args:
+        narrative_id: MongoDB ObjectId of the narrative
+    
+    Returns:
+        List of timeline snapshots, one per day the narrative was active
+    
+    Raises:
+        404: If narrative not found
+        500: If database error occurs
+    """
+    try:
+        timeline_data = await get_narrative_timeline(narrative_id)
+        
+        if timeline_data is None:
+            raise HTTPException(status_code=404, detail="Narrative not found")
+        
+        return [TimelineSnapshot(**snapshot) for snapshot in timeline_data]
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error fetching narrative timeline: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch timeline data")
