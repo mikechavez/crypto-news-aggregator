@@ -32,19 +32,25 @@ export function Narratives() {
       </div>
 
       <div className="space-y-6">
-        {narratives.map((narrative, index) => (
+        {narratives.map((narrative, index) => {
+          // Handle both old and new field names for backward compatibility
+          const displayTitle = narrative.title || narrative.theme;
+          const displaySummary = narrative.summary || narrative.story;
+          const displayUpdated = narrative.last_updated || narrative.updated_at;
+          
+          return (
           <Card key={`${narrative.theme}-${index}`}>
             <CardHeader>
               <div className="flex items-start justify-between">
-                <CardTitle>{narrative.theme}</CardTitle>
+                <CardTitle>{displayTitle}</CardTitle>
                 <span className="text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
                   {formatNumber(narrative.article_count)} articles
                 </span>
               </div>
             </CardHeader>
             <CardContent>
-              {narrative.story && (
-                <p className="text-gray-700 mb-4">{narrative.story}</p>
+              {displaySummary && (
+                <p className="text-gray-700 mb-4">{displaySummary}</p>
               )}
               
               <div className="flex flex-wrap gap-2 mb-4">
@@ -59,11 +65,12 @@ export function Narratives() {
               </div>
 
               <div className="flex items-center justify-end text-sm text-gray-500 pt-4 border-t border-gray-200">
-                <span>Updated {formatRelativeTime(narrative.updated_at)}</span>
+                <span>Updated {formatRelativeTime(displayUpdated || '')}</span>
               </div>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       {narratives.length === 0 && (
