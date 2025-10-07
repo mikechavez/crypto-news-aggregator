@@ -30,9 +30,10 @@ class RSSService:
             "bitcoincom": "https://news.bitcoin.com/feed/",
             "dlnews": "https://www.dlnews.com/arc/outboundfeeds/rss/",
             
-            # Research & Analysis (1 working source)
+            # Research & Analysis (2 working sources)
             "glassnode": "https://insights.glassnode.com/feed/",
-            # Note: messari, delphidigital, bankless, galaxy feeds have technical issues (SSL/XML)
+            "messari": "https://messari.io/rss",
+            # Note: delphidigital, bankless, galaxy feeds have technical issues (SSL/XML)
             
             # DeFi-Focused (1 working source)
             "thedefiant": "https://thedefiant.io/feed",
