@@ -38,11 +38,18 @@ export interface SignalScore {
 
 // Narrative types
 export interface Narrative {
-  theme: string;              // Short title for the narrative
+  theme: string;              // Theme category (e.g., regulatory, defi_adoption)
+  title: string;              // Generated narrative title
+  summary: string;            // AI-generated narrative summary
   entities: string[];         // List of entities in this narrative
-  story: string;              // 1-2 sentence summary of the narrative
   article_count: number;      // Number of articles supporting this narrative
-  updated_at: string;         // ISO timestamp of last update
+  mention_velocity: number;   // Articles per day rate
+  lifecycle: string;          // Lifecycle stage: emerging, hot, mature, declining
+  first_seen: string;         // ISO timestamp when narrative was first detected
+  last_updated: string;       // ISO timestamp of last update
+  // Backward compatibility fields
+  updated_at?: string;        // Alias for last_updated
+  story?: string;             // Alias for summary
 }
 
 export interface NarrativeArticle {
