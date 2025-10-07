@@ -15,6 +15,14 @@ export interface EntityMention {
   created_at: string;
 }
 
+// Narrative summary for signals
+export interface NarrativeSummary {
+  id: string;                  // Narrative ObjectId
+  title: string;               // Narrative title
+  theme: string;               // Theme category
+  lifecycle: string;           // Lifecycle stage
+}
+
 // Signal types
 export interface Signal {
   entity: string;              // Entity name (e.g., "Solana")
@@ -23,6 +31,8 @@ export interface Signal {
   velocity: number;            // Mentions per hour
   source_count: number;        // Number of sources
   sentiment: number;           // Sentiment score (-1 to 1)
+  is_emerging: boolean;        // True if not part of any narrative
+  narratives: NarrativeSummary[]; // Narratives containing this entity
   first_seen: string;          // ISO timestamp
   last_updated: string;        // ISO timestamp
 }

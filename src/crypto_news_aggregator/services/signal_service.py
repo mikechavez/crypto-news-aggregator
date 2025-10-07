@@ -152,6 +152,29 @@ async def calculate_sentiment_metrics(entity: str) -> Dict[str, float]:
     }
 
 
+async def get_narratives_for_entity(entity: str) -> list:
+    """
+    Find all narratives that contain this entity.
+    
+    Args:
+        entity: The entity to search for
+    
+    Returns:
+        List of narrative IDs (as strings)
+    """
+    db = await mongo_manager.get_async_database()
+    collection = db.narratives
+    
+    # Find narratives where this entity is in the entities array
+    cursor = collection.find({"entities": entity})
+    
+    narrative_ids = []
+    async for narrative in cursor:
+        narrative_ids.append(str(narrative["_id"]))
+    
+    return narrative_ids
+
+
 async def calculate_signal_score(entity: str) -> Dict[str, Any]:
     """
     Calculate overall signal score for an entity.
@@ -163,7 +186,7 @@ async def calculate_signal_score(entity: str) -> Dict[str, Any]:
         entity: The entity to score (will be normalized to canonical form)
     
     Returns:
-        Dict with score and component metrics
+        Dict with score, component metrics, narrative_ids, and is_emerging flag
     """
     # Normalize entity name to canonical form (defensive measure)
     canonical_entity = normalize_entity_name(entity)
@@ -189,6 +212,10 @@ async def calculate_signal_score(entity: str) -> Dict[str, Any]:
     max_expected_score = 40.0
     normalized_score = min(10.0, (raw_score / max_expected_score) * 10.0)
     
+    # Query narratives containing this entity
+    narrative_ids = await get_narratives_for_entity(canonical_entity)
+    is_emerging = len(narrative_ids) == 0
+    
     return {
         "score": round(normalized_score, 2),
         "velocity": round(velocity, 2),
@@ -199,4 +226,6 @@ async def calculate_signal_score(entity: str) -> Dict[str, Any]:
             "max": round(sentiment_metrics["max"], 3),
             "divergence": round(sentiment_metrics["divergence"], 3),
         },
+        "narrative_ids": narrative_ids,
+        "is_emerging": is_emerging,
     }

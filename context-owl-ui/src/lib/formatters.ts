@@ -135,3 +135,40 @@ export function getEntityTypeColor(entityType: string): string {
 
   return colorMap[entityType.toLowerCase()] || 'text-gray-600 bg-gray-50';
 }
+
+/**
+ * Format theme for display
+ * Maps technical theme names to user-friendly labels
+ */
+export function formatTheme(theme: string): string {
+  const themeMap: Record<string, string> = {
+    'regulatory': 'Regulatory',
+    'defi_adoption': 'DeFi Adoption',
+    'institutional_investment': 'Institutional',
+    'technology_upgrade': 'Tech Upgrade',
+    'market_volatility': 'Market Volatility',
+    'security_breach': 'Security',
+    'partnership': 'Partnership',
+    'ecosystem_growth': 'Ecosystem',
+  };
+
+  return themeMap[theme] || theme.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+/**
+ * Get color class for narrative theme badge
+ */
+export function getThemeColor(theme: string): string {
+  const colorMap: Record<string, string> = {
+    'regulatory': 'text-red-700 bg-red-100 hover:bg-red-200',
+    'defi_adoption': 'text-purple-700 bg-purple-100 hover:bg-purple-200',
+    'institutional_investment': 'text-green-700 bg-green-100 hover:bg-green-200',
+    'technology_upgrade': 'text-blue-700 bg-blue-100 hover:bg-blue-200',
+    'market_volatility': 'text-orange-700 bg-orange-100 hover:bg-orange-200',
+    'security_breach': 'text-red-700 bg-red-100 hover:bg-red-200',
+    'partnership': 'text-indigo-700 bg-indigo-100 hover:bg-indigo-200',
+    'ecosystem_growth': 'text-teal-700 bg-teal-100 hover:bg-teal-200',
+  };
+
+  return colorMap[theme] || 'text-gray-700 bg-gray-100 hover:bg-gray-200';
+}

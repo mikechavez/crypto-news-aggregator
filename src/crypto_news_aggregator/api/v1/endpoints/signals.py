@@ -5,11 +5,50 @@ Signals API endpoints for trending entity detection.
 import json
 from fastapi import APIRouter, Query, HTTPException
 from typing import List, Dict, Any, Optional
+from bson import ObjectId
 
 from ....db.operations.signal_scores import get_trending_entities
 from ....core.redis_rest_client import redis_client
+from ....db.mongodb import mongo_manager
 
 router = APIRouter()
+
+
+async def get_narrative_details(narrative_ids: List[str]) -> List[Dict[str, Any]]:
+    """
+    Fetch narrative details for a list of narrative IDs.
+    
+    Args:
+        narrative_ids: List of narrative ObjectId strings
+    
+    Returns:
+        List of narrative detail dicts with id, title, theme, lifecycle
+    """
+    if not narrative_ids:
+        return []
+    
+    db = await mongo_manager.get_async_database()
+    collection = db.narratives
+    
+    # Convert string IDs to ObjectIds
+    try:
+        object_ids = [ObjectId(nid) for nid in narrative_ids]
+    except Exception:
+        return []
+    
+    # Fetch narratives
+    cursor = collection.find({"_id": {"$in": object_ids}})
+    
+    narratives = []
+    async for narrative in cursor:
+        narratives.append({
+            "id": str(narrative["_id"]),
+            "title": narrative.get("title", ""),
+            "theme": narrative.get("theme", ""),
+            "lifecycle": narrative.get("lifecycle", "")
+        })
+    
+    return narratives
 
 
 @router.get("/trending")
@@ -64,6 +103,25 @@ async def get_trending_signals(
             entity_type=entity_type,
         )
         
+        # Fetch narrative details for all signals
+        signals_with_narratives = []
+        for signal in trending:
+            narrative_ids = signal.get("narrative_ids", [])
+            narratives = await get_narrative_details(narrative_ids)
+            
+            signals_with_narratives.append({
+                "entity": signal["entity"],
+                "entity_type": signal["entity_type"],
+                "signal_score": signal["score"],
+                "velocity": signal["velocity"],
+                "source_count": signal["source_count"],
+                "sentiment": signal["sentiment"],
+                "is_emerging": signal.get("is_emerging", False),
+                "narratives": narratives,
+                "first_seen": signal["first_seen"].isoformat() if signal.get("first_seen") else None,
+                "last_updated": signal["last_updated"].isoformat() if signal.get("last_updated") else None,
+            })
+        
         # Format response
         response = {
             "count": len(trending),
@@ -72,19 +130,7 @@ async def get_trending_signals(
                 "min_score": min_score,
                 "entity_type": entity_type,
             },
-            "signals": [
-                {
-                    "entity": signal["entity"],
-                    "entity_type": signal["entity_type"],
-                    "signal_score": signal["score"],
-                    "velocity": signal["velocity"],
-                    "source_count": signal["source_count"],
-                    "sentiment": signal["sentiment"],
-                    "first_seen": signal["first_seen"].isoformat() if signal.get("first_seen") else None,
-                    "last_updated": signal["last_updated"].isoformat() if signal.get("last_updated") else None,
-                }
-                for signal in trending
-            ],
+            "signals": signals_with_narratives,
         }
         
         # Cache for 2 minutes (120 seconds)

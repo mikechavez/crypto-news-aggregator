@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { signalsAPI } from '../api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { formatRelativeTime, getSignalStrengthColor, formatPercentage, formatSentiment, getSentimentColor, formatEntityType, getEntityTypeColor } from '../lib/formatters';
+import { formatRelativeTime, getSignalStrengthColor, formatPercentage, formatSentiment, getSentimentColor, formatEntityType, getEntityTypeColor, formatTheme, getThemeColor } from '../lib/formatters';
 
 export function Signals() {
+  const navigate = useNavigate();
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['signals'],
     queryFn: () => signalsAPI.getSignals({ limit: 10 }),
@@ -82,6 +84,34 @@ export function Signals() {
                   <span className="text-gray-700">
                     {formatRelativeTime(signal.last_updated)}
                   </span>
+                </div>
+                
+                {/* Narrative context section */}
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  {signal.is_emerging ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-yellow-700 bg-yellow-100 px-2 py-1 rounded-full">
+                        🆕 Emerging
+                      </span>
+                      <span className="text-xs text-gray-500">Not yet part of any narrative</span>
+                    </div>
+                  ) : signal.narratives && signal.narratives.length > 0 ? (
+                    <div>
+                      <span className="text-xs text-gray-500 block mb-1">Part of:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {signal.narratives.map((narrative) => (
+                          <button
+                            key={narrative.id}
+                            onClick={() => navigate('/narratives')}
+                            className={`text-xs font-medium px-2 py-1 rounded-full transition-colors ${getThemeColor(narrative.theme)}`}
+                            title={narrative.title}
+                          >
+                            {formatTheme(narrative.theme)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </CardContent>

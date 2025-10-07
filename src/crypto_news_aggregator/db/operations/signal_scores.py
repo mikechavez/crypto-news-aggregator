@@ -17,6 +17,8 @@ async def upsert_signal_score(
     velocity: float,
     source_count: int,
     sentiment: Dict[str, float],
+    narrative_ids: List[str] = None,
+    is_emerging: bool = False,
     first_seen: datetime = None,
 ) -> str:
     """
@@ -29,6 +31,8 @@ async def upsert_signal_score(
         velocity: Mention velocity metric
         source_count: Number of unique sources
         sentiment: Sentiment metrics dict
+        narrative_ids: List of narrative IDs containing this entity
+        is_emerging: True if entity is not part of any narrative
         first_seen: When entity was first detected (optional)
     
     Returns:
@@ -50,6 +54,8 @@ async def upsert_signal_score(
             "velocity": velocity,
             "source_count": source_count,
             "sentiment": sentiment,
+            "narrative_ids": narrative_ids or [],
+            "is_emerging": is_emerging,
             "last_updated": now,
         }
         
@@ -67,6 +73,8 @@ async def upsert_signal_score(
             "velocity": velocity,
             "source_count": source_count,
             "sentiment": sentiment,
+            "narrative_ids": narrative_ids or [],
+            "is_emerging": is_emerging,
             "first_seen": first_seen or now,
             "last_updated": now,
             "created_at": now,
