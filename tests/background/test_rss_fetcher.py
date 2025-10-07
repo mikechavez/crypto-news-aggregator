@@ -131,17 +131,17 @@ def test_rss_service_has_correct_feed_count():
     """Verify that RSSService has the expected number of RSS feeds configured."""
     rss_service = RSSService()
     
-    # Should have 10 total feeds:
+    # Should have 11 total feeds:
     # - 4 original (coindesk, cointelegraph, decrypt, bitcoinmagazine)
-    # - 4 News & General (theblock, cryptoslate, benzinga, bitcoincom)
+    # - 5 News & General (theblock, cryptoslate, benzinga, bitcoincom, dlnews)
     # - 1 Research & Analysis (glassnode)
     # - 1 DeFi-Focused (thedefiant)
-    assert len(rss_service.feed_urls) == 10, f"Expected 10 RSS feeds, got {len(rss_service.feed_urls)}"
+    assert len(rss_service.feed_urls) == 11, f"Expected 11 RSS feeds, got {len(rss_service.feed_urls)}"
     
     # Verify key sources are present
     expected_sources = [
         "coindesk", "cointelegraph", "decrypt", "bitcoinmagazine",  # Original
-        "theblock", "cryptoslate", "benzinga", "bitcoincom",  # News & General
+        "theblock", "cryptoslate", "benzinga", "bitcoincom", "dlnews",  # News & General
         "glassnode",  # Research
         "thedefiant",  # DeFi
     ]
