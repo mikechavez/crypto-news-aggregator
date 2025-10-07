@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { signalsAPI } from '../api';
@@ -8,6 +9,7 @@ import { formatRelativeTime, getSignalStrengthColor, formatPercentage, formatSen
 
 export function Signals() {
   const navigate = useNavigate();
+  const [expandedArticles, setExpandedArticles] = useState<Set<number>>(new Set());
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['signals'],
     queryFn: () => signalsAPI.getSignals({ limit: 10 }),
@@ -113,6 +115,48 @@ export function Signals() {
                     </div>
                   ) : null}
                 </div>
+                
+                {/* Recent articles section */}
+                {signal.recent_articles && signal.recent_articles.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <button
+                      onClick={() => {
+                        const newExpanded = new Set(expandedArticles);
+                        if (newExpanded.has(index)) {
+                          newExpanded.delete(index);
+                        } else {
+                          newExpanded.add(index);
+                        }
+                        setExpandedArticles(newExpanded);
+                      }}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                    >
+                      {expandedArticles.has(index) ? '▼' : '▶'} Recent mentions ({signal.recent_articles.length})
+                    </button>
+                    
+                    {expandedArticles.has(index) && (
+                      <div className="mt-2 space-y-2">
+                        {signal.recent_articles.map((article, articleIdx) => (
+                          <div key={articleIdx} className="text-xs bg-gray-50 p-2 rounded">
+                            <a
+                              href={article.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 hover:underline font-medium block mb-1"
+                            >
+                              {article.title}
+                            </a>
+                            <div className="flex items-center gap-2 text-gray-500">
+                              <span className="capitalize">{article.source}</span>
+                              <span>•</span>
+                              <span>{formatRelativeTime(article.published_at)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

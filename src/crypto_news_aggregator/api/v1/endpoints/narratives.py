@@ -6,16 +6,52 @@ Provides access to detected narrative clusters from co-occurring entities.
 
 import json
 import logging
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel, Field
+from bson import ObjectId
 
 from ....db.operations.narratives import get_active_narratives, get_narrative_timeline
 from ....core.redis_rest_client import redis_client
+from ....db.mongodb import mongo_manager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def get_articles_for_narrative(article_ids: List[str], limit: int = 20) -> List[Dict[str, Any]]:
+    """
+    Fetch article details for a list of article IDs.
+    
+    Args:
+        article_ids: List of article source IDs
+        limit: Maximum number of articles to return (default 20)
+    
+    Returns:
+        List of article dicts with title, url, source, published_at
+    """
+    if not article_ids:
+        return []
+    
+    db = await mongo_manager.get_async_database()
+    articles_collection = db.articles
+    
+    # Fetch articles by source_id
+    cursor = articles_collection.find(
+        {"source_id": {"$in": article_ids[:limit]}}
+    ).sort("published_at", -1).limit(limit)
+    
+    articles = []
+    async for article in cursor:
+        articles.append({
+            "title": article.get("title", ""),
+            "url": article.get("url", ""),
+            "source": article.get("source", ""),
+            "published_at": article.get("published_at").isoformat() if article.get("published_at") else None
+        })
+    
+    return articles
 
 
 class TimelineSnapshot(BaseModel):
@@ -113,7 +149,7 @@ async def get_active_narratives_endpoint(
         if not narratives:
             return []
         
-        # Convert to response models
+        # Convert to response models and fetch articles
         response_data = []
         for narrative in narratives:
             # Handle both old (updated_at) and new (last_updated) field names
@@ -139,6 +175,10 @@ async def get_active_narratives_endpoint(
             days_active = narrative.get("days_active", 1)
             peak_activity = narrative.get("peak_activity")
             
+            # Fetch articles for this narrative
+            article_ids = narrative.get("article_ids", [])
+            articles = await get_articles_for_narrative(article_ids, limit=20)
+            
             response_data.append({
                 "theme": narrative.get("theme", ""),
                 "title": narrative.get("title", narrative.get("theme", "")),  # Fallback to theme if no title
@@ -151,6 +191,7 @@ async def get_active_narratives_endpoint(
                 "last_updated": last_updated_str,
                 "days_active": days_active,
                 "peak_activity": peak_activity,
+                "articles": articles,
                 # Add backward compatibility fields for old UI
                 "updated_at": last_updated_str,
                 "story": summary
