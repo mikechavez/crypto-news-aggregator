@@ -1,8 +1,17 @@
 /**
+ * Safely parse a date string, returning a valid Date or current date as fallback
+ */
+function parseDate(dateString: string | null | undefined): Date {
+  if (!dateString) return new Date();
+  const date = new Date(dateString);
+  return isNaN(date.getTime()) ? new Date() : date;
+}
+
+/**
  * Format a date string to a human-readable format
  */
 export function formatDate(dateString: string): string {
-  const date = new Date(dateString);
+  const date = parseDate(dateString);
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'short',
@@ -16,7 +25,7 @@ export function formatDate(dateString: string): string {
  * Format a relative time (e.g., "2 hours ago")
  */
 export function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString);
+  const date = parseDate(dateString);
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
