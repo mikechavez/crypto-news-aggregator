@@ -5,6 +5,37 @@ import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { formatRelativeTime, formatNumber } from '../lib/formatters';
 
+/**
+ * Safely parse narrative date values to ISO string format
+ * Handles null, undefined, invalid dates, and various date formats
+ */
+const parseNarrativeDate = (dateValue: any): string => {
+  // Handle null, undefined, or empty values
+  if (!dateValue) return new Date().toISOString();
+  
+  // If it's already a Date object, convert to ISO string
+  if (dateValue instanceof Date) {
+    return isNaN(dateValue.getTime()) ? new Date().toISOString() : dateValue.toISOString();
+  }
+  
+  // If it's a string, validate it can be parsed
+  if (typeof dateValue === 'string') {
+    // Return as-is if it's already a valid date string
+    const date = new Date(dateValue);
+    if (!isNaN(date.getTime())) {
+      return dateValue;
+    }
+  }
+  
+  // Try to convert any other type to a date
+  try {
+    const date = new Date(dateValue);
+    return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+};
+
 export function Narratives() {
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['narratives'],
@@ -26,7 +57,7 @@ export function Narratives() {
         </p>
         {dataUpdatedAt && (
           <p className="text-sm text-gray-500 mt-2">
-            Last updated: {formatRelativeTime(new Date(dataUpdatedAt).toISOString())}
+            Last updated: {formatRelativeTime(parseNarrativeDate(dataUpdatedAt))}
           </p>
         )}
       </div>
@@ -65,7 +96,7 @@ export function Narratives() {
               </div>
 
               <div className="flex items-center justify-end text-sm text-gray-500 pt-4 border-t border-gray-200">
-                <span>Updated {formatRelativeTime(displayUpdated || '')}</span>
+                <span>Updated {formatRelativeTime(parseNarrativeDate(displayUpdated))}</span>
               </div>
             </CardContent>
           </Card>
