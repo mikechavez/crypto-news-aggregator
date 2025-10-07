@@ -5,6 +5,25 @@ import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { formatRelativeTime, formatNumber } from '../lib/formatters';
 
+/**
+ * Safely parse narrative date values to ISO string format
+ * Handles null, undefined, invalid dates, and various date formats
+ */
+const parseNarrativeDate = (dateValue: any): string => {
+  if (!dateValue) return new Date().toISOString();
+  if (dateValue instanceof Date) return dateValue.toISOString();
+  
+  // If it's already a string, try to parse it
+  if (typeof dateValue === 'string') {
+    const date = new Date(dateValue);
+    return isNaN(date.getTime()) ? new Date().toISOString() : dateValue;
+  }
+  
+  // Try to convert to date
+  const date = new Date(dateValue);
+  return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+};
+
 export function Narratives() {
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['narratives'],
@@ -65,7 +84,7 @@ export function Narratives() {
               </div>
 
               <div className="flex items-center justify-end text-sm text-gray-500 pt-4 border-t border-gray-200">
-                <span>Updated {formatRelativeTime(displayUpdated || '')}</span>
+                <span>Updated {formatRelativeTime(parseNarrativeDate(displayUpdated))}</span>
               </div>
             </CardContent>
           </Card>
