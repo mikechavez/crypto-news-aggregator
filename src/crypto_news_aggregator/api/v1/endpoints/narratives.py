@@ -93,29 +93,38 @@ async def get_active_narratives_endpoint(
         # Convert to response models
         response_data = []
         for narrative in narratives:
-            # Convert datetime to ISO string
-            last_updated = narrative.get("last_updated")
+            # Handle both old (updated_at) and new (last_updated) field names
+            last_updated = narrative.get("last_updated") or narrative.get("updated_at")
             if last_updated:
                 last_updated_str = last_updated.isoformat() if hasattr(last_updated, 'isoformat') else str(last_updated)
             else:
-                last_updated_str = ""
+                # Fallback to current time if no timestamp
+                from datetime import datetime, timezone as tz
+                last_updated_str = datetime.now(tz.utc).isoformat()
             
-            first_seen = narrative.get("first_seen")
+            first_seen = narrative.get("first_seen") or narrative.get("created_at")
             if first_seen:
                 first_seen_str = first_seen.isoformat() if hasattr(first_seen, 'isoformat') else str(first_seen)
             else:
-                first_seen_str = ""
+                # Use last_updated as fallback
+                first_seen_str = last_updated_str
+            
+            # Handle both old (story) and new (summary) field names
+            summary = narrative.get("summary") or narrative.get("story", "")
             
             response_data.append({
                 "theme": narrative.get("theme", ""),
-                "title": narrative.get("title", ""),
-                "summary": narrative.get("summary", ""),
+                "title": narrative.get("title", narrative.get("theme", "")),  # Fallback to theme if no title
+                "summary": summary,
                 "entities": narrative.get("entities", []),
                 "article_count": narrative.get("article_count", 0),
                 "mention_velocity": narrative.get("mention_velocity", 0.0),
                 "lifecycle": narrative.get("lifecycle", "emerging"),
                 "first_seen": first_seen_str,
-                "last_updated": last_updated_str
+                "last_updated": last_updated_str,
+                # Add backward compatibility fields for old UI
+                "updated_at": last_updated_str,
+                "story": summary
             })
         
         # Cache the results for 10 minutes (600 seconds)
