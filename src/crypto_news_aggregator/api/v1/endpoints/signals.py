@@ -113,9 +113,10 @@ async def get_trending_signals(
     limit: int = Query(default=10, ge=1, le=100, description="Maximum number of results"),
     min_score: float = Query(default=0.0, ge=0.0, le=10.0, description="Minimum signal score"),
     entity_type: Optional[str] = Query(default=None, description="Filter by entity type (ticker, project, event)"),
+    timeframe: str = Query(default="7d", description="Time window for scoring (24h, 7d, or 30d)"),
 ) -> Dict[str, Any]:
     """
-    Get trending entities based on signal scores.
+    Get trending entities based on signal scores for a specific timeframe.
     
     Signal scores are calculated based on:
     - Velocity: Rate of mentions over time
@@ -128,9 +129,10 @@ async def get_trending_signals(
         limit: Maximum number of results (1-100, default 10)
         min_score: Minimum signal score threshold (0-10, default 0)
         entity_type: Filter by entity type (optional)
+        timeframe: Time window for scoring (24h, 7d, or 30d, default 7d)
     
     Returns:
-        List of trending entities with signal scores
+        List of trending entities with signal scores for the specified timeframe
     """
     # Validate entity_type if provided
     if entity_type and entity_type not in ["ticker", "project", "event"]:
@@ -139,8 +141,15 @@ async def get_trending_signals(
             detail="entity_type must be one of: ticker, project, event"
         )
     
-    # Build cache key
-    cache_key = f"signals:trending:{limit}:{min_score}:{entity_type or 'all'}"
+    # Validate timeframe
+    if timeframe not in ["24h", "7d", "30d"]:
+        raise HTTPException(
+            status_code=400,
+            detail="timeframe must be one of: 24h, 7d, 30d"
+        )
+    
+    # Build cache key including timeframe
+    cache_key = f"signals:trending:{limit}:{min_score}:{entity_type or 'all'}:{timeframe}"
     
     # Try to get from cache
     cached_result = redis_client.get(cache_key)
@@ -152,12 +161,20 @@ async def get_trending_signals(
             # If cache is corrupted, continue to fetch fresh data
             pass
     
+    # Map timeframe to field names
+    field_map = {
+        "24h": {"score": "score_24h", "velocity": "velocity_24h"},
+        "7d": {"score": "score_7d", "velocity": "velocity_7d"},
+        "30d": {"score": "score_30d", "velocity": "velocity_30d"},
+    }
+    
     # Fetch trending entities
     try:
         trending = await get_trending_entities(
             limit=limit,
             min_score=min_score,
             entity_type=entity_type,
+            timeframe=timeframe,
         )
         
         # Fetch narrative details and recent articles for all signals
@@ -169,11 +186,15 @@ async def get_trending_signals(
             # Fetch recent articles for this entity
             recent_articles = await get_recent_articles_for_entity(signal["entity"], limit=5)
             
+            # Get timeframe-specific score and velocity
+            score_field = field_map[timeframe]["score"]
+            velocity_field = field_map[timeframe]["velocity"]
+            
             signals_with_narratives.append({
                 "entity": signal["entity"],
                 "entity_type": signal["entity_type"],
-                "signal_score": signal["score"],
-                "velocity": signal["velocity"],
+                "signal_score": signal.get(score_field, signal.get("score", 0.0)),
+                "velocity": signal.get(velocity_field, signal.get("velocity", 0.0)),
                 "source_count": signal["source_count"],
                 "sentiment": signal["sentiment"],
                 "is_emerging": signal.get("is_emerging", False),
@@ -190,6 +211,7 @@ async def get_trending_signals(
                 "limit": limit,
                 "min_score": min_score,
                 "entity_type": entity_type,
+                "timeframe": timeframe,
             },
             "signals": signals_with_narratives,
         }
