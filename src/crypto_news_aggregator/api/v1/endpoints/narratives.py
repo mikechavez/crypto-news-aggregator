@@ -96,6 +96,7 @@ class NarrativeResponse(BaseModel):
     last_updated: str = Field(..., description="ISO timestamp of last update")
     days_active: int = Field(default=1, description="Number of days narrative has been active")
     peak_activity: Optional[PeakActivity] = Field(default=None, description="Peak activity metrics")
+    articles: List[Dict[str, Any]] = Field(default=[], description="Recent articles in this narrative")
     
     class Config:
         json_schema_extra = {
