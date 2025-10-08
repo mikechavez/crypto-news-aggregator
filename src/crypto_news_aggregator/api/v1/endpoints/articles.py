@@ -71,11 +71,11 @@ async def list_articles(
 @router.get("/recent")
 async def get_recent_articles(
     limit: int = Query(100, ge=1, le=200, description="Number of recent articles to return"),
-    current_user: UserInDB = Depends(get_current_user),
 ):
     """
     Get recent articles in chronological order with clickable links.
     Returns title, url, source, published_at, and first 3 entities.
+    Public endpoint - no authentication required.
     """
     from ....db.mongodb import mongo_manager
     
