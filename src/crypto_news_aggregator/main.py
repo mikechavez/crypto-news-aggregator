@@ -149,9 +149,9 @@ app = FastAPI(
 origins = [
     "http://localhost:5173",  # Local Vite dev server
     "http://localhost:3000",  # Alternative local dev port
-    "https://context-owl-ui.vercel.app",  # Production frontend (if assigned)
-    "https://context-owl-5zwt1nrjk-mikes-projects-92d90cb6.vercel.app",  # Actual Vercel deployment URL
-    "*"  # Permissive for development, restrict in production
+    "https://context-owl-ui.vercel.app",  # Production frontend
+    "https://context-owl-5zwt1nrjk-mikes-projects-92d90cb6.vercel.app",  # Vercel preview deployments
+    "https://*.vercel.app",  # All Vercel deployments
 ]
 
 app.add_middleware(
@@ -161,6 +161,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=[API_KEY_NAME],
+    allow_origin_regex=r"https://.*\.vercel\.app",  # Allow all Vercel preview URLs
 )
 
 # Setup performance monitoring
