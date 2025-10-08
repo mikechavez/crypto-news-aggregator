@@ -5,7 +5,7 @@ import { signalsAPI } from '../api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { formatRelativeTime, getSignalStrengthColor, formatPercentage, formatSentiment, getSentimentColor, formatEntityType, getEntityTypeColor, formatTheme, getThemeColor } from '../lib/formatters';
+import { formatRelativeTime, formatSentiment, getSentimentColor, formatEntityType, getEntityTypeColor, formatTheme, getThemeColor } from '../lib/formatters';
 
 /**
  * Safely parse date values to ISO string format
@@ -35,6 +35,24 @@ const parseDateSafe = (dateValue: any): string => {
     return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
   } catch {
     return new Date().toISOString();
+  }
+};
+
+/**
+ * Get velocity indicator based on velocity value
+ * Returns emoji, label, and color classes for the badge
+ */
+const getVelocityIndicator = (velocity: number): { emoji: string; label: string; colorClass: string } => {
+  if (velocity >= 50) {
+    return { emoji: '🔥', label: 'Surging', colorClass: 'bg-red-100 text-red-700' };
+  } else if (velocity >= 20) {
+    return { emoji: '↑', label: 'Rising', colorClass: 'bg-green-100 text-green-700' };
+  } else if (velocity >= 5) {
+    return { emoji: '→', label: 'Growing', colorClass: 'bg-blue-100 text-blue-700' };
+  } else if (velocity >= 0) {
+    return { emoji: '', label: 'Active', colorClass: 'bg-gray-100 text-gray-700' };
+  } else {
+    return { emoji: '↓', label: 'Declining', colorClass: 'bg-orange-100 text-orange-700' };
   }
 };
 
@@ -119,22 +137,22 @@ export function Signals() {
           const ticker = signal.entity.match(/\$[A-Z]+/)?.[0];
           const entityName = signal.entity.replace(/\$[A-Z]+/g, '').trim();
           
+          const velocityIndicator = getVelocityIndicator(signal.velocity);
+          
           return (
           <Card key={`${signal.entity}-${index}`}>
             <CardHeader>
-              <div className="flex items-start justify-between">
-                <CardTitle className="text-lg">
-                  <span className="text-blue-600 font-bold mr-2">#{index + 1}</span>
+              <CardTitle className="text-lg">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-blue-600 font-bold">#{index + 1}</span>
                   {/* TODO: Add Link to entity detail when endpoints ready */}
-                  {entityName}
-                  {ticker && <span className="text-gray-500 ml-2">{ticker}</span>}
-                </CardTitle>
-                <span
-                  className={`text-sm font-semibold ${getSignalStrengthColor(signal.signal_score)}`}
-                >
-                  {formatPercentage(signal.signal_score, 0)}
-                </span>
-              </div>
+                  <span>{entityName}</span>
+                  {ticker && <span className="text-gray-500">{ticker}</span>}
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${velocityIndicator.colorClass}`}>
+                    {velocityIndicator.emoji} {velocityIndicator.label}
+                  </span>
+                </div>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
@@ -142,12 +160,6 @@ export function Signals() {
                   <span className="text-gray-500">Type:</span>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${getEntityTypeColor(signal.entity_type)}`}>
                     {formatEntityType(signal.entity_type)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Velocity:</span>
-                  <span className="text-gray-700">
-                    {signal.velocity.toFixed(1)} mentions/hr
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
