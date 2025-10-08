@@ -90,7 +90,13 @@ async def update_signal_scores(run_immediately: bool = False):
                 entity_type = entity_info["entity_type"]
                 
                 try:
-                    signal_data = await calculate_signal_score(entity)
+                    # Calculate signal scores for all three timeframes
+                    signal_24h = await calculate_signal_score(entity, timeframe_hours=24)
+                    signal_7d = await calculate_signal_score(entity, timeframe_hours=168)  # 7 days
+                    signal_30d = await calculate_signal_score(entity, timeframe_hours=720)  # 30 days
+                    
+                    # Also calculate legacy score for backward compatibility
+                    signal_legacy = await calculate_signal_score(entity)
                     
                     # Get first_seen timestamp (primary mentions only)
                     first_mention = await entity_mentions_collection.find_one(
@@ -99,22 +105,38 @@ async def update_signal_scores(run_immediately: bool = False):
                     )
                     first_seen = first_mention["created_at"] if first_mention else datetime.now(timezone.utc)
                     
-                    # Store the signal score
+                    # Store the signal score with all timeframes
                     await upsert_signal_score(
                         entity=entity,
                         entity_type=entity_type,
-                        score=signal_data["score"],
-                        velocity=signal_data["velocity"],
-                        source_count=signal_data["source_count"],
-                        sentiment=signal_data["sentiment"],
-                        narrative_ids=signal_data.get("narrative_ids", []),
-                        is_emerging=signal_data.get("is_emerging", False),
+                        score=signal_legacy["score"],
+                        velocity=signal_legacy["velocity"],
+                        source_count=signal_legacy["source_count"],
+                        sentiment=signal_legacy["sentiment"],
+                        narrative_ids=signal_legacy.get("narrative_ids", []),
+                        is_emerging=signal_legacy.get("is_emerging", False),
                         first_seen=first_seen,
+                        # Multi-timeframe data
+                        score_24h=signal_24h["score"],
+                        score_7d=signal_7d["score"],
+                        score_30d=signal_30d["score"],
+                        velocity_24h=signal_24h["velocity"],
+                        velocity_7d=signal_7d["velocity"],
+                        velocity_30d=signal_30d["velocity"],
+                        mentions_24h=signal_24h.get("mentions", 0),
+                        mentions_7d=signal_7d.get("mentions", 0),
+                        mentions_30d=signal_30d.get("mentions", 0),
+                        recency_24h=signal_24h.get("recency_factor", 0.0),
+                        recency_7d=signal_7d.get("recency_factor", 0.0),
+                        recency_30d=signal_30d.get("recency_factor", 0.0),
                     )
                     
                     scored_entities.append({
                         "entity": entity,
-                        "score": signal_data["score"]
+                        "score": signal_legacy["score"],
+                        "score_24h": signal_24h["score"],
+                        "score_7d": signal_7d["score"],
+                        "score_30d": signal_30d["score"],
                     })
                     
                 except Exception as exc:
@@ -127,7 +149,8 @@ async def update_signal_scores(run_immediately: bool = False):
                 
                 logger.info(
                     f"Signal scores updated: {len(scored_entities)} entities scored, "
-                    f"top entity: {top_entity['entity']} (score {top_entity['score']})"
+                    f"top entity: {top_entity['entity']} "
+                    f"(24h: {top_entity['score_24h']}, 7d: {top_entity['score_7d']}, 30d: {top_entity['score_30d']})"
                 )
             
         except asyncio.CancelledError:
