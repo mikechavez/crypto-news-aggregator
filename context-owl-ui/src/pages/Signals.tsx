@@ -14,10 +14,18 @@ export function Signals() {
     queryKey: ['signals'],
     queryFn: () => signalsAPI.getSignals({ limit: 10 }),
     refetchInterval: 30000, // 30 seconds
+    staleTime: 0, // Always consider data stale
   });
 
   if (isLoading) return <Loading />;
   if (error) return <ErrorMessage message={error.message} onRetry={() => refetch()} />;
+
+  // Debug: Log the first signal to see if recent_articles is present
+  if (data?.signals && data.signals.length > 0) {
+    console.log('First signal data:', data.signals[0]);
+    console.log('Has recent_articles?', 'recent_articles' in data.signals[0]);
+    console.log('Recent articles count:', data.signals[0].recent_articles?.length);
+  }
 
   return (
     <div>
