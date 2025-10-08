@@ -51,6 +51,63 @@ async def get_narrative_details(narrative_ids: List[str]) -> List[Dict[str, Any]
     return narratives
 
 
+async def get_recent_articles_for_entity(entity: str, limit: int = 5) -> List[Dict[str, Any]]:
+    """
+    Fetch recent articles mentioning a specific entity.
+    
+    Args:
+        entity: The entity name to search for
+        limit: Maximum number of articles to return (default 5)
+    
+    Returns:
+        List of article dicts with title, url, source, published_at
+    """
+    db = await mongo_manager.get_async_database()
+    
+    # First, get article IDs from entity_mentions (these are MongoDB ObjectIds)
+    mentions_collection = db.entity_mentions
+    cursor = mentions_collection.find(
+        {"entity": entity}
+    ).sort("timestamp", -1).limit(limit * 2)  # Get more mentions to ensure we have enough unique articles
+    
+    article_object_ids = []
+    seen_ids = set()
+    async for mention in cursor:
+        article_id = mention.get("article_id")
+        if article_id and article_id not in seen_ids:
+            try:
+                # Convert string to ObjectId if needed
+                if isinstance(article_id, str):
+                    article_object_ids.append(ObjectId(article_id))
+                else:
+                    article_object_ids.append(article_id)
+                seen_ids.add(article_id)
+                if len(article_object_ids) >= limit:
+                    break
+            except Exception:
+                continue
+    
+    if not article_object_ids:
+        return []
+    
+    # Fetch article details using _id field
+    articles_collection = db.articles
+    cursor = articles_collection.find(
+        {"_id": {"$in": article_object_ids}}
+    ).sort("published_at", -1).limit(limit)
+    
+    articles = []
+    async for article in cursor:
+        articles.append({
+            "title": article.get("title", ""),
+            "url": article.get("url", ""),
+            "source": article.get("source", ""),
+            "published_at": article.get("published_at").isoformat() if article.get("published_at") else None
+        })
+    
+    return articles
+
+
 @router.get("/trending")
 async def get_trending_signals(
     limit: int = Query(default=10, ge=1, le=100, description="Maximum number of results"),
@@ -103,11 +160,14 @@ async def get_trending_signals(
             entity_type=entity_type,
         )
         
-        # Fetch narrative details for all signals
+        # Fetch narrative details and recent articles for all signals
         signals_with_narratives = []
         for signal in trending:
             narrative_ids = signal.get("narrative_ids", [])
             narratives = await get_narrative_details(narrative_ids)
+            
+            # Fetch recent articles for this entity
+            recent_articles = await get_recent_articles_for_entity(signal["entity"], limit=5)
             
             signals_with_narratives.append({
                 "entity": signal["entity"],
@@ -118,6 +178,7 @@ async def get_trending_signals(
                 "sentiment": signal["sentiment"],
                 "is_emerging": signal.get("is_emerging", False),
                 "narratives": narratives,
+                "recent_articles": recent_articles,
                 "first_seen": signal["first_seen"].isoformat() if signal.get("first_seen") else None,
                 "last_updated": signal["last_updated"].isoformat() if signal.get("last_updated") else None,
             })

@@ -33,6 +33,7 @@ export interface Signal {
   sentiment: number;           // Sentiment score (-1 to 1)
   is_emerging: boolean;        // True if not part of any narrative
   narratives: NarrativeSummary[]; // Narratives containing this entity
+  recent_articles: ArticleLink[]; // Recent articles mentioning this entity
   first_seen: string;          // ISO timestamp
   last_updated: string;        // ISO timestamp
 }
@@ -57,6 +58,7 @@ export interface Narrative {
   lifecycle: string;          // Lifecycle stage: emerging, hot, mature, declining
   first_seen: string;         // ISO timestamp when narrative was first detected
   last_updated: string;       // ISO timestamp of last update
+  articles: ArticleLink[];    // Articles supporting this narrative
   // Backward compatibility fields
   updated_at?: string;        // Alias for last_updated
   story?: string;             // Alias for summary
@@ -80,6 +82,14 @@ export interface Article {
   summary: string | null;
   sentiment_score: number | null;
   created_at: string;
+}
+
+// Simplified article for signal/narrative displays
+export interface ArticleLink {
+  title: string;
+  url: string;
+  source: string;
+  published_at: string;
 }
 
 // API response types
