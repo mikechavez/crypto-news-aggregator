@@ -123,6 +123,7 @@ export interface SignalFilters extends Record<string, string | number | boolean 
   min_strength?: number;
   limit?: number;
   offset?: number;
+  timeframe?: '24h' | '7d' | '30d';
 }
 
 export interface NarrativeFilters extends Record<string, string | number | boolean | string[] | undefined> {
