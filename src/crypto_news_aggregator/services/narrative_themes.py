@@ -7,6 +7,7 @@ enabling theme-based narrative clustering instead of entity co-occurrence.
 
 import json
 import logging
+import re
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
@@ -14,6 +15,42 @@ from ..db.mongodb import mongo_manager
 from ..llm.factory import get_llm_provider
 
 logger = logging.getLogger(__name__)
+
+
+def clean_json_response(response: str) -> str:
+    """
+    Clean JSON response from LLM to handle control characters and newlines.
+    
+    Claude often includes newlines and control characters in JSON string values,
+    which breaks json.loads(). This function:
+    1. Strips markdown code blocks
+    2. Replaces control characters (newlines, carriage returns, tabs) with spaces
+    3. Normalizes multiple spaces to single space
+    
+    Args:
+        response: Raw LLM response string
+    
+    Returns:
+        Cleaned JSON string ready for parsing
+    """
+    # Strip markdown code blocks
+    response_clean = response.strip()
+    if response_clean.startswith("```json"):
+        response_clean = response_clean[7:]
+    if response_clean.startswith("```"):
+        response_clean = response_clean[3:]
+    if response_clean.endswith("```"):
+        response_clean = response_clean[:-3]
+    response_clean = response_clean.strip()
+    
+    # Replace control characters with spaces
+    # This handles newlines (\n), carriage returns (\r), and tabs (\t)
+    response_clean = response_clean.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
+    
+    # Normalize multiple spaces to single space
+    response_clean = re.sub(r'\s+', ' ', response_clean)
+    
+    return response_clean
 
 # Predefined theme categories for crypto news
 THEME_CATEGORIES = [
@@ -75,17 +112,14 @@ JSON array:"""
             logger.warning(f"Empty response from LLM for article {article_id}")
             return []
         
-        # Parse JSON response
-        response_clean = response.strip()
-        if response_clean.startswith("```json"):
-            response_clean = response_clean[7:]
-        if response_clean.startswith("```"):
-            response_clean = response_clean[3:]
-        if response_clean.endswith("```"):
-            response_clean = response_clean[:-3]
-        response_clean = response_clean.strip()
+        # Parse JSON response with cleaning
+        response_clean = clean_json_response(response)
         
-        themes = json.loads(response_clean)
+        try:
+            themes = json.loads(response_clean)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse JSON for article {article_id}: {e}. Response: {response_clean[:200]}")
+            return []
         
         # Validate themes are in our predefined list
         valid_themes = [t for t in themes if t in THEME_CATEGORIES]
@@ -97,9 +131,6 @@ JSON array:"""
         logger.debug(f"Extracted themes for article {article_id}: {valid_themes}")
         return valid_themes
     
-    except json.JSONDecodeError as e:
-        logger.warning(f"Failed to parse JSON response for article {article_id}: {e}. Response: {response}")
-        return []
     except Exception as e:
         logger.exception(f"Error extracting themes for article {article_id}: {e}")
         return []
@@ -227,7 +258,7 @@ Generate a narrative summary:
 1. Create a concise title (max 60 characters) that captures the main story
 2. Write a 2-3 sentence summary of what's happening in this narrative
 
-Return JSON: {{"title": "...", "summary": "..."}}"""
+Return valid JSON with no newlines in string values: {{"title": "...", "summary": "..."}}"""
     
     try:
         # Call Claude
@@ -238,30 +269,24 @@ Return JSON: {{"title": "...", "summary": "..."}}"""
             logger.warning(f"Empty response from LLM for theme {theme}")
             return None
         
-        # Parse JSON response
-        response_clean = response.strip()
-        if response_clean.startswith("```json"):
-            response_clean = response_clean[7:]
-        if response_clean.startswith("```"):
-            response_clean = response_clean[3:]
-        if response_clean.endswith("```"):
-            response_clean = response_clean[:-3]
-        response_clean = response_clean.strip()
+        # Parse JSON response with cleaning
+        response_clean = clean_json_response(response)
         
-        narrative_data = json.loads(response_clean)
+        try:
+            narrative_data = json.loads(response_clean)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse JSON for theme {theme}: {e}. Using fallback. Response: {response_clean[:200]}")
+            # Fallback
+            return {
+                "title": f"{theme.replace('_', ' ').title()} Narrative",
+                "summary": f"Multiple articles discussing {theme.replace('_', ' ')} in the crypto space."
+            }
         
         return {
             "title": narrative_data.get("title", f"{theme.replace('_', ' ').title()} Narrative"),
             "summary": narrative_data.get("summary", "")
         }
     
-    except json.JSONDecodeError as e:
-        logger.warning(f"Failed to parse JSON response for theme {theme}: {e}. Response: {response}")
-        # Fallback
-        return {
-            "title": f"{theme.replace('_', ' ').title()} Narrative",
-            "summary": f"Multiple articles discussing {theme.replace('_', ' ')} in the crypto space."
-        }
     except Exception as e:
         logger.exception(f"Error generating narrative for theme {theme}: {e}")
         return None
