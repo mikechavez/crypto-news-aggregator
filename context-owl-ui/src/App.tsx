@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Signals } from './pages/Signals';
 import { Narratives } from './pages/Narratives';
+import { Articles } from './pages/Articles';
 // import { EntityDetail } from './pages/EntityDetail';
 
 const queryClient = new QueryClient({
@@ -24,6 +25,7 @@ function App() {
             <Route path="/" element={<Navigate to="/signals" replace />} />
             <Route path="/signals" element={<Signals />} />
             <Route path="/narratives" element={<Narratives />} />
+            <Route path="/articles" element={<Articles />} />
             {/* TODO: Uncomment when backend /api/v1/entities endpoints are implemented */}
             {/* <Route path="/entity/:id" element={<EntityDetail />} /> */}
           </Routes>

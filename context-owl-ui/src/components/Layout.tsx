@@ -10,8 +10,9 @@ export function Layout({ children }: LayoutProps) {
   const location = useLocation();
 
   const navItems = [
-    { path: '/', label: 'Signals' },
+    { path: '/signals', label: 'Signals' },
     { path: '/narratives', label: 'Narratives' },
+    { path: '/articles', label: 'Articles' },
   ];
 
   return (

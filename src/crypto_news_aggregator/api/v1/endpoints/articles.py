@@ -68,6 +68,62 @@ async def list_articles(
     return response
 
 
+@router.get("/recent")
+async def get_recent_articles(
+    limit: int = Query(100, ge=1, le=200, description="Number of recent articles to return"),
+    current_user: UserInDB = Depends(get_current_user),
+):
+    """
+    Get recent articles in chronological order with clickable links.
+    Returns title, url, source, published_at, and first 3 entities.
+    """
+    from ....db.mongodb import mongo_manager
+    
+    db = await mongo_manager.get_async_database()
+    articles_collection = db.articles
+    entity_mentions_collection = db.entity_mentions
+    
+    # Fetch recent articles sorted by published_at DESC
+    cursor = articles_collection.find(
+        {},
+        {
+            "title": 1,
+            "url": 1,
+            "source": 1,
+            "published_at": 1,
+            "_id": 1
+        }
+    ).sort("published_at", -1).limit(limit)
+    
+    articles = []
+    async for article in cursor:
+        article_id = str(article["_id"])
+        
+        # Fetch entities for this article (first 3)
+        entity_cursor = entity_mentions_collection.find(
+            {"article_id": article_id},
+            {"entity_name": 1, "entity_type": 1}
+        ).limit(3)
+        
+        entities = []
+        async for entity in entity_cursor:
+            entities.append({
+                "name": entity.get("entity_name", ""),
+                "type": entity.get("entity_type", "")
+            })
+        
+        articles.append({
+            "id": article_id,
+            "title": article.get("title", ""),
+            "url": article.get("url", ""),
+            "source": article.get("source", ""),
+            "published_at": article.get("published_at").isoformat() if article.get("published_at") else None,
+            "entities": entities
+        })
+    
+    return {"articles": articles, "total": len(articles)}
+
+
 @router.get("/search", response_model=List[ArticleResponse])
 async def search_articles(
     q: str = Query(..., min_length=2, description="Search query"),
