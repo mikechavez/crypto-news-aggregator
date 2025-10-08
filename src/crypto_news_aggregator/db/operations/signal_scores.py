@@ -165,14 +165,16 @@ async def get_trending_entities(
     limit: int = 20,
     min_score: float = 0.0,
     entity_type: Optional[str] = None,
+    timeframe: str = "7d",
 ) -> List[Dict[str, Any]]:
     """
-    Get trending entities sorted by signal score.
+    Get trending entities sorted by signal score for a specific timeframe.
     
     Args:
         limit: Maximum number of results (default 20)
         min_score: Minimum signal score threshold (default 0.0)
         entity_type: Filter by entity type (optional)
+        timeframe: Time window for scoring (24h, 7d, or 30d, default 7d)
     
     Returns:
         List of signal score documents
@@ -180,13 +182,22 @@ async def get_trending_entities(
     db = await mongo_manager.get_async_database()
     collection = db.signal_scores
     
-    # Build query
-    query = {"score": {"$gte": min_score}}
+    # Map timeframe to score field
+    score_field_map = {
+        "24h": "score_24h",
+        "7d": "score_7d",
+        "30d": "score_30d",
+    }
+    
+    score_field = score_field_map.get(timeframe, "score_7d")
+    
+    # Build query - filter by the timeframe-specific score
+    query = {score_field: {"$gte": min_score}}
     if entity_type:
         query["entity_type"] = entity_type
     
-    # Get trending entities sorted by score
-    cursor = collection.find(query).sort("score", -1).limit(limit)
+    # Get trending entities sorted by timeframe-specific score
+    cursor = collection.find(query).sort(score_field, -1).limit(limit)
     
     results = []
     async for signal in cursor:

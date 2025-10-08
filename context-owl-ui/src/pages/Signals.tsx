@@ -38,12 +38,29 @@ const parseDateSafe = (dateValue: any): string => {
   }
 };
 
+type Timeframe = '24h' | '7d' | '30d';
+
+interface TabConfig {
+  id: Timeframe;
+  label: string;
+  emoji: string;
+  description: string;
+}
+
+const TABS: TabConfig[] = [
+  { id: '24h', label: 'Hot', emoji: '🔥', description: 'Breaking news and sudden spikes' },
+  { id: '7d', label: 'Trending', emoji: '📈', description: 'Gaining momentum this week' },
+  { id: '30d', label: 'Top', emoji: '⭐', description: 'Major ongoing narratives' },
+];
+
 export function Signals() {
   const navigate = useNavigate();
   const [expandedArticles, setExpandedArticles] = useState<Set<number>>(new Set());
+  const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>('7d');
+  
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
-    queryKey: ['signals'],
-    queryFn: () => signalsAPI.getSignals({ limit: 10 }),
+    queryKey: ['signals', selectedTimeframe],
+    queryFn: () => signalsAPI.getSignals({ limit: 10, timeframe: selectedTimeframe }),
     refetchInterval: 30000, // 30 seconds
     staleTime: 0, // Always consider data stale
   });
@@ -58,6 +75,8 @@ export function Signals() {
     console.log('Recent articles count:', data.signals[0].recent_articles?.length);
   }
 
+  const currentTab = TABS.find(tab => tab.id === selectedTimeframe) || TABS[1];
+
   return (
     <div>
       <div className="mb-8">
@@ -70,6 +89,29 @@ export function Signals() {
             Last updated: {formatRelativeTime(parseDateSafe(dataUpdatedAt))}
           </p>
         )}
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="mb-6">
+        <div className="flex gap-2 border-b border-gray-200">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setSelectedTimeframe(tab.id)}
+              className={`px-4 py-3 font-medium text-sm transition-colors relative ${
+                selectedTimeframe === tab.id
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <span className="mr-2">{tab.emoji}</span>
+              {tab.label} ({tab.id})
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 text-sm text-gray-600">
+          {currentTab.description}
+        </p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
