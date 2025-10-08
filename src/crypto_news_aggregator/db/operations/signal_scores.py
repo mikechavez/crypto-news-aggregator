@@ -20,6 +20,19 @@ async def upsert_signal_score(
     narrative_ids: List[str] = None,
     is_emerging: bool = False,
     first_seen: datetime = None,
+    # Multi-timeframe fields
+    score_24h: Optional[float] = None,
+    score_7d: Optional[float] = None,
+    score_30d: Optional[float] = None,
+    velocity_24h: Optional[float] = None,
+    velocity_7d: Optional[float] = None,
+    velocity_30d: Optional[float] = None,
+    mentions_24h: Optional[int] = None,
+    mentions_7d: Optional[int] = None,
+    mentions_30d: Optional[int] = None,
+    recency_24h: Optional[float] = None,
+    recency_7d: Optional[float] = None,
+    recency_30d: Optional[float] = None,
 ) -> str:
     """
     Create or update a signal score record.
@@ -27,13 +40,25 @@ async def upsert_signal_score(
     Args:
         entity: The entity name/value
         entity_type: Type of entity (ticker, project, event)
-        score: Overall signal score (0-10)
-        velocity: Mention velocity metric
+        score: Overall signal score (0-10) - legacy field
+        velocity: Mention velocity metric - legacy field
         source_count: Number of unique sources
         sentiment: Sentiment metrics dict
         narrative_ids: List of narrative IDs containing this entity
         is_emerging: True if entity is not part of any narrative
         first_seen: When entity was first detected (optional)
+        score_24h: Signal score for 24h timeframe
+        score_7d: Signal score for 7d timeframe
+        score_30d: Signal score for 30d timeframe
+        velocity_24h: Velocity for 24h timeframe
+        velocity_7d: Velocity for 7d timeframe
+        velocity_30d: Velocity for 30d timeframe
+        mentions_24h: Mention count for 24h timeframe
+        mentions_7d: Mention count for 7d timeframe
+        mentions_30d: Mention count for 30d timeframe
+        recency_24h: Recency factor for 24h timeframe
+        recency_7d: Recency factor for 7d timeframe
+        recency_30d: Recency factor for 30d timeframe
     
     Returns:
         The ID of the upserted signal score record
@@ -59,6 +84,32 @@ async def upsert_signal_score(
             "last_updated": now,
         }
         
+        # Add multi-timeframe fields if provided
+        if score_24h is not None:
+            update_data["score_24h"] = score_24h
+        if score_7d is not None:
+            update_data["score_7d"] = score_7d
+        if score_30d is not None:
+            update_data["score_30d"] = score_30d
+        if velocity_24h is not None:
+            update_data["velocity_24h"] = velocity_24h
+        if velocity_7d is not None:
+            update_data["velocity_7d"] = velocity_7d
+        if velocity_30d is not None:
+            update_data["velocity_30d"] = velocity_30d
+        if mentions_24h is not None:
+            update_data["mentions_24h"] = mentions_24h
+        if mentions_7d is not None:
+            update_data["mentions_7d"] = mentions_7d
+        if mentions_30d is not None:
+            update_data["mentions_30d"] = mentions_30d
+        if recency_24h is not None:
+            update_data["recency_24h"] = recency_24h
+        if recency_7d is not None:
+            update_data["recency_7d"] = recency_7d
+        if recency_30d is not None:
+            update_data["recency_30d"] = recency_30d
+        
         await collection.update_one(
             {"entity": entity},
             {"$set": update_data}
@@ -79,6 +130,32 @@ async def upsert_signal_score(
             "last_updated": now,
             "created_at": now,
         }
+        
+        # Add multi-timeframe fields if provided
+        if score_24h is not None:
+            signal_data["score_24h"] = score_24h
+        if score_7d is not None:
+            signal_data["score_7d"] = score_7d
+        if score_30d is not None:
+            signal_data["score_30d"] = score_30d
+        if velocity_24h is not None:
+            signal_data["velocity_24h"] = velocity_24h
+        if velocity_7d is not None:
+            signal_data["velocity_7d"] = velocity_7d
+        if velocity_30d is not None:
+            signal_data["velocity_30d"] = velocity_30d
+        if mentions_24h is not None:
+            signal_data["mentions_24h"] = mentions_24h
+        if mentions_7d is not None:
+            signal_data["mentions_7d"] = mentions_7d
+        if mentions_30d is not None:
+            signal_data["mentions_30d"] = mentions_30d
+        if recency_24h is not None:
+            signal_data["recency_24h"] = recency_24h
+        if recency_7d is not None:
+            signal_data["recency_7d"] = recency_7d
+        if recency_30d is not None:
+            signal_data["recency_30d"] = recency_30d
         
         result = await collection.insert_one(signal_data)
         return str(result.inserted_id)
