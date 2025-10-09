@@ -52,7 +52,6 @@ router.include_router(tasks.router, prefix="", tags=["tasks"])
 
 # Protected routes (require authentication)
 protected_router = APIRouter()
-protected_router.include_router(articles.router, prefix="/articles", tags=["articles"])
 protected_router.include_router(sources.router, prefix="/sources", tags=["sources"])
 
 # API key protected routes (no JWT required)
@@ -61,6 +60,7 @@ api_key_router.include_router(price.router, prefix="/price", tags=["price"])
 api_key_router.include_router(signals.router, prefix="/signals", tags=["signals"])
 api_key_router.include_router(narratives.router, prefix="/narratives", tags=["narratives"])
 api_key_router.include_router(entity_alerts.router, prefix="", tags=["entity-alerts"])
+api_key_router.include_router(articles.router, prefix="/articles", tags=["articles"])
 
 # Include test endpoints only when explicitly enabled
 if _enable_test_endpoints():
