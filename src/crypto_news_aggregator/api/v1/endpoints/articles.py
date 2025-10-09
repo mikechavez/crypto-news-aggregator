@@ -8,19 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 from bson import ObjectId
 
-from ....db.mongodb_models import (
-    ArticleInDB,
-    ArticleResponse,
-    SentimentAnalysis,
-    SentimentLabel,
-)
+from ....models.article import ArticleInDB
 from ....services.article_service import article_service
 from ....core.auth import get_api_key
 
 router = APIRouter()
 
 
-@router.get("/", response_model=List[ArticleResponse])
+@router.get("/")
 async def list_articles(
     skip: int = Query(0, ge=0, description="Number of items to skip"),
     limit: int = Query(10, ge=1, le=100, description="Number of items per page"),
@@ -123,7 +118,7 @@ async def get_recent_articles(
     return {"articles": articles, "total": len(articles)}
 
 
-@router.get("/search", response_model=List[ArticleResponse])
+@router.get("/search")
 async def search_articles(
     q: str = Query(..., min_length=2, description="Search query"),
     skip: int = Query(0, ge=0, description="Number of items to skip"),
@@ -157,7 +152,7 @@ async def search_articles(
     return response
 
 
-@router.get("/{article_id}", response_model=ArticleResponse)
+@router.get("/{article_id}")
 async def get_article(
     article_id: str, api_key: str = Depends(get_api_key)
 ):
