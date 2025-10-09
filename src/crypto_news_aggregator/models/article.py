@@ -46,6 +46,17 @@ class ArticleBase(BaseModel):
         "cointelegraph",
         "decrypt",
         "bitcoinmagazine",
+        "theblock",
+        "cryptoslate",
+        "benzinga",
+        "messari",
+        "bitcoin.com",
+        "glassnode",
+        "bankless",
+        "thedefiant",
+        "defillama",
+        "dune",
+        "galaxy",
     ] = Field(..., description="The source of the article.")
     text: str
     author: Optional[ArticleAuthor] = None
