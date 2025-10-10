@@ -86,7 +86,7 @@ export function Signals() {
   
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['signals', selectedTimeframe],
-    queryFn: () => signalsAPI.getSignals({ limit: 10, timeframe: selectedTimeframe }),
+    queryFn: () => signalsAPI.getSignals({ limit: 50, timeframe: selectedTimeframe }),
     refetchInterval: 30000, // 30 seconds
     staleTime: 0, // Always consider data stale
   });

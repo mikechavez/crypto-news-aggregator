@@ -110,7 +110,7 @@ async def get_recent_articles_for_entity(entity: str, limit: int = 5) -> List[Di
 
 @router.get("/trending")
 async def get_trending_signals(
-    limit: int = Query(default=10, ge=1, le=100, description="Maximum number of results"),
+    limit: int = Query(default=50, ge=1, le=100, description="Maximum number of results"),
     min_score: float = Query(default=0.0, ge=0.0, le=10.0, description="Minimum signal score"),
     entity_type: Optional[str] = Query(default=None, description="Filter by entity type (ticker, project, event)"),
     timeframe: str = Query(default="7d", description="Time window for scoring (24h, 7d, or 30d)"),
@@ -126,7 +126,7 @@ async def get_trending_signals(
     Results are cached for 2 minutes.
     
     Args:
-        limit: Maximum number of results (1-100, default 10)
+        limit: Maximum number of results (1-100, default 50)
         min_score: Minimum signal score threshold (0-10, default 0)
         entity_type: Filter by entity type (optional)
         timeframe: Time window for scoring (24h, 7d, or 30d, default 7d)
