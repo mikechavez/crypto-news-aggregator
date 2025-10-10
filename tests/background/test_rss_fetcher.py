@@ -133,7 +133,7 @@ def test_rss_service_has_correct_feed_count():
     
     # Should have 13 total feeds:
     # - 4 original (coindesk, cointelegraph, decrypt, bitcoinmagazine)
-    # - 6 News & General (theblock, cryptoslate, benzinga, bitcoincom, dlnews, watcherguru)
+    # - 6 News & General (theblock, cryptoslate, benzinga, bitcoin.com, dlnews, watcherguru)
     # - 2 Research & Analysis (glassnode, messari)
     # - 1 DeFi-Focused (thedefiant)
     assert len(rss_service.feed_urls) == 13, f"Expected 13 RSS feeds, got {len(rss_service.feed_urls)}"
@@ -141,7 +141,7 @@ def test_rss_service_has_correct_feed_count():
     # Verify key sources are present
     expected_sources = [
         "coindesk", "cointelegraph", "decrypt", "bitcoinmagazine",  # Original
-        "theblock", "cryptoslate", "benzinga", "bitcoincom", "dlnews", "watcherguru",  # News & General
+        "theblock", "cryptoslate", "benzinga", "bitcoin.com", "dlnews", "watcherguru",  # News & General
         "glassnode", "messari",  # Research
         "thedefiant",  # DeFi
     ]
@@ -153,3 +153,26 @@ def test_rss_service_has_correct_feed_count():
     for source, url in rss_service.feed_urls.items():
         assert isinstance(url, str), f"URL for {source} is not a string"
         assert url.startswith("http"), f"URL for {source} does not start with http"
+
+
+def test_rss_source_names_match_article_model():
+    """
+    Validate that all RSS source names are valid according to ArticleCreate model.
+    This prevents runtime validation errors when creating articles from RSS feeds.
+    """
+    from typing import get_args
+    from crypto_news_aggregator.models.article import ArticleBase
+    
+    rss_service = RSSService()
+    
+    # Get the valid source values from the ArticleBase Literal type
+    # ArticleBase has the 'source' field with Literal type
+    source_field = ArticleBase.model_fields['source']
+    valid_sources = get_args(source_field.annotation)
+    
+    # Check that all RSS source names are in the valid sources list
+    for source_name in rss_service.feed_urls.keys():
+        assert source_name in valid_sources, (
+            f"RSS source '{source_name}' is not in ArticleCreate model's valid sources. "
+            f"Valid sources are: {valid_sources}"
+        )
