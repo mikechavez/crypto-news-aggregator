@@ -41,13 +41,21 @@ const parseDateSafe = (dateValue: any): string => {
 /**
  * Get velocity indicator based on velocity value
  * Returns emoji, label, and color classes for the badge
+ * 
+ * Velocity is a percentage (e.g., 1379 = 1379% growth = 13.79x increase)
+ * Thresholds:
+ * - Surging: >= 500 (500%+ growth, 5x or more - truly explosive)
+ * - Rising: >= 200 (200%+ growth, 2x-5x - strong growth)
+ * - Growing: >= 50 (50%+ growth, 1.5x-2x - moderate growth)
+ * - Active: >= 0 (0-50% growth - steady)
+ * - Declining: < 0 (negative growth - losing momentum)
  */
 const getVelocityIndicator = (velocity: number): { emoji: string; label: string; colorClass: string } => {
-  if (velocity >= 50) {
+  if (velocity >= 500) {
     return { emoji: '🔥', label: 'Surging', colorClass: 'bg-red-100 text-red-700' };
-  } else if (velocity >= 20) {
+  } else if (velocity >= 200) {
     return { emoji: '↑', label: 'Rising', colorClass: 'bg-green-100 text-green-700' };
-  } else if (velocity >= 5) {
+  } else if (velocity >= 50) {
     return { emoji: '→', label: 'Growing', colorClass: 'bg-blue-100 text-blue-700' };
   } else if (velocity >= 0) {
     return { emoji: '', label: 'Active', colorClass: 'bg-gray-100 text-gray-700' };
