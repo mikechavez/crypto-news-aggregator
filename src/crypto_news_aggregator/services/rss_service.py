@@ -27,7 +27,7 @@ class RSSService:
             "theblock": "https://www.theblock.co/rss.xml",
             "cryptoslate": "https://cryptoslate.com/feed/",
             "benzinga": "https://www.benzinga.com/feed",
-            "bitcoincom": "https://news.bitcoin.com/feed/",
+            "bitcoin.com": "https://news.bitcoin.com/feed/",
             "dlnews": "https://www.dlnews.com/arc/outboundfeeds/rss/",
             "watcherguru": "https://watcher.guru/news/feed",
             

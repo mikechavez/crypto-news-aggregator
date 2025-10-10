@@ -57,6 +57,8 @@ class ArticleBase(BaseModel):
         "defillama",
         "dune",
         "galaxy",
+        "dlnews",
+        "watcherguru",
     ] = Field(..., description="The source of the article.")
     text: str
     author: Optional[ArticleAuthor] = None
