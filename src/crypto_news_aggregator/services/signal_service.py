@@ -24,14 +24,14 @@ async def calculate_mentions_and_velocity(entity: str, timeframe_hours: int) -> 
     Calculate mention count and velocity (growth rate) for an entity over a timeframe.
     
     Velocity = (current_period - previous_period) / previous_period * 100
-    Example: 50 mentions this week vs 30 last week = (50-30)/30 = 67% growth
+    Example: 50 mentions this week vs 30 last week = (50-30)/30*100 = 67% growth
     
     Args:
         entity: The entity to calculate metrics for
         timeframe_hours: Timeframe in hours (24, 168 for 7d, 720 for 30d)
     
     Returns:
-        Dict with 'mentions' (count) and 'velocity' (growth % as decimal)
+        Dict with 'mentions' (count) and 'velocity' (growth rate as percentage, e.g., 67.0 for 67%)
     """
     db = await mongo_manager.get_async_database()
     collection = db.entity_mentions
@@ -55,13 +55,13 @@ async def calculate_mentions_and_velocity(entity: str, timeframe_hours: int) -> 
         "created_at": {"$gte": previous_period_start, "$lt": current_period_start}
     })
     
-    # Calculate velocity as growth rate
+    # Calculate velocity as growth rate percentage
     if previous_mentions == 0:
         # If no previous data, velocity is 100% if we have current mentions, else 0%
-        velocity = 1.0 if current_mentions > 0 else 0.0
+        velocity = 100.0 if current_mentions > 0 else 0.0
     else:
-        # Growth rate: (current - previous) / previous
-        velocity = (current_mentions - previous_mentions) / previous_mentions
+        # Growth rate as percentage: (current - previous) / previous * 100
+        velocity = ((current_mentions - previous_mentions) / previous_mentions) * 100
     
     return {
         "mentions": float(current_mentions),
@@ -303,10 +303,11 @@ async def calculate_signal_score(
         sentiment_metrics = await calculate_sentiment_metrics(canonical_entity)
         
         # New formula:
-        # - Velocity (growth rate as decimal, e.g., 0.67 for 67%) weighted at 50%
+        # - Velocity (growth rate as percentage, e.g., 67.0 for 67%) weighted at 50%
         # - Diversity weighted at 30%
         # - Recency factor weighted at 20%
-        velocity_component = metrics["velocity"] * 0.5
+        # Note: velocity is now a percentage (0-300+), so we scale it down
+        velocity_component = (metrics["velocity"] / 100) * 0.5
         diversity_component = diversity * 0.3
         recency_component = recency * 0.2
         
@@ -324,7 +325,7 @@ async def calculate_signal_score(
         
         return {
             "score": round(normalized_score, 2),
-            "velocity": round(metrics["velocity"], 3),
+            "velocity": round(metrics["velocity"], 2),  # Percentage value (e.g., 67.50)
             "mentions": int(metrics["mentions"]),
             "source_count": diversity,
             "recency_factor": round(recency, 3),
