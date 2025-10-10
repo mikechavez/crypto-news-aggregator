@@ -184,7 +184,7 @@ async def get_trending_signals(
             narratives = await get_narrative_details(narrative_ids)
             
             # Fetch recent articles for this entity
-            recent_articles = await get_recent_articles_for_entity(signal["entity"], limit=5)
+            recent_articles = await get_recent_articles_for_entity(signal["entity"], limit=20)
             
             # Get timeframe-specific score and velocity
             score_field = field_map[timeframe]["score"]
