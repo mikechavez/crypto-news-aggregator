@@ -21,7 +21,7 @@ from ..db.mongodb import PyObjectId
 from ..db.mongodb import mongo_manager, COLLECTION_ARTICLES
 from ..core.config import get_settings
 from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
-from ..core.sentiment_analyzer import SentimentAnalyzer
+# from ..core.sentiment_analyzer import SentimentAnalyzer  # DISABLED: Causes Railway deployment crash
 
 logger = logging.getLogger(__name__)
 # settings = get_settings()  # Removed top-level settings; use lazy initialization in methods as needed.
@@ -173,24 +173,15 @@ class ArticleService:
         article_data["updated_at"] = datetime.now(timezone.utc)
 
         # Compute sentiment for the article content/title
-        try:
-            s = SentimentAnalyzer.analyze_article(
-                content=article_data.get("text")
-                or "",  # Changed from "content" to "text"
-                title=article_data.get("title"),
-            )
-            # Map to Mongo-friendly schema
-            sentiment_payload = {
-                "score": float(s.get("polarity", 0.0)),
-                "magnitude": abs(float(s.get("polarity", 0.0))),
-                "label": (str(s.get("label", "Neutral")).lower()),
-                "subjectivity": float(s.get("subjectivity", 0.0)),
-            }
-            article_data["sentiment"] = sentiment_payload
-        except Exception as e:
-            logger.warning(
-                f"Failed to compute sentiment for article '{article_data.get('title','')}': {e}"
-            )
+        # DISABLED: SentimentAnalyzer causes Railway deployment crash
+        # Return default neutral sentiment instead
+        sentiment_payload = {
+            "score": 0.0,
+            "magnitude": 0.0,
+            "label": "neutral",
+            "subjectivity": 0.0,
+        }
+        article_data["sentiment"] = sentiment_payload
 
         # Create the article in MongoDB
         collection = await self._get_collection()

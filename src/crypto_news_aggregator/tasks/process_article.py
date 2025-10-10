@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..db.session import get_sessionmaker, get_engine
 from ..db.models import Article, Source, Sentiment
-from ..core.sentiment_analyzer import SentimentAnalyzer
+# from ..core.sentiment_analyzer import SentimentAnalyzer  # DISABLED: Causes Railway deployment crash
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +65,13 @@ async def _process_article_async(article_id: int) -> Dict[str, Any]:
                 }
 
             # Analyze sentiment
-            sentiment = SentimentAnalyzer.analyze_article(
-                article_text=article.content or "", title=article.title
-            )
+            # DISABLED: SentimentAnalyzer causes Railway deployment crash
+            # Return default neutral sentiment instead
+            sentiment = {
+                "polarity": 0.0,
+                "label": "Neutral",
+                "subjectivity": 0.0,
+            }
 
             # Update article with sentiment score
             article.sentiment_score = sentiment["polarity"]
@@ -180,9 +184,13 @@ async def _process_new_articles_async(batch_size: int = 10) -> Dict[str, Any]:
             for article in articles:
                 try:
                     # Process each article
-                    sentiment = SentimentAnalyzer.analyze_article(
-                        article_text=article.content or "", title=article.title
-                    )
+                    # DISABLED: SentimentAnalyzer causes Railway deployment crash
+                    # Return default neutral sentiment instead
+                    sentiment = {
+                        "polarity": 0.0,
+                        "label": "Neutral",
+                        "subjectivity": 0.0,
+                    }
 
                     # Update article with sentiment score
                     article.sentiment_score = sentiment["polarity"]
