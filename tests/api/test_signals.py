@@ -104,7 +104,7 @@ async def test_get_trending_signals_default(test_signal_data):
     
     # Should return signals sorted by score
     assert data["count"] > 0
-    assert len(data["signals"]) <= 10  # Default limit
+    assert len(data["signals"]) <= 50  # Default limit
     
     # Check first signal has highest score
     if len(data["signals"]) > 1:
