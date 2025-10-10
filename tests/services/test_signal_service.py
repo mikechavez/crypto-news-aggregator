@@ -355,9 +355,9 @@ async def test_calculate_mentions_and_velocity_growth(mongo_db):
     
     result = await calculate_mentions_and_velocity("TEST_MF_GROWTH", timeframe_hours=24)
     
-    # Expected: (50 - 30) / 30 = 0.667 (67% growth)
+    # Expected: (50 - 30) / 30 * 100 = 66.67% growth
     assert result["mentions"] == 50.0
-    assert result["velocity"] == pytest.approx(0.667, abs=0.01)
+    assert result["velocity"] == pytest.approx(66.67, abs=0.1)
     
     await collection.delete_many({"entity": "TEST_MF_GROWTH"})
 
