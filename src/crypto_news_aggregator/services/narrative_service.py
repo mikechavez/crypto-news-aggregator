@@ -1,10 +1,11 @@
 """
-Narrative clustering service using theme-based detection.
+Narrative clustering service using two-layer narrative discovery.
 
 This service identifies narratives by:
-- Extracting themes from articles using Claude Sonnet
-- Grouping articles by shared themes (not entity co-occurrence)
-- Generating AI-powered narrative summaries
+- Layer 1: Discovering natural narrative elements (actors, actions, tensions)
+- Layer 2: Optionally mapping to themes for analytics
+- Grouping articles by shared actors and tensions (richer than theme-only)
+- Generating AI-powered narrative summaries from narrative_summary fields
 - Tracking narrative lifecycle (emerging, hot, mature, declining)
 """
 
@@ -17,8 +18,10 @@ from ..db.mongodb import mongo_manager
 from ..llm.factory import get_llm_provider
 from ..db.operations.narratives import upsert_narrative
 from .narrative_themes import (
-    backfill_themes_for_recent_articles,
+    backfill_narratives_for_recent_articles,
     get_articles_by_theme,
+    get_articles_by_narrative_similarity,
+    generate_narrative_from_cluster,
     generate_narrative_from_theme,
     THEME_CATEGORIES
 )
@@ -92,26 +95,29 @@ async def extract_entities_from_articles(articles: List[Dict[str, Any]]) -> List
 
 async def detect_narratives(
     hours: int = 48,
-    min_articles: int = 2
+    min_articles: int = 2,
+    use_narrative_clustering: bool = True
 ) -> List[Dict[str, Any]]:
     """
-    Detect active narratives using theme-based clustering.
+    Detect active narratives using two-layer narrative discovery.
     
-    Main entry point for narrative detection. Groups articles by shared themes
-    and generates narrative summaries for active themes.
+    Main entry point for narrative detection. Can use either:
+    1. Narrative-based clustering (groups by actors/tensions) - NEW DEFAULT
+    2. Theme-based clustering (groups by themes) - LEGACY
     
     Args:
         hours: Look back this many hours for articles (default 48)
-        min_articles: Minimum articles per theme to create narrative (default 2)
+        min_articles: Minimum articles per cluster to create narrative (default 2)
+        use_narrative_clustering: Use new narrative-based clustering (default True)
     
     Returns:
         List of narrative dicts with full structure including lifecycle tracking
     """
     try:
-        # Step 1: Backfill themes for recent articles that don't have them
-        logger.info(f"Backfilling themes for articles from last {hours} hours")
-        backfilled = await backfill_themes_for_recent_articles(hours=hours, limit=100)
-        logger.info(f"Backfilled themes for {backfilled} articles")
+        # Step 1: Backfill narrative data for recent articles
+        logger.info(f"Backfilling narratives for articles from last {hours} hours")
+        backfilled = await backfill_narratives_for_recent_articles(hours=hours, limit=100)
+        logger.info(f"Backfilled narratives for {backfilled} articles")
         
         # Step 2: Get existing narratives for comparison (lifecycle tracking)
         db = await mongo_manager.get_async_database()
@@ -122,78 +128,162 @@ async def detect_narratives(
             if theme:
                 existing_narratives[theme] = narrative
         
-        # Step 3: For each theme, find articles and create narratives
         narratives = []
         
-        for theme in THEME_CATEGORIES:
-            # Get articles for this theme
-            articles = await get_articles_by_theme(theme, hours=hours, min_articles=min_articles)
+        if use_narrative_clustering:
+            # NEW: Use narrative-based clustering (actors + tensions)
+            logger.info("Using narrative-based clustering (actors + tensions)")
             
-            if not articles:
-                continue
+            # Get article clusters based on shared actors and tensions
+            clusters = await get_articles_by_narrative_similarity(hours=hours, min_articles=min_articles)
             
-            logger.info(f"Found {len(articles)} articles for theme '{theme}'")
-            
-            # Extract entities from these articles
-            entities = await extract_entities_from_articles(articles)
-            
-            # Generate narrative summary
-            narrative_content = await generate_narrative_from_theme(theme, articles)
-            
-            if not narrative_content:
-                logger.warning(f"Failed to generate narrative for theme '{theme}'")
-                continue
-            
-            # Calculate mention velocity (articles per day)
-            article_count = len(articles)
-            time_span_days = hours / 24.0
-            mention_velocity = article_count / time_span_days if time_span_days > 0 else 0
-            
-            # Get previous count for lifecycle tracking
-            previous_count = None
-            first_seen = datetime.now(timezone.utc)
-            if theme in existing_narratives:
-                previous_count = existing_narratives[theme].get("article_count")
-                first_seen = existing_narratives[theme].get("first_seen", first_seen)
-            
-            # Determine lifecycle stage
-            lifecycle = determine_lifecycle_stage(article_count, mention_velocity, previous_count)
-            
-            # Build narrative document
-            narrative = {
-                "theme": theme,
-                "title": narrative_content["title"],
-                "summary": narrative_content["summary"],
-                "entities": entities[:10],  # Limit to top 10 entities
-                "article_ids": [str(a["_id"]) for a in articles],
-                "first_seen": first_seen,
-                "last_updated": datetime.now(timezone.utc),
-                "article_count": article_count,
-                "mention_velocity": round(mention_velocity, 2),
-                "lifecycle": lifecycle
-            }
-            
-            narratives.append(narrative)
-            logger.info(f"Created narrative for theme '{theme}': {article_count} articles, lifecycle={lifecycle}")
-            
-            # Save narrative to database
-            try:
-                narrative_id = await upsert_narrative(
-                    theme=narrative["theme"],
-                    title=narrative["title"],
-                    summary=narrative["summary"],
-                    entities=narrative["entities"],
-                    article_ids=narrative["article_ids"],
-                    article_count=narrative["article_count"],
-                    mention_velocity=narrative["mention_velocity"],
-                    lifecycle=narrative["lifecycle"],
-                    first_seen=narrative["first_seen"]
-                )
-                logger.info(f"Saved narrative {narrative_id} to database")
-            except Exception as e:
-                logger.exception(f"Failed to save narrative for theme '{theme}': {e}")
+            for i, articles in enumerate(clusters):
+                logger.info(f"Processing narrative cluster {i+1}/{len(clusters)} with {len(articles)} articles")
+                
+                # Extract entities from these articles
+                entities = await extract_entities_from_articles(articles)
+                
+                # Generate narrative summary from cluster
+                narrative_content = await generate_narrative_from_cluster(articles)
+                
+                if not narrative_content:
+                    logger.warning(f"Failed to generate narrative for cluster {i+1}")
+                    continue
+                
+                # Calculate mention velocity (articles per day)
+                article_count = len(articles)
+                time_span_days = hours / 24.0
+                mention_velocity = article_count / time_span_days if time_span_days > 0 else 0
+                
+                # Use narrative title as theme identifier
+                theme = narrative_content["title"][:50]  # Truncate for theme key
+                
+                # Get previous count for lifecycle tracking
+                previous_count = None
+                first_seen = datetime.now(timezone.utc)
+                if theme in existing_narratives:
+                    previous_count = existing_narratives[theme].get("article_count")
+                    first_seen = existing_narratives[theme].get("first_seen", first_seen)
+                
+                # Determine lifecycle stage
+                lifecycle = determine_lifecycle_stage(article_count, mention_velocity, previous_count)
+                
+                # Collect actors and tensions from cluster
+                all_actors = set()
+                all_tensions = set()
+                for article in articles:
+                    all_actors.update(article.get("actors", []))
+                    all_tensions.update(article.get("tensions", []))
+                
+                # Build narrative document
+                narrative = {
+                    "theme": theme,
+                    "title": narrative_content["title"],
+                    "summary": narrative_content["summary"],
+                    "entities": entities[:10],  # Limit to top 10 entities
+                    "actors": list(all_actors)[:10],  # NEW: Key actors in narrative
+                    "tensions": list(all_tensions)[:5],  # NEW: Key tensions
+                    "article_ids": [str(a["_id"]) for a in articles],
+                    "first_seen": first_seen,
+                    "last_updated": datetime.now(timezone.utc),
+                    "article_count": article_count,
+                    "mention_velocity": round(mention_velocity, 2),
+                    "lifecycle": lifecycle
+                }
+                
+                narratives.append(narrative)
+                logger.info(f"Created narrative: '{narrative['title']}' ({article_count} articles, lifecycle={lifecycle})")
+                
+                # Save narrative to database
+                try:
+                    narrative_id = await upsert_narrative(
+                        theme=narrative["theme"],
+                        title=narrative["title"],
+                        summary=narrative["summary"],
+                        entities=narrative["entities"],
+                        article_ids=narrative["article_ids"],
+                        article_count=narrative["article_count"],
+                        mention_velocity=narrative["mention_velocity"],
+                        lifecycle=narrative["lifecycle"],
+                        first_seen=narrative["first_seen"]
+                    )
+                    logger.info(f"Saved narrative {narrative_id} to database")
+                except Exception as e:
+                    logger.exception(f"Failed to save narrative '{theme}': {e}")
         
-        logger.info(f"Generated {len(narratives)} theme-based narratives")
+        else:
+            # LEGACY: Use theme-based clustering
+            logger.info("Using legacy theme-based clustering")
+            
+            for theme in THEME_CATEGORIES:
+                # Get articles for this theme
+                articles = await get_articles_by_theme(theme, hours=hours, min_articles=min_articles)
+                
+                if not articles:
+                    continue
+                
+                logger.info(f"Found {len(articles)} articles for theme '{theme}'")
+                
+                # Extract entities from these articles
+                entities = await extract_entities_from_articles(articles)
+                
+                # Generate narrative summary
+                narrative_content = await generate_narrative_from_theme(theme, articles)
+                
+                if not narrative_content:
+                    logger.warning(f"Failed to generate narrative for theme '{theme}'")
+                    continue
+                
+                # Calculate mention velocity (articles per day)
+                article_count = len(articles)
+                time_span_days = hours / 24.0
+                mention_velocity = article_count / time_span_days if time_span_days > 0 else 0
+                
+                # Get previous count for lifecycle tracking
+                previous_count = None
+                first_seen = datetime.now(timezone.utc)
+                if theme in existing_narratives:
+                    previous_count = existing_narratives[theme].get("article_count")
+                    first_seen = existing_narratives[theme].get("first_seen", first_seen)
+                
+                # Determine lifecycle stage
+                lifecycle = determine_lifecycle_stage(article_count, mention_velocity, previous_count)
+                
+                # Build narrative document
+                narrative = {
+                    "theme": theme,
+                    "title": narrative_content["title"],
+                    "summary": narrative_content["summary"],
+                    "entities": entities[:10],  # Limit to top 10 entities
+                    "article_ids": [str(a["_id"]) for a in articles],
+                    "first_seen": first_seen,
+                    "last_updated": datetime.now(timezone.utc),
+                    "article_count": article_count,
+                    "mention_velocity": round(mention_velocity, 2),
+                    "lifecycle": lifecycle
+                }
+                
+                narratives.append(narrative)
+                logger.info(f"Created narrative for theme '{theme}': {article_count} articles, lifecycle={lifecycle}")
+                
+                # Save narrative to database
+                try:
+                    narrative_id = await upsert_narrative(
+                        theme=narrative["theme"],
+                        title=narrative["title"],
+                        summary=narrative["summary"],
+                        entities=narrative["entities"],
+                        article_ids=narrative["article_ids"],
+                        article_count=narrative["article_count"],
+                        mention_velocity=narrative["mention_velocity"],
+                        lifecycle=narrative["lifecycle"],
+                        first_seen=narrative["first_seen"]
+                    )
+                    logger.info(f"Saved narrative {narrative_id} to database")
+                except Exception as e:
+                    logger.exception(f"Failed to save narrative for theme '{theme}': {e}")
+        
+        logger.info(f"Generated {len(narratives)} narratives")
         return narratives
     
     except Exception as e:
