@@ -40,7 +40,7 @@ async def test_narrative_detection():
         logger.info("Running theme-based narrative detection...")
         logger.info("=" * 80)
         
-        narratives = await detect_narratives(hours=48, min_articles=3)
+        narratives = await detect_narratives(hours=48, min_articles=2)
         
         logger.info("=" * 80)
         logger.info(f"RESULTS: Generated {len(narratives)} narratives")

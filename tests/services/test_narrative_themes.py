@@ -175,7 +175,7 @@ async def test_get_articles_by_theme_success():
         mock_collection.find.return_value = mock_cursor
         
         # Get articles
-        articles = await get_articles_by_theme(theme="regulatory", hours=48, min_articles=3)
+        articles = await get_articles_by_theme(theme="regulatory", hours=48, min_articles=2)
         
         # Assertions
         assert articles is not None
@@ -197,10 +197,9 @@ async def test_get_articles_by_theme_below_threshold():
             return mock_db
         mock_mongo.get_async_database = get_db
         
-        # Mock only 2 articles (below threshold of 3)
+        # Mock only 1 article (below threshold of 2)
         sample_articles = [
             {"_id": "1", "title": "Article 1", "themes": ["regulatory"]},
-            {"_id": "2", "title": "Article 2", "themes": ["regulatory"]},
         ]
         
         # Mock cursor
@@ -226,7 +225,7 @@ async def test_get_articles_by_theme_below_threshold():
         mock_collection.find.return_value = mock_cursor
         
         # Get articles
-        articles = await get_articles_by_theme(theme="regulatory", hours=48, min_articles=3)
+        articles = await get_articles_by_theme(theme="regulatory", hours=48, min_articles=2)
         
         # Should return None when below threshold
         assert articles is None

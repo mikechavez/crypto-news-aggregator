@@ -188,7 +188,7 @@ async def backfill_themes_for_recent_articles(hours: int = 48, limit: int = 100)
 async def get_articles_by_theme(
     theme: str,
     hours: int = 48,
-    min_articles: int = 3
+    min_articles: int = 2
 ) -> Optional[List[Dict[str, Any]]]:
     """
     Get articles that share a specific theme within a time window.

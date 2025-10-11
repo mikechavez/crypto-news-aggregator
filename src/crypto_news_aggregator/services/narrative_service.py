@@ -92,7 +92,7 @@ async def extract_entities_from_articles(articles: List[Dict[str, Any]]) -> List
 
 async def detect_narratives(
     hours: int = 48,
-    min_articles: int = 3
+    min_articles: int = 2
 ) -> List[Dict[str, Any]]:
     """
     Detect active narratives using theme-based clustering.
@@ -102,7 +102,7 @@ async def detect_narratives(
     
     Args:
         hours: Look back this many hours for articles (default 48)
-        min_articles: Minimum articles per theme to create narrative (default 3)
+        min_articles: Minimum articles per theme to create narrative (default 2)
     
     Returns:
         List of narrative dicts with full structure including lifecycle tracking
