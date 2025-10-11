@@ -7,6 +7,7 @@ Tests theme-based narrative detection and lifecycle tracking.
 import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
+from bson import ObjectId
 
 from crypto_news_aggregator.services.narrative_service import (
     determine_lifecycle_stage,
@@ -94,7 +95,13 @@ async def test_extract_entities_from_articles(sample_articles):
         
         # Mock entity mentions
         def mock_find(query):
-            article_id = query.get("article_id")
+            # Handle $or query format (new code) or direct article_id (old code)
+            article_ids = []
+            if "$or" in query:
+                for condition in query["$or"]:
+                    article_ids.append(condition.get("article_id"))
+            else:
+                article_ids.append(query.get("article_id"))
             
             class MockCursor:
                 def __init__(self, data):
@@ -111,12 +118,13 @@ async def test_extract_entities_from_articles(sample_articles):
                     self.index += 1
                     return result
             
-            if article_id == "article1":
+            # Return entities based on article_id
+            if "article1" in article_ids:
                 return MockCursor([
                     {"entity": "SEC"},
                     {"entity": "Coinbase"}
                 ])
-            elif article_id == "article2":
+            elif "article2" in article_ids:
                 return MockCursor([
                     {"entity": "Binance"},
                     {"entity": "SEC"}
@@ -213,3 +221,74 @@ async def test_detect_narratives_integration(sample_articles):
             assert "mention_velocity" in narrative
             assert "lifecycle" in narrative
             assert narrative["lifecycle"] in ["emerging", "hot", "mature", "declining"]
+
+
+@pytest.mark.asyncio
+async def test_extract_entities_handles_mixed_article_id_formats():
+    """
+    Test that extract_entities_from_articles handles both ObjectId and string article_ids.
+    
+    This is a regression test for the bug where entity_mentions.article_id had mixed formats
+    (some ObjectId, some string), causing entities to not be linked to narratives.
+    """
+    # Create sample articles with ObjectId _id
+    articles = [
+        {"_id": ObjectId("507f1f77bcf86cd799439011"), "title": "Test Article 1"},
+        {"_id": ObjectId("507f1f77bcf86cd799439012"), "title": "Test Article 2"},
+    ]
+    
+    # Mock entity mentions with MIXED formats (ObjectId and string)
+    mock_entity_mentions = [
+        # Article 1: entity_id stored as ObjectId
+        {"entity": "Bitcoin", "article_id": ObjectId("507f1f77bcf86cd799439011")},
+        {"entity": "Ethereum", "article_id": ObjectId("507f1f77bcf86cd799439011")},
+        # Article 2: article_id stored as STRING (legacy format)
+        {"entity": "Ripple", "article_id": "507f1f77bcf86cd799439012"},
+        {"entity": "SEC", "article_id": "507f1f77bcf86cd799439012"},
+    ]
+    
+    # Mock the database
+    with patch("crypto_news_aggregator.services.narrative_service.mongo_manager") as mock_mongo:
+        mock_db = MagicMock()
+        mock_collection = MagicMock()
+        
+        # Mock the find() method to return appropriate entities based on query
+        def mock_find(query):
+            mock_cursor = AsyncMock()
+            
+            # Simulate MongoDB $or query behavior
+            if "$or" in query:
+                or_conditions = query["$or"]
+                matching_mentions = []
+                
+                for condition in or_conditions:
+                    article_id_query = condition.get("article_id")
+                    for mention in mock_entity_mentions:
+                        if mention["article_id"] == article_id_query:
+                            matching_mentions.append(mention)
+                
+                # Create async iterator
+                async def async_iter():
+                    for mention in matching_mentions:
+                        yield mention
+                
+                mock_cursor.__aiter__ = lambda self: async_iter()
+            else:
+                # Single condition query (shouldn't happen with our fix, but handle it)
+                mock_cursor.__aiter__ = lambda self: async_iter()
+            
+            return mock_cursor
+        
+        mock_collection.find = mock_find
+        mock_db.entity_mentions = mock_collection
+        mock_mongo.get_async_database = AsyncMock(return_value=mock_db)
+        
+        # Test entity extraction
+        entities = await extract_entities_from_articles(articles)
+        
+        # Verify all entities were found (both ObjectId and string formats)
+        assert len(entities) == 4
+        assert "Bitcoin" in entities
+        assert "Ethereum" in entities
+        assert "Ripple" in entities
+        assert "SEC" in entities
