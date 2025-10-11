@@ -72,16 +72,24 @@ async def extract_entities_from_articles(articles: List[Dict[str, Any]]) -> List
     Returns:
         List of unique entity names
     """
+    from bson import ObjectId
+    
     db = await mongo_manager.get_async_database()
     entity_mentions_collection = db.entity_mentions
     
     entities = set()
     
     for article in articles:
-        article_id = str(article.get("_id"))
+        article_id = article.get("_id")
         
-        # Find all entity mentions for this article
-        cursor = entity_mentions_collection.find({"article_id": article_id})
+        # entity_mentions.article_id has mixed formats (ObjectId and string)
+        # Query for both to handle legacy data
+        cursor = entity_mentions_collection.find({
+            "$or": [
+                {"article_id": article_id},        # ObjectId format
+                {"article_id": str(article_id)}    # String format
+            ]
+        })
         async for mention in cursor:
             entity = mention.get("entity")
             if entity:
