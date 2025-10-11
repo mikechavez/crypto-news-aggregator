@@ -151,7 +151,7 @@ async def test_detect_narratives_no_articles():
         mock_backfill.return_value = 0
         mock_get_articles.return_value = None  # No articles for any theme
         
-        narratives = await detect_narratives(hours=48, min_articles=3)
+        narratives = await detect_narratives(hours=48, min_articles=2)
         
         assert narratives == []
 
