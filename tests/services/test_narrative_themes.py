@@ -10,9 +10,14 @@ from unittest.mock import AsyncMock, MagicMock, patch, ANY
 
 from crypto_news_aggregator.services.narrative_themes import (
     extract_themes_from_article,
+    discover_narrative_from_article,
+    map_narrative_to_themes,
     backfill_themes_for_recent_articles,
+    backfill_narratives_for_recent_articles,
     get_articles_by_theme,
+    get_articles_by_narrative_similarity,
     generate_narrative_from_theme,
+    generate_narrative_from_cluster,
     THEME_CATEGORIES
 )
 
@@ -40,12 +45,23 @@ def mock_llm_response_narrative():
 
 
 @pytest.mark.asyncio
-async def test_extract_themes_from_article_success(sample_article_data, mock_llm_response_themes):
-    """Test successful theme extraction from article."""
+async def test_extract_themes_from_article_success(sample_article_data):
+    """Test successful theme extraction from article (now uses two-layer approach)."""
     with patch("crypto_news_aggregator.services.narrative_themes.get_llm_provider") as mock_llm:
-        # Mock LLM provider
+        # Mock LLM provider for both layers
         mock_provider = MagicMock()
-        mock_provider._get_completion.return_value = mock_llm_response_themes
+        # First call: Layer 1 (narrative discovery)
+        # Second call: Layer 2 (theme mapping) - must be a dict with "themes" key
+        mock_provider._get_completion.side_effect = [
+            '''{
+                "actors": ["SEC"],
+                "actions": ["Announced regulations"],
+                "tensions": ["Regulation vs Innovation"],
+                "implications": "New frameworks for exchanges",
+                "narrative_summary": "SEC announces new crypto regulations"
+            }''',
+            '{"themes": ["regulatory", "stablecoin"], "suggested_new_theme": null}'
+        ]
         mock_llm.return_value = mock_provider
         
         # Extract themes
@@ -58,16 +74,25 @@ async def test_extract_themes_from_article_success(sample_article_data, mock_llm
         # Assertions
         assert themes == ["regulatory", "stablecoin"]
         assert all(theme in THEME_CATEGORIES for theme in themes)
-        mock_provider._get_completion.assert_called_once()
+        assert mock_provider._get_completion.call_count == 2  # Two layers
 
 
 @pytest.mark.asyncio
 async def test_extract_themes_filters_invalid_themes(sample_article_data):
-    """Test that invalid themes are filtered out."""
+    """Test that invalid themes are filtered out (two-layer approach)."""
     with patch("crypto_news_aggregator.services.narrative_themes.get_llm_provider") as mock_llm:
-        # Mock LLM provider returning invalid themes
+        # Mock LLM provider for both layers
         mock_provider = MagicMock()
-        mock_provider._get_completion.return_value = '["regulatory", "invalid_theme", "stablecoin"]'
+        mock_provider._get_completion.side_effect = [
+            '''{
+                "actors": ["SEC"],
+                "actions": ["Announced regulations"],
+                "tensions": ["Regulation vs Innovation"],
+                "implications": "New frameworks",
+                "narrative_summary": "SEC announces regulations"
+            }''',
+            '{"themes": ["regulatory", "invalid_theme", "stablecoin"], "suggested_new_theme": null}'
+        ]
         mock_llm.return_value = mock_provider
         
         themes = await extract_themes_from_article(
@@ -311,3 +336,338 @@ def test_theme_categories_defined():
     assert "defi_adoption" in THEME_CATEGORIES
     assert "institutional_investment" in THEME_CATEGORIES
     assert "stablecoin" in THEME_CATEGORIES
+
+
+# ============================================================================
+# NEW TESTS FOR NARRATIVE DISCOVERY SYSTEM (Two-Layer Approach)
+# ============================================================================
+
+@pytest.fixture
+def mock_llm_response_narrative_discovery():
+    """Mock LLM response for Layer 1 narrative discovery."""
+    return '''{
+        "actors": ["SEC", "Binance", "Coinbase"],
+        "actions": ["SEC filed charges against exchanges", "Alleged unregistered securities operations"],
+        "tensions": ["Regulation vs. Innovation", "Centralization vs. Decentralization"],
+        "implications": "Enforcement actions mark escalation in regulatory pressure on crypto industry",
+        "narrative_summary": "Regulators are tightening control over centralized cryptocurrency exchanges as the SEC charges major platforms with securities violations."
+    }'''
+
+
+@pytest.fixture
+def mock_llm_response_theme_mapping():
+    """Mock LLM response for Layer 2 theme mapping."""
+    return '''{
+        "themes": ["regulatory", "security"],
+        "suggested_new_theme": null
+    }'''
+
+
+@pytest.mark.asyncio
+async def test_discover_narrative_from_article_success(sample_article_data, mock_llm_response_narrative_discovery):
+    """Test Layer 1: Successful narrative discovery from article."""
+    with patch("crypto_news_aggregator.services.narrative_themes.get_llm_provider") as mock_llm:
+        # Mock LLM provider
+        mock_provider = MagicMock()
+        mock_provider._get_completion.return_value = mock_llm_response_narrative_discovery
+        mock_llm.return_value = mock_provider
+        
+        # Discover narrative
+        narrative_data = await discover_narrative_from_article(
+            article_id=sample_article_data["article_id"],
+            title=sample_article_data["title"],
+            summary=sample_article_data["summary"]
+        )
+        
+        # Assertions
+        assert narrative_data is not None
+        assert "actors" in narrative_data
+        assert "actions" in narrative_data
+        assert "tensions" in narrative_data
+        assert "implications" in narrative_data
+        assert "narrative_summary" in narrative_data
+        
+        # Verify content
+        assert "SEC" in narrative_data["actors"]
+        assert "Binance" in narrative_data["actors"]
+        assert len(narrative_data["actions"]) > 0
+        assert len(narrative_data["tensions"]) > 0
+        assert len(narrative_data["narrative_summary"]) > 0
+        
+        mock_provider._get_completion.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_discover_narrative_empty_content():
+    """Test Layer 1: Narrative discovery with empty content."""
+    narrative_data = await discover_narrative_from_article(
+        article_id="test123",
+        title="",
+        summary=""
+    )
+    
+    assert narrative_data is None
+
+
+@pytest.mark.asyncio
+async def test_discover_narrative_missing_fields(sample_article_data):
+    """Test Layer 1: Narrative discovery with incomplete LLM response."""
+    with patch("crypto_news_aggregator.services.narrative_themes.get_llm_provider") as mock_llm:
+        # Mock LLM provider returning incomplete data
+        mock_provider = MagicMock()
+        mock_provider._get_completion.return_value = '{"actors": ["SEC"], "actions": []}'
+        mock_llm.return_value = mock_provider
+        
+        narrative_data = await discover_narrative_from_article(
+            article_id=sample_article_data["article_id"],
+            title=sample_article_data["title"],
+            summary=sample_article_data["summary"]
+        )
+        
+        # Should return None when required fields are missing
+        assert narrative_data is None
+
+
+@pytest.mark.asyncio
+async def test_discover_narrative_llm_error(sample_article_data):
+    """Test Layer 1: Narrative discovery when LLM fails."""
+    with patch("crypto_news_aggregator.services.narrative_themes.get_llm_provider") as mock_llm:
+        # Mock LLM provider raising exception
+        mock_provider = MagicMock()
+        mock_provider._get_completion.side_effect = Exception("LLM API error")
+        mock_llm.return_value = mock_provider
+        
+        narrative_data = await discover_narrative_from_article(
+            article_id=sample_article_data["article_id"],
+            title=sample_article_data["title"],
+            summary=sample_article_data["summary"]
+        )
+        
+        # Should return None on error
+        assert narrative_data is None
+
+
+@pytest.mark.asyncio
+async def test_map_narrative_to_themes_success(mock_llm_response_theme_mapping):
+    """Test Layer 2: Successful theme mapping from narrative."""
+    with patch("crypto_news_aggregator.services.narrative_themes.get_llm_provider") as mock_llm:
+        # Mock LLM provider
+        mock_provider = MagicMock()
+        mock_provider._get_completion.return_value = mock_llm_response_theme_mapping
+        mock_llm.return_value = mock_provider
+        
+        narrative_summary = "Regulators are tightening control over centralized exchanges"
+        
+        # Map to themes
+        mapping = await map_narrative_to_themes(narrative_summary, "test123")
+        
+        # Assertions
+        assert mapping is not None
+        assert "themes" in mapping
+        assert "suggested_new_theme" in mapping
+        assert "regulatory" in mapping["themes"]
+        assert all(theme in THEME_CATEGORIES or theme == "emerging" for theme in mapping["themes"])
+        
+        mock_provider._get_completion.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_map_narrative_to_themes_emerging():
+    """Test Layer 2: Theme mapping suggests new category for emerging narrative."""
+    with patch("crypto_news_aggregator.services.narrative_themes.get_llm_provider") as mock_llm:
+        # Mock LLM provider suggesting new theme
+        mock_provider = MagicMock()
+        mock_provider._get_completion.return_value = '''{
+            "themes": ["emerging"],
+            "suggested_new_theme": "ai_agents"
+        }'''
+        mock_llm.return_value = mock_provider
+        
+        narrative_summary = "AI agents are now trading autonomously on DEXs"
+        
+        # Map to themes
+        mapping = await map_narrative_to_themes(narrative_summary, "test123")
+        
+        # Assertions
+        assert mapping["themes"] == ["emerging"]
+        assert mapping["suggested_new_theme"] == "ai_agents"
+
+
+@pytest.mark.asyncio
+async def test_map_narrative_to_themes_empty_summary():
+    """Test Layer 2: Theme mapping with empty narrative summary."""
+    mapping = await map_narrative_to_themes("", "test123")
+    
+    # Should return emerging theme as fallback
+    assert mapping["themes"] == ["emerging"]
+    assert mapping["suggested_new_theme"] is None
+
+
+@pytest.mark.asyncio
+async def test_map_narrative_filters_invalid_themes():
+    """Test Layer 2: Theme mapping filters out invalid themes."""
+    with patch("crypto_news_aggregator.services.narrative_themes.get_llm_provider") as mock_llm:
+        # Mock LLM provider returning invalid themes
+        mock_provider = MagicMock()
+        mock_provider._get_completion.return_value = '''{
+            "themes": ["regulatory", "invalid_theme", "stablecoin"],
+            "suggested_new_theme": null
+        }'''
+        mock_llm.return_value = mock_provider
+        
+        mapping = await map_narrative_to_themes("Some narrative", "test123")
+        
+        # Should filter out invalid_theme
+        assert "regulatory" in mapping["themes"]
+        assert "stablecoin" in mapping["themes"]
+        assert "invalid_theme" not in mapping["themes"]
+
+
+@pytest.mark.asyncio
+async def test_get_articles_by_narrative_similarity():
+    """Test clustering articles by shared actors and tensions."""
+    with patch("crypto_news_aggregator.services.narrative_themes.mongo_manager") as mock_mongo:
+        # Mock database
+        mock_db = MagicMock()
+        mock_collection = MagicMock()
+        mock_db.articles = mock_collection
+        
+        async def get_db():
+            return mock_db
+        mock_mongo.get_async_database = get_db
+        
+        # Mock articles with narrative data
+        sample_articles = [
+            {
+                "_id": "1",
+                "title": "SEC sues Binance",
+                "narrative_summary": "SEC charges Binance",
+                "actors": ["SEC", "Binance"],
+                "tensions": ["Regulation vs Innovation"]
+            },
+            {
+                "_id": "2",
+                "title": "SEC sues Coinbase",
+                "narrative_summary": "SEC charges Coinbase",
+                "actors": ["SEC", "Coinbase"],
+                "tensions": ["Regulation vs Innovation"]
+            },
+            {
+                "_id": "3",
+                "title": "Arbitrum gains users",
+                "narrative_summary": "L2 competition heats up",
+                "actors": ["Arbitrum", "Optimism"],
+                "tensions": ["Scaling competition"]
+            },
+        ]
+        
+        # Mock cursor
+        class MockCursor:
+            def __init__(self, data):
+                self.data = data
+                self.index = 0
+            
+            def __aiter__(self):
+                return self
+            
+            async def __anext__(self):
+                if self.index >= len(self.data):
+                    raise StopAsyncIteration
+                result = self.data[self.index]
+                self.index += 1
+                return result
+            
+            def sort(self, *args, **kwargs):
+                return self
+        
+        mock_cursor = MockCursor(sample_articles)
+        mock_collection.find.return_value = mock_cursor
+        
+        # Get clusters
+        clusters = await get_articles_by_narrative_similarity(hours=48, min_articles=2)
+        
+        # Assertions
+        assert len(clusters) >= 1
+        # First cluster should have SEC-related articles (shared tension)
+        assert any(len(cluster) == 2 for cluster in clusters)
+
+
+@pytest.mark.asyncio
+async def test_generate_narrative_from_cluster_success():
+    """Test generating rich narrative summary from article cluster."""
+    with patch("crypto_news_aggregator.services.narrative_themes.get_llm_provider") as mock_llm:
+        # Mock LLM provider
+        mock_provider = MagicMock()
+        mock_provider._get_completion.return_value = '''{
+            "title": "SEC vs Major Exchanges: Enforcement intensifies",
+            "summary": "The SEC has filed charges against Binance and Coinbase, marking a significant escalation in regulatory enforcement."
+        }'''
+        mock_llm.return_value = mock_provider
+        
+        # Sample cluster with narrative data
+        articles = [
+            {
+                "_id": "1",
+                "narrative_summary": "SEC charges Binance with securities violations",
+                "actors": ["SEC", "Binance"],
+                "tensions": ["Regulation vs Innovation"]
+            },
+            {
+                "_id": "2",
+                "narrative_summary": "SEC files lawsuit against Coinbase",
+                "actors": ["SEC", "Coinbase"],
+                "tensions": ["Regulation vs Innovation"]
+            },
+        ]
+        
+        # Generate narrative
+        narrative = await generate_narrative_from_cluster(articles)
+        
+        # Assertions
+        assert narrative is not None
+        assert "title" in narrative
+        assert "summary" in narrative
+        assert "SEC" in narrative["title"]
+        assert len(narrative["title"]) <= 80  # Max length check
+        assert len(narrative["summary"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_generate_narrative_from_cluster_empty():
+    """Test narrative generation with empty cluster."""
+    narrative = await generate_narrative_from_cluster([])
+    
+    assert narrative is None
+
+
+@pytest.mark.asyncio
+async def test_extract_themes_uses_two_layer_approach(sample_article_data):
+    """Test that extract_themes_from_article now uses two-layer approach."""
+    with patch("crypto_news_aggregator.services.narrative_themes.get_llm_provider") as mock_llm:
+        # Mock LLM provider for both layers
+        mock_provider = MagicMock()
+        
+        # First call: Layer 1 (narrative discovery)
+        # Second call: Layer 2 (theme mapping)
+        mock_provider._get_completion.side_effect = [
+            '''{
+                "actors": ["SEC", "Binance"],
+                "actions": ["Filed charges"],
+                "tensions": ["Regulation vs Innovation"],
+                "implications": "Escalation in enforcement",
+                "narrative_summary": "SEC tightens control over exchanges"
+            }''',
+            '{"themes": ["regulatory"], "suggested_new_theme": null}'
+        ]
+        mock_llm.return_value = mock_provider
+        
+        # Extract themes (should use two-layer internally)
+        themes = await extract_themes_from_article(
+            article_id=sample_article_data["article_id"],
+            title=sample_article_data["title"],
+            summary=sample_article_data["summary"]
+        )
+        
+        # Assertions
+        assert themes == ["regulatory"]
+        assert mock_provider._get_completion.call_count == 2  # Called twice (Layer 1 + Layer 2)
