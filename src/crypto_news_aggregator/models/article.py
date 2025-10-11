@@ -71,18 +71,6 @@ class ArticleBase(BaseModel):
     sentiment_label: Optional[str] = None
     raw_data: Dict[str, Any]  # To store the raw article payload
     published_at: datetime  # Timestamp from the source
-    
-    # Narrative discovery fields (Layer 1)
-    actors: Optional[List[str]] = Field(None, description="Key actors mentioned (people, orgs, protocols, assets)")
-    actions: Optional[List[str]] = Field(None, description="Main events or actions that occurred")
-    tensions: Optional[List[str]] = Field(None, description="Forces or tensions at play")
-    implications: Optional[str] = Field(None, description="Why this matters, what's shifting")
-    narrative_summary: Optional[str] = Field(None, description="Natural 2-3 sentence narrative description")
-    
-    # Theme mapping fields (Layer 2)
-    mapped_themes: Optional[List[str]] = Field(None, description="Themes mapped from narrative")
-    suggested_new_theme: Optional[str] = Field(None, description="Suggested new theme if existing don't fit")
-    narrative_extracted_at: Optional[datetime] = Field(None, description="When narrative was extracted")
 
 
 class ArticleCreate(ArticleBase):
