@@ -2,7 +2,16 @@
 
 ## Summary
 
-Successfully replaced the rigid 12-theme classification system with a two-layer narrative discovery approach that captures nuanced narratives naturally.
+Successfully replaced the rigid 12-theme classification system with a two-layer narrative discovery approach that captures nuanced narratives naturally. Now enhanced with salience-aware clustering for intelligent narrative grouping.
+
+## Latest Update: Salience-Aware Clustering (2025-01-11)
+
+✅ **TASK 1 COMPLETE:** Implemented `cluster_by_narrative_salience()` function
+- Location: `src/crypto_news_aggregator/services/narrative_themes.py`
+- Test coverage: 10/10 tests passing
+- Integration test: Successfully clusters real-world scenarios
+
+See `SALIENCE_CLUSTERING_IMPLEMENTATION.md` for detailed documentation.
 
 ## Problem Solved
 
