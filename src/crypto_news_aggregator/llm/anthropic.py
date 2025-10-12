@@ -33,7 +33,7 @@ class AnthropicProvider(LLMProvider):
         }
         payload = {
             "model": self.model_name,
-            "max_tokens": 1024,
+            "max_tokens": 2048,  # Increased for narrative JSON responses
             "messages": [{"role": "user", "content": prompt}],
         }
         try:

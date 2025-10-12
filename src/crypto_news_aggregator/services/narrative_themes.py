@@ -24,8 +24,9 @@ def clean_json_response(response: str) -> str:
     Claude often includes newlines and control characters in JSON string values,
     which breaks json.loads(). This function:
     1. Strips markdown code blocks
-    2. Replaces control characters (newlines, carriage returns, tabs) with spaces
-    3. Normalizes multiple spaces to single space
+    2. Extracts JSON object from text (handles "Here is..." prefixes)
+    3. Replaces control characters (newlines, carriage returns, tabs) with spaces
+    4. Normalizes multiple spaces to single space
     
     Args:
         response: Raw LLM response string
@@ -42,6 +43,14 @@ def clean_json_response(response: str) -> str:
     if response_clean.endswith("```"):
         response_clean = response_clean[:-3]
     response_clean = response_clean.strip()
+    
+    # Extract JSON object if there's text before it
+    # Look for the first { and last } to extract just the JSON
+    first_brace = response_clean.find('{')
+    last_brace = response_clean.rfind('}')
+    
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        response_clean = response_clean[first_brace:last_brace + 1]
     
     # Replace control characters with spaces
     # This handles newlines (\n), carriage returns (\r), and tabs (\t)
@@ -275,7 +284,9 @@ Then summarize in 2-3 sentences what broader narrative this article contributes 
 Article Title: {title}
 Article Summary: {summary[:500]}
 
-Output valid JSON:
+**CRITICAL**: Respond with ONLY valid JSON. Do not include any explanatory text, markdown formatting, or commentary. Start your response with {{ and end with }}.
+
+Required JSON format:
 {{
   "actors": ["list of actors with salience >= 2"],
   "actor_salience": {{
@@ -289,8 +300,7 @@ Output valid JSON:
   "narrative_summary": "2-3 sentence description"
 }}
 
-Example:
-Article about "SEC sues Binance for regulatory violations"
+Example for "SEC sues Binance for regulatory violations":
 {{
   "actors": ["SEC", "Binance", "Coinbase"],
   "actor_salience": {{
@@ -305,7 +315,7 @@ Article about "SEC sues Binance for regulatory violations"
   "narrative_summary": "Regulators are intensifying enforcement against major exchanges as the SEC targets Binance for alleged securities violations, with implications for the broader industry."
 }}
 
-JSON output:"""
+Your JSON response:"""
     
     try:
         # Call LLM
@@ -322,7 +332,9 @@ JSON output:"""
         try:
             narrative_data = json.loads(response_clean)
         except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse JSON for article {article_id}: {e}. Response: {response_clean[:200]}")
+            logger.warning(f"Failed to parse JSON for article {article_id}: {e}")
+            logger.debug(f"Raw response length: {len(response)} chars")
+            logger.debug(f"Cleaned response: {response_clean[:500]}")
             return None
         
         # Validate required fields
@@ -442,10 +454,15 @@ async def cluster_by_narrative_salience(
     
     for idx, article in enumerate(articles, 1):
         nucleus = article.get('nucleus_entity')
-        actors = article.get('actors', [])
-        actor_salience = article.get('actor_salience', {})
-        tensions = article.get('tensions', [])
+        actors = article.get('actors') or []
+        actor_salience = article.get('actor_salience') or {}
+        tensions = article.get('tensions') or []
         article_title = article.get('title', 'Unknown')[:50]
+        
+        # Skip articles with missing critical data
+        if not nucleus or not actors:
+            logger.warning(f"Skipping article {idx} - missing nucleus or actors")
+            continue
         
         # Get high-salience actors only (salience >= 4)
         # These are the key players, not background mentions
@@ -470,11 +487,12 @@ async def cluster_by_narrative_salience(
             cluster_tensions = set()
             
             for cluster_article in cluster:
-                cluster_actors.update(cluster_article.get('actors', []))
-                cluster_tensions.update(cluster_article.get('tensions', []))
-                c_salience = cluster_article.get('actor_salience', {})
+                cluster_actors.update(cluster_article.get('actors') or [])
+                cluster_tensions.update(cluster_article.get('tensions') or [])
+                c_salience = cluster_article.get('actor_salience') or {}
+                c_actors = cluster_article.get('actors') or []
                 cluster_core_actors.update(
-                    a for a in cluster_article.get('actors', [])
+                    a for a in c_actors
                     if c_salience.get(a, 0) >= 4
                 )
             
@@ -548,12 +566,16 @@ async def backfill_narratives_for_recent_articles(hours: int = 48, limit: int = 
     from datetime import timedelta
     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
     
-    # Find recent articles without narrative data
+    # Find recent articles without narrative data or with incomplete data
     cursor = articles_collection.find({
         "published_at": {"$gte": cutoff_time},
         "$or": [
             {"narrative_summary": {"$exists": False}},
-            {"actors": {"$exists": False}}
+            {"actors": {"$exists": False}},
+            {"nucleus_entity": {"$exists": False}},
+            {"actors": None},
+            {"nucleus_entity": None},
+            {"actors": []},
         ]
     }).limit(limit)
     
