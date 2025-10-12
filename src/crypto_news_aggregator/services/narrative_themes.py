@@ -5,6 +5,7 @@ This service uses Claude Sonnet to extract thematic categories from articles,
 enabling theme-based narrative clustering instead of entity co-occurrence.
 """
 
+import hashlib
 import json
 import logging
 import re
@@ -286,26 +287,53 @@ async def get_articles_by_theme(
 
 
 async def discover_narrative_from_article(
-    article_id: str,
-    title: str,
-    summary: str,
+    article: Dict,
     max_retries: int = 3
 ) -> Optional[Dict[str, Any]]:
     """
-    Layer 1: Discover narrative elements from an article using natural language extraction.
+    Extract narrative elements from article with caching.
     
-    Extracts actors, actions, tensions, implications, and narrative summary with salience scoring.
+    Uses content hash to skip re-processing unchanged articles.
     
     Args:
-        article_id: Article ID for logging
-        title: Article title
-        summary: Article summary/description
+        article: Article document dict with _id, title, description/text/content
         max_retries: Maximum number of retry attempts for validation failures
     
     Returns:
         Dict with narrative elements including actor_salience and nucleus_entity, or None if extraction fails
     """
     import asyncio
+    
+    article_id = str(article.get('_id', 'unknown'))
+    
+    # Generate content hash for caching
+    title = article.get('title', '')
+    summary = article.get('description', '') or article.get('text', '') or article.get('content', '')
+    content_for_hash = f"{title}:{summary}"
+    content_hash = hashlib.sha1(content_for_hash.encode()).hexdigest()
+    
+    # Check if we already have current narrative data
+    existing_hash = article.get('narrative_hash')
+    existing_summary = article.get('narrative_summary')
+    existing_actors = article.get('actors')
+    
+    # Skip if hash matches and we have valid data
+    if (existing_hash == content_hash and 
+        existing_summary and 
+        existing_actors):
+        logger.debug(
+            f"✓ Skipping article {article_id[:8]}... - "
+            f"narrative data already current (hash: {content_hash[:8]}...)"
+        )
+        return None  # Signal that no update needed
+    
+    if existing_hash and existing_hash != content_hash:
+        logger.info(
+            f"♻️  Article {article_id[:8]}... content changed - "
+            f"re-extracting narrative (old hash: {existing_hash[:8]}, new: {content_hash[:8]})"
+        )
+    else:
+        logger.info(f"🔄 Processing article {article_id[:8]}... (hash: {content_hash[:8]}...)")
     
     if not title and not summary:
         logger.warning(f"Article {article_id} has no title or summary for narrative discovery")
@@ -339,6 +367,38 @@ Given the following article, describe:
 5. The *implications* or *stakes* (why it matters)
 
 Then summarize in 2-3 sentences what broader narrative this article contributes to.
+
+**ENTITY NORMALIZATION GUIDELINES:**
+
+1. **Normalize entity names to canonical forms:**
+   - "U.S. Securities and Exchange Commission" → "SEC"
+   - "Securities and Exchange Commission" → "SEC"  
+   - "US SEC" → "SEC"
+   - "Ethereum Foundation" → "Ethereum"
+   - "Ethereum network" → "Ethereum"
+   - "Tether Holdings Limited" → "Tether"
+   - "Tether USDT" → "Tether"
+   - "Bitcoin Core developers" → "Bitcoin"
+   - "Bitcoin network" → "Bitcoin"
+   - "Binance.US" → "Binance" (unless US distinction is critical to the story)
+   - "Binance exchange" → "Binance"
+   - Always use the shortest, most recognizable form
+   - Use common abbreviations (SEC, ETF, DeFi) not full names
+   - For cryptocurrencies, use the name not ticker (Bitcoin not BTC, Ethereum not ETH)
+
+2. **Nucleus entity selection rules:**
+   - If multiple entities have salience 5, choose the one most directly responsible for the main action
+   - Prefer specific entities over generic categories ("Binance" not "crypto exchanges")
+   - Prefer actors over objects in regulatory stories ("SEC" not "lawsuit" or "regulation")
+   - Prefer companies/organizations over people ("Coinbase" not "Brian Armstrong" unless person is the focus)
+   - The nucleus should be the grammatical subject of the article's main action
+
+3. **Salience scoring consistency:**
+   - Reserve salience 5 for 1-2 entities maximum (the true protagonists)
+   - Use salience 4 for 2-4 key participants
+   - Use salience 3 for 3-6 secondary participants
+   - Avoid giving everything high salience - be selective
+   - Background mentions like "Bitcoin" or "crypto market" in passing should be excluded (salience 1)
 
 Article Title: {title}
 Article Summary: {summary[:500]}
@@ -397,6 +457,10 @@ Your JSON response:"""
                 
                 if is_valid:
                     logger.debug(f"✓ Validation passed for article {article_id}")
+                    
+                    # Add content hash to narrative data for caching
+                    narrative_data['narrative_hash'] = content_hash
+                    
                     return narrative_data
                 else:
                     logger.warning(f"✗ Validation failed for article {article_id}: {error}")
@@ -637,16 +701,21 @@ async def backfill_narratives_for_recent_articles(hours: int = 48, limit: int = 
     from datetime import timedelta
     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
     
-    # Find recent articles without narrative data or with incomplete data
+    # Find articles needing narrative extraction
+    # Only process if:
+    # 1. Missing narrative_summary, OR
+    # 2. Missing narrative_hash (old format), OR  
+    # 3. Missing actors or nucleus_entity (incomplete data)
     cursor = articles_collection.find({
         "published_at": {"$gte": cutoff_time},
         "$or": [
             {"narrative_summary": {"$exists": False}},
+            {"narrative_summary": None},
             {"actors": {"$exists": False}},
-            {"nucleus_entity": {"$exists": False}},
             {"actors": None},
+            {"nucleus_entity": {"$exists": False}},
             {"nucleus_entity": None},
-            {"actors": []},
+            {"narrative_hash": {"$exists": False}},  # Missing hash = needs processing
         ]
     }).limit(limit)
     
@@ -654,14 +723,12 @@ async def backfill_narratives_for_recent_articles(hours: int = 48, limit: int = 
     
     async for article in cursor:
         article_id = str(article.get("_id"))
-        title = article.get("title", "")
-        summary = article.get("description", "") or article.get("text", "") or article.get("content", "")
         
-        # Extract narrative elements
-        narrative_data = await discover_narrative_from_article(article_id, title, summary)
+        # Extract narrative elements (now with caching)
+        narrative_data = await discover_narrative_from_article(article)
         
         if narrative_data:
-            # Update article with narrative data
+            # Update article with narrative data (including hash)
             await articles_collection.update_one(
                 {"_id": article["_id"]},
                 {"$set": {
@@ -672,6 +739,7 @@ async def backfill_narratives_for_recent_articles(hours: int = 48, limit: int = 
                     "tensions": narrative_data.get("tensions", []),
                     "implications": narrative_data.get("implications", ""),
                     "narrative_summary": narrative_data.get("narrative_summary", ""),
+                    "narrative_hash": narrative_data.get("narrative_hash", ""),
                     "narrative_extracted_at": datetime.now(timezone.utc)
                 }}
             )

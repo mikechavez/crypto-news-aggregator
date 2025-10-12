@@ -72,9 +72,16 @@ class ArticleBase(BaseModel):
     raw_data: Dict[str, Any]  # To store the raw article payload
     published_at: datetime  # Timestamp from the source
     
-    # Narrative salience fields
+    # Narrative data fields
+    actors: Optional[List[str]] = None
     actor_salience: Optional[Dict[str, int]] = None  # {"EntityName": 5, ...}
     nucleus_entity: Optional[str] = None  # Primary entity article is about
+    actions: Optional[List[str]] = None
+    tensions: Optional[List[str]] = None
+    implications: Optional[str] = None
+    narrative_summary: Optional[str] = None
+    narrative_hash: Optional[str] = None  # Content hash for caching
+    narrative_extracted_at: Optional[datetime] = None
 
 
 class ArticleCreate(ArticleBase):
