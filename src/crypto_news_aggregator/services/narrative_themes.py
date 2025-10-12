@@ -368,6 +368,38 @@ Given the following article, describe:
 
 Then summarize in 2-3 sentences what broader narrative this article contributes to.
 
+**ENTITY NORMALIZATION GUIDELINES:**
+
+1. **Normalize entity names to canonical forms:**
+   - "U.S. Securities and Exchange Commission" → "SEC"
+   - "Securities and Exchange Commission" → "SEC"  
+   - "US SEC" → "SEC"
+   - "Ethereum Foundation" → "Ethereum"
+   - "Ethereum network" → "Ethereum"
+   - "Tether Holdings Limited" → "Tether"
+   - "Tether USDT" → "Tether"
+   - "Bitcoin Core developers" → "Bitcoin"
+   - "Bitcoin network" → "Bitcoin"
+   - "Binance.US" → "Binance" (unless US distinction is critical to the story)
+   - "Binance exchange" → "Binance"
+   - Always use the shortest, most recognizable form
+   - Use common abbreviations (SEC, ETF, DeFi) not full names
+   - For cryptocurrencies, use the name not ticker (Bitcoin not BTC, Ethereum not ETH)
+
+2. **Nucleus entity selection rules:**
+   - If multiple entities have salience 5, choose the one most directly responsible for the main action
+   - Prefer specific entities over generic categories ("Binance" not "crypto exchanges")
+   - Prefer actors over objects in regulatory stories ("SEC" not "lawsuit" or "regulation")
+   - Prefer companies/organizations over people ("Coinbase" not "Brian Armstrong" unless person is the focus)
+   - The nucleus should be the grammatical subject of the article's main action
+
+3. **Salience scoring consistency:**
+   - Reserve salience 5 for 1-2 entities maximum (the true protagonists)
+   - Use salience 4 for 2-4 key participants
+   - Use salience 3 for 3-6 secondary participants
+   - Avoid giving everything high salience - be selective
+   - Background mentions like "Bitcoin" or "crypto market" in passing should be excluded (salience 1)
+
 Article Title: {title}
 Article Summary: {summary[:500]}
 
