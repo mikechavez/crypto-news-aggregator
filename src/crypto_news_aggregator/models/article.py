@@ -71,6 +71,10 @@ class ArticleBase(BaseModel):
     sentiment_label: Optional[str] = None
     raw_data: Dict[str, Any]  # To store the raw article payload
     published_at: datetime  # Timestamp from the source
+    
+    # Narrative salience fields
+    actor_salience: Optional[Dict[str, int]] = None  # {"EntityName": 5, ...}
+    nucleus_entity: Optional[str] = None  # Primary entity article is about
 
 
 class ArticleCreate(ArticleBase):
