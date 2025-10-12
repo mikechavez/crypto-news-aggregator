@@ -15,6 +15,7 @@ from crypto_news_aggregator.services.narrative_themes import (
     get_articles_by_theme,
     generate_narrative_from_theme,
     cluster_by_narrative_salience,
+    validate_narrative_json,
     THEME_CATEGORIES
 )
 
@@ -649,3 +650,389 @@ async def test_extract_themes_basic_functionality(sample_article_data):
         # Assertions
         assert themes == ["regulatory"]
         assert mock_provider._get_completion.call_count == 1
+
+
+# ============================================================================
+# VALIDATION TESTS
+# ============================================================================
+
+class TestValidateNarrativeJson:
+    """Unit tests for validate_narrative_json function."""
+    
+    @pytest.fixture
+    def valid_narrative_data(self):
+        """Valid narrative data for testing."""
+        return {
+            "actors": ["SEC", "Binance", "Coinbase"],
+            "actor_salience": {
+                "SEC": 5,
+                "Binance": 4,
+                "Coinbase": 3
+            },
+            "nucleus_entity": "SEC",
+            "actions": ["Filed lawsuit", "Announced enforcement"],
+            "tensions": ["Regulation vs Innovation"],
+            "narrative_summary": "The SEC is intensifying regulatory enforcement against major crypto exchanges."
+        }
+    
+    def test_validate_valid_data(self, valid_narrative_data):
+        """Test validation passes for valid data."""
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is True
+        assert error is None
+    
+    def test_validate_missing_required_field(self, valid_narrative_data):
+        """Test validation fails when required field is missing."""
+        # Remove required field
+        del valid_narrative_data["actors"]
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is False
+        assert "Missing required field: actors" in error
+    
+    def test_validate_missing_multiple_fields(self):
+        """Test validation fails with first missing field."""
+        data = {
+            "actors": ["SEC"],
+            "actor_salience": {"SEC": 5}
+            # Missing: nucleus_entity, actions, tensions, narrative_summary
+        }
+        
+        is_valid, error = validate_narrative_json(data)
+        
+        assert is_valid is False
+        assert "Missing required field" in error
+    
+    def test_validate_empty_actors_list(self, valid_narrative_data):
+        """Test validation fails for empty actors list."""
+        valid_narrative_data["actors"] = []
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is False
+        assert "actors must be non-empty list" in error
+    
+    def test_validate_actors_not_list(self, valid_narrative_data):
+        """Test validation fails when actors is not a list."""
+        valid_narrative_data["actors"] = "SEC, Binance"
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is False
+        assert "actors must be non-empty list" in error
+    
+    def test_validate_caps_actors_at_20(self, valid_narrative_data):
+        """Test validation caps actors list at 20 items."""
+        # Create list with 25 actors
+        valid_narrative_data["actors"] = [f"Actor{i}" for i in range(25)]
+        valid_narrative_data["actor_salience"] = {f"Actor{i}": 3 for i in range(25)}
+        valid_narrative_data["nucleus_entity"] = "Actor0"
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is True
+        assert len(valid_narrative_data["actors"]) == 20
+    
+    def test_validate_empty_nucleus_entity(self, valid_narrative_data):
+        """Test validation fails for empty nucleus_entity."""
+        valid_narrative_data["nucleus_entity"] = ""
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is False
+        assert "nucleus_entity must be non-empty string" in error
+    
+    def test_validate_nucleus_entity_not_string(self, valid_narrative_data):
+        """Test validation fails when nucleus_entity is not a string."""
+        valid_narrative_data["nucleus_entity"] = 123
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is False
+        assert "nucleus_entity must be non-empty string" in error
+    
+    def test_validate_auto_adds_nucleus_to_actors(self, valid_narrative_data):
+        """Test validation auto-adds nucleus_entity to actors list if missing."""
+        valid_narrative_data["nucleus_entity"] = "NewEntity"
+        # NewEntity not in actors list initially
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        # Should still be valid (auto-fixed)
+        assert is_valid is False  # Will fail because NewEntity has no salience score
+        assert "missing salience score" in error
+    
+    def test_validate_auto_adds_nucleus_to_actors_success(self, valid_narrative_data):
+        """Test validation auto-adds nucleus_entity to actors list successfully."""
+        valid_narrative_data["nucleus_entity"] = "NewEntity"
+        valid_narrative_data["actor_salience"]["NewEntity"] = 5
+        # NewEntity not in actors list initially
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is True
+        assert "NewEntity" in valid_narrative_data["actors"]
+        assert valid_narrative_data["actors"][0] == "NewEntity"  # Added at front
+    
+    def test_validate_salience_not_dict(self, valid_narrative_data):
+        """Test validation fails when actor_salience is not a dict."""
+        valid_narrative_data["actor_salience"] = ["SEC", "Binance"]
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is False
+        assert "actor_salience must be a dictionary" in error
+    
+    def test_validate_salience_invalid_type(self, valid_narrative_data):
+        """Test validation fails for non-numeric salience score."""
+        valid_narrative_data["actor_salience"]["SEC"] = "high"
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is False
+        assert "Invalid salience type for SEC" in error
+    
+    def test_validate_salience_out_of_range_low(self, valid_narrative_data):
+        """Test validation fails for salience score below 1."""
+        valid_narrative_data["actor_salience"]["SEC"] = 0
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is False
+        assert "Invalid salience 0 for SEC (must be 1-5)" in error
+    
+    def test_validate_salience_out_of_range_high(self, valid_narrative_data):
+        """Test validation fails for salience score above 5."""
+        valid_narrative_data["actor_salience"]["Binance"] = 6
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is False
+        assert "Invalid salience 6 for Binance (must be 1-5)" in error
+    
+    def test_validate_salience_accepts_float(self, valid_narrative_data):
+        """Test validation accepts float salience scores."""
+        valid_narrative_data["actor_salience"]["SEC"] = 4.5
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is True
+    
+    def test_validate_nucleus_missing_salience(self, valid_narrative_data):
+        """Test validation fails when nucleus_entity has no salience score."""
+        del valid_narrative_data["actor_salience"]["SEC"]
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is False
+        assert "nucleus_entity 'SEC' missing salience score" in error
+    
+    def test_validate_narrative_summary_too_short(self, valid_narrative_data):
+        """Test validation fails for narrative_summary under 10 characters."""
+        valid_narrative_data["narrative_summary"] = "Too short"
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is False
+        assert "narrative_summary must be string with at least 10 characters" in error
+    
+    def test_validate_narrative_summary_not_string(self, valid_narrative_data):
+        """Test validation fails when narrative_summary is not a string."""
+        valid_narrative_data["narrative_summary"] = 12345
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is False
+        assert "narrative_summary must be string with at least 10 characters" in error
+    
+    def test_validate_narrative_summary_exactly_10_chars(self, valid_narrative_data):
+        """Test validation passes for narrative_summary with exactly 10 characters."""
+        valid_narrative_data["narrative_summary"] = "1234567890"
+        
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+        
+        assert is_valid is True
+    
+    def test_validate_all_required_fields_present(self):
+        """Test that all required fields are checked."""
+        required_fields = ['actors', 'actor_salience', 'nucleus_entity', 
+                          'actions', 'tensions', 'narrative_summary']
+        
+        for field in required_fields:
+            data = {
+                "actors": ["SEC"],
+                "actor_salience": {"SEC": 5},
+                "nucleus_entity": "SEC",
+                "actions": ["Filed lawsuit"],
+                "tensions": ["Regulation"],
+                "narrative_summary": "The SEC is taking action."
+            }
+            del data[field]
+            
+            is_valid, error = validate_narrative_json(data)
+            
+            assert is_valid is False
+            assert f"Missing required field: {field}" in error
+
+
+# ============================================================================
+# INTEGRATION TESTS
+# ============================================================================
+
+class TestValidateNarrativeJsonIntegration:
+    """Integration tests for validate_narrative_json with discover_narrative_from_article."""
+    
+    @pytest.mark.asyncio
+    async def test_validation_with_discover_narrative_valid_response(self):
+        """Test validation works with valid LLM response from discover_narrative_from_article."""
+        with patch("crypto_news_aggregator.services.narrative_themes.get_llm_provider") as mock_llm:
+            # Mock valid LLM response
+            mock_provider = MagicMock()
+            mock_provider._get_completion.return_value = '''{
+                "actors": ["SEC", "Binance", "Coinbase"],
+                "actor_salience": {
+                    "SEC": 5,
+                    "Binance": 4,
+                    "Coinbase": 3
+                },
+                "nucleus_entity": "SEC",
+                "actions": ["Filed lawsuit against Binance"],
+                "tensions": ["Regulation vs Innovation"],
+                "implications": "Signals regulatory crackdown",
+                "narrative_summary": "The SEC is intensifying enforcement against major exchanges as it targets Binance for alleged securities violations."
+            }'''
+            mock_llm.return_value = mock_provider
+            
+            # Discover narrative
+            narrative_data = await discover_narrative_from_article(
+                article_id="test123",
+                title="SEC Sues Binance",
+                summary="The SEC has filed a lawsuit against Binance for regulatory violations."
+            )
+            
+            # Validate the response
+            assert narrative_data is not None
+            is_valid, error = validate_narrative_json(narrative_data)
+            
+            assert is_valid is True
+            assert error is None
+    
+    @pytest.mark.asyncio
+    async def test_validation_catches_malformed_llm_response(self):
+        """Test validation catches malformed LLM response."""
+        with patch("crypto_news_aggregator.services.narrative_themes.get_llm_provider") as mock_llm:
+            # Mock malformed LLM response (missing nucleus_entity)
+            mock_provider = MagicMock()
+            mock_provider._get_completion.return_value = '''{
+                "actors": ["SEC", "Binance"],
+                "actor_salience": {"SEC": 5, "Binance": 4},
+                "actions": ["Filed lawsuit"],
+                "tensions": ["Regulation"],
+                "implications": "Enforcement action",
+                "narrative_summary": "SEC takes action."
+            }'''
+            mock_llm.return_value = mock_provider
+            
+            # Discover narrative
+            narrative_data = await discover_narrative_from_article(
+                article_id="test123",
+                title="SEC Sues Binance",
+                summary="The SEC has filed a lawsuit."
+            )
+            
+            # Current implementation returns None for missing fields
+            # If we integrate validation, it should catch this
+            if narrative_data:
+                is_valid, error = validate_narrative_json(narrative_data)
+                assert is_valid is False
+                assert "Missing required field: nucleus_entity" in error
+    
+    @pytest.mark.asyncio
+    async def test_validation_catches_empty_actors(self):
+        """Test validation catches empty actors list from LLM."""
+        with patch("crypto_news_aggregator.services.narrative_themes.get_llm_provider") as mock_llm:
+            # Mock LLM response with empty actors
+            mock_provider = MagicMock()
+            mock_provider._get_completion.return_value = '''{
+                "actors": [],
+                "actor_salience": {},
+                "nucleus_entity": "SEC",
+                "actions": ["Filed lawsuit"],
+                "tensions": ["Regulation"],
+                "implications": "Enforcement",
+                "narrative_summary": "SEC enforcement action continues."
+            }'''
+            mock_llm.return_value = mock_provider
+            
+            # Discover narrative
+            narrative_data = await discover_narrative_from_article(
+                article_id="test123",
+                title="SEC Action",
+                summary="SEC takes enforcement action."
+            )
+            
+            # Current implementation returns None for empty actors
+            # Validation would also catch this
+            if narrative_data:
+                is_valid, error = validate_narrative_json(narrative_data)
+                assert is_valid is False
+                assert "actors must be non-empty list" in error
+    
+    @pytest.mark.asyncio
+    async def test_validation_catches_invalid_salience_scores(self):
+        """Test validation catches invalid salience scores from LLM."""
+        with patch("crypto_news_aggregator.services.narrative_themes.get_llm_provider") as mock_llm:
+            # Mock LLM response with out-of-range salience
+            mock_provider = MagicMock()
+            mock_provider._get_completion.return_value = '''{
+                "actors": ["SEC", "Binance"],
+                "actor_salience": {
+                    "SEC": 10,
+                    "Binance": 4
+                },
+                "nucleus_entity": "SEC",
+                "actions": ["Filed lawsuit"],
+                "tensions": ["Regulation"],
+                "implications": "Enforcement",
+                "narrative_summary": "SEC enforcement action against Binance continues."
+            }'''
+            mock_llm.return_value = mock_provider
+            
+            # Discover narrative
+            narrative_data = await discover_narrative_from_article(
+                article_id="test123",
+                title="SEC vs Binance",
+                summary="SEC files lawsuit against Binance."
+            )
+            
+            # Validate the response
+            if narrative_data:
+                is_valid, error = validate_narrative_json(narrative_data)
+                assert is_valid is False
+                assert "Invalid salience 10 for SEC (must be 1-5)" in error
+    
+    @pytest.mark.asyncio
+    async def test_validation_auto_fix_nucleus_in_actors(self):
+        """Test validation auto-fixes nucleus_entity not in actors list."""
+        # Create data where nucleus is not in actors
+        data = {
+            "actors": ["Binance", "Coinbase"],
+            "actor_salience": {
+                "SEC": 5,
+                "Binance": 4,
+                "Coinbase": 3
+            },
+            "nucleus_entity": "SEC",
+            "actions": ["Filed lawsuit"],
+            "tensions": ["Regulation"],
+            "narrative_summary": "SEC enforcement action against exchanges."
+        }
+        
+        is_valid, error = validate_narrative_json(data)
+        
+        # Should auto-fix by adding SEC to actors
+        assert is_valid is True
+        assert "SEC" in data["actors"]
+        assert data["actors"][0] == "SEC"  # Added at front

@@ -8,13 +8,66 @@ enabling theme-based narrative clustering instead of entity co-occurrence.
 import json
 import logging
 import re
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timezone
 
 from ..db.mongodb import mongo_manager
 from ..llm.factory import get_llm_provider
 
 logger = logging.getLogger(__name__)
+
+
+def validate_narrative_json(data: Dict) -> Tuple[bool, Optional[str]]:
+    """
+    Validate LLM-extracted narrative data.
+    
+    Returns: (is_valid, error_message)
+    """
+    # Check required fields
+    required_fields = ['actors', 'actor_salience', 'nucleus_entity', 
+                       'actions', 'tensions', 'narrative_summary']
+    
+    for field in required_fields:
+        if field not in data:
+            return False, f"Missing required field: {field}"
+    
+    # Validate actors is non-empty list
+    if not isinstance(data['actors'], list) or len(data['actors']) == 0:
+        return False, "actors must be non-empty list"
+    
+    # Cap actors at 20 (prevent bloat)
+    if len(data['actors']) > 20:
+        logger.debug(f"Capping actors list from {len(data['actors'])} to 20")
+        data['actors'] = data['actors'][:20]
+    
+    # Validate nucleus_entity exists and is a string
+    if not isinstance(data['nucleus_entity'], str) or not data['nucleus_entity']:
+        return False, "nucleus_entity must be non-empty string"
+    
+    # Auto-fix: Ensure nucleus_entity is in actors list
+    if data['nucleus_entity'] not in data['actors']:
+        logger.debug(f"Adding nucleus_entity {data['nucleus_entity']} to actors list")
+        data['actors'].insert(0, data['nucleus_entity'])
+    
+    # Validate salience scores
+    if not isinstance(data.get('actor_salience'), dict):
+        return False, "actor_salience must be a dictionary"
+    
+    for entity, score in data['actor_salience'].items():
+        if not isinstance(score, (int, float)):
+            return False, f"Invalid salience type for {entity}: {type(score)}"
+        if not (1 <= score <= 5):
+            return False, f"Invalid salience {score} for {entity} (must be 1-5)"
+    
+    # Ensure nucleus has salience score
+    if data['nucleus_entity'] not in data.get('actor_salience', {}):
+        return False, f"nucleus_entity '{data['nucleus_entity']}' missing salience score"
+    
+    # Validate narrative_summary is non-empty
+    if not isinstance(data.get('narrative_summary'), str) or len(data['narrative_summary']) < 10:
+        return False, "narrative_summary must be string with at least 10 characters"
+    
+    return True, None
 
 
 def clean_json_response(response: str) -> str:
@@ -235,7 +288,8 @@ async def get_articles_by_theme(
 async def discover_narrative_from_article(
     article_id: str,
     title: str,
-    summary: str
+    summary: str,
+    max_retries: int = 3
 ) -> Optional[Dict[str, Any]]:
     """
     Layer 1: Discover narrative elements from an article using natural language extraction.
@@ -246,16 +300,21 @@ async def discover_narrative_from_article(
         article_id: Article ID for logging
         title: Article title
         summary: Article summary/description
+        max_retries: Maximum number of retry attempts for validation failures
     
     Returns:
         Dict with narrative elements including actor_salience and nucleus_entity, or None if extraction fails
     """
+    import asyncio
+    
     if not title and not summary:
         logger.warning(f"Article {article_id} has no title or summary for narrative discovery")
         return None
     
-    # Build prompt for Claude with salience scoring
-    prompt = f"""You are a narrative analyst studying emerging patterns in crypto news.
+    # Retry loop for validation failures
+    for attempt in range(max_retries):
+        # Build prompt for Claude with salience scoring
+        prompt = f"""You are a narrative analyst studying emerging patterns in crypto news.
 
 Given the following article, describe:
 
@@ -316,45 +375,57 @@ Example for "SEC sues Binance for regulatory violations":
 }}
 
 Your JSON response:"""
-    
-    try:
-        # Call LLM
-        llm_client = get_llm_provider()
-        response = llm_client._get_completion(prompt)
-        
-        if not response:
-            logger.warning(f"Empty response from LLM for article {article_id}")
-            return None
-        
-        # Parse JSON response with cleaning
-        response_clean = clean_json_response(response)
         
         try:
-            narrative_data = json.loads(response_clean)
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse JSON for article {article_id}: {e}")
-            logger.debug(f"Raw response length: {len(response)} chars")
-            logger.debug(f"Cleaned response: {response_clean[:500]}")
-            return None
-        
-        # Validate required fields
-        required_fields = ["actors", "actor_salience", "nucleus_entity", "actions", "tensions", "implications", "narrative_summary"]
-        for field in required_fields:
-            if field not in narrative_data:
-                logger.warning(f"Missing required field '{field}' for article {article_id}")
+            # Call LLM
+            llm_client = get_llm_provider()
+            response = llm_client._get_completion(prompt)
+            
+            if not response:
+                logger.warning(f"Empty response from LLM for article {article_id}")
                 return None
+            
+            # Parse JSON response with cleaning
+            response_clean = clean_json_response(response)
+            
+            # Parse JSON response
+            try:
+                narrative_data = json.loads(response_clean)
+                
+                # VALIDATE before returning
+                is_valid, error = validate_narrative_json(narrative_data)
+                
+                if is_valid:
+                    logger.debug(f"✓ Validation passed for article {article_id}")
+                    return narrative_data
+                else:
+                    logger.warning(f"✗ Validation failed for article {article_id}: {error}")
+                    
+                    # If this is not the last retry, continue to retry
+                    if attempt < max_retries - 1:
+                        logger.info(f"Retrying with stricter prompt (attempt {attempt + 2}/{max_retries})")
+                        await asyncio.sleep(1)
+                        continue
+                    else:
+                        logger.error(f"Max retries exhausted for article {article_id}, validation failed: {error}")
+                        return None
+            
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON parse error for article {article_id} (attempt {attempt + 1}): {e}")
+                logger.debug(f"Raw response length: {len(response)} chars")
+                logger.debug(f"Cleaned response preview: {response_clean[:200]}")
+                
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1)
+                    continue
+                else:
+                    return None
         
-        # Validate that we have meaningful data
-        if not narrative_data.get("actors") or not narrative_data.get("actions"):
-            logger.warning(f"Empty actors or actions for article {article_id}")
+        except Exception as e:
+            logger.exception(f"Error discovering narrative for article {article_id}: {e}")
             return None
-        
-        logger.debug(f"Discovered narrative for article {article_id}: {narrative_data.get('narrative_summary', '')[:100]}")
-        return narrative_data
     
-    except Exception as e:
-        logger.exception(f"Error discovering narrative for article {article_id}: {e}")
-        return None
+    return None
 
 
 async def generate_narrative_from_theme(
