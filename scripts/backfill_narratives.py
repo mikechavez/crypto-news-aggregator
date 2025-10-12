@@ -39,16 +39,21 @@ async def backfill_with_rate_limiting(hours: int, limit: int, batch_size: int = 
     
     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
     
-    # Find articles needing narrative data
+    # Find articles needing narrative extraction
+    # Only process if:
+    # 1. Missing narrative_summary, OR
+    # 2. Missing narrative_hash (old format), OR  
+    # 3. Missing actors or nucleus_entity (incomplete data)
     cursor = articles_collection.find({
         "published_at": {"$gte": cutoff_time},
         "$or": [
             {"narrative_summary": {"$exists": False}},
+            {"narrative_summary": None},
             {"actors": {"$exists": False}},
-            {"nucleus_entity": {"$exists": False}},
             {"actors": None},
+            {"nucleus_entity": {"$exists": False}},
             {"nucleus_entity": None},
-            {"actors": []},
+            {"narrative_hash": {"$exists": False}},  # Missing hash = needs processing
         ]
     }).limit(limit)
     
@@ -74,14 +79,12 @@ async def backfill_with_rate_limiting(hours: int, limit: int, batch_size: int = 
         
         for article in batch:
             article_id = str(article.get("_id"))
-            title = article.get("title", "")
-            summary = article.get("description", "") or article.get("text", "") or article.get("content", "")
             
-            # Extract narrative elements
-            narrative_data = await discover_narrative_from_article(article_id, title, summary)
+            # Extract narrative elements (now with caching)
+            narrative_data = await discover_narrative_from_article(article)
             
             if narrative_data:
-                # Update article with narrative data
+                # Update article with narrative data (including hash)
                 await articles_collection.update_one(
                     {"_id": article["_id"]},
                     {"$set": {
@@ -92,6 +95,7 @@ async def backfill_with_rate_limiting(hours: int, limit: int, batch_size: int = 
                         "tensions": narrative_data.get("tensions", []),
                         "implications": narrative_data.get("implications", ""),
                         "narrative_summary": narrative_data.get("narrative_summary", ""),
+                        "narrative_hash": narrative_data.get("narrative_hash", ""),
                         "narrative_extracted_at": datetime.now(timezone.utc)
                     }}
                 )

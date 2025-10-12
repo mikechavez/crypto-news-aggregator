@@ -24,8 +24,10 @@ from crypto_news_aggregator.services.narrative_themes import (
 def sample_article_data():
     """Sample article data for testing."""
     return {
+        "_id": "test123",
         "article_id": "test123",
         "title": "SEC Announces New Crypto Regulations",
+        "description": "The Securities and Exchange Commission has announced new regulatory frameworks for cryptocurrency exchanges and stablecoin issuers.",
         "summary": "The Securities and Exchange Commission has announced new regulatory frameworks for cryptocurrency exchanges and stablecoin issuers."
     }
 
@@ -358,9 +360,7 @@ async def test_discover_narrative_from_article_success(sample_article_data, mock
         
         # Discover narrative
         narrative_data = await discover_narrative_from_article(
-            article_id=sample_article_data["article_id"],
-            title=sample_article_data["title"],
-            summary=sample_article_data["summary"]
+            article=sample_article_data
         )
         
         # Assertions
@@ -385,9 +385,7 @@ async def test_discover_narrative_from_article_success(sample_article_data, mock
 async def test_discover_narrative_empty_content():
     """Test Layer 1: Narrative discovery with empty content."""
     narrative_data = await discover_narrative_from_article(
-        article_id="test123",
-        title="",
-        summary=""
+        article={"_id": "test123", "title": "", "description": ""}
     )
     
     assert narrative_data is None
@@ -403,9 +401,7 @@ async def test_discover_narrative_missing_fields(sample_article_data):
         mock_llm.return_value = mock_provider
         
         narrative_data = await discover_narrative_from_article(
-            article_id=sample_article_data["article_id"],
-            title=sample_article_data["title"],
-            summary=sample_article_data["summary"]
+            article=sample_article_data
         )
         
         # Should return None when required fields are missing
@@ -422,9 +418,7 @@ async def test_discover_narrative_llm_error(sample_article_data):
         mock_llm.return_value = mock_provider
         
         narrative_data = await discover_narrative_from_article(
-            article_id=sample_article_data["article_id"],
-            title=sample_article_data["title"],
-            summary=sample_article_data["summary"]
+            article=sample_article_data
         )
         
         # Should return None on error
@@ -907,9 +901,11 @@ class TestValidateNarrativeJsonIntegration:
             
             # Discover narrative
             narrative_data = await discover_narrative_from_article(
-                article_id="test123",
-                title="SEC Sues Binance",
-                summary="The SEC has filed a lawsuit against Binance for regulatory violations."
+                article={
+                    "_id": "test123",
+                    "title": "SEC Sues Binance",
+                    "description": "The SEC has filed a lawsuit against Binance for regulatory violations."
+                }
             )
             
             # Validate the response
@@ -937,9 +933,11 @@ class TestValidateNarrativeJsonIntegration:
             
             # Discover narrative
             narrative_data = await discover_narrative_from_article(
-                article_id="test123",
-                title="SEC Sues Binance",
-                summary="The SEC has filed a lawsuit."
+                article={
+                    "_id": "test123",
+                    "title": "SEC Sues Binance",
+                    "description": "The SEC has filed a lawsuit."
+                }
             )
             
             # Current implementation returns None for missing fields
@@ -968,9 +966,11 @@ class TestValidateNarrativeJsonIntegration:
             
             # Discover narrative
             narrative_data = await discover_narrative_from_article(
-                article_id="test123",
-                title="SEC Action",
-                summary="SEC takes enforcement action."
+                article={
+                    "_id": "test123",
+                    "title": "SEC Action",
+                    "description": "SEC takes enforcement action."
+                }
             )
             
             # Current implementation returns None for empty actors
@@ -1002,9 +1002,11 @@ class TestValidateNarrativeJsonIntegration:
             
             # Discover narrative
             narrative_data = await discover_narrative_from_article(
-                article_id="test123",
-                title="SEC vs Binance",
-                summary="SEC files lawsuit against Binance."
+                article={
+                    "_id": "test123",
+                    "title": "SEC vs Binance",
+                    "description": "SEC files lawsuit against Binance."
+                }
             )
             
             # Validate the response
