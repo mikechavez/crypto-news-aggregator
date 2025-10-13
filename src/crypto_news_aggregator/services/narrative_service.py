@@ -45,40 +45,79 @@ SALIENCE_CLUSTERING_CONFIG = {
 }
 
 
+def calculate_momentum(article_dates: List[datetime]) -> str:
+    """
+    Calculate momentum based on velocity change over time.
+    
+    Args:
+        article_dates: Sorted list of article publication dates
+    
+    Returns:
+        Momentum: "growing", "declining", "stable", or "unknown"
+    """
+    if len(article_dates) < 3:
+        return "unknown"
+    
+    # Split articles into older and recent halves
+    midpoint = len(article_dates) // 2
+    recent_articles = article_dates[midpoint:]
+    older_articles = article_dates[:midpoint]
+    
+    # Calculate time spans (in hours)
+    recent_span = (recent_articles[-1] - recent_articles[0]).total_seconds() / 3600 or 1
+    older_span = (older_articles[-1] - older_articles[0]).total_seconds() / 3600 or 1
+    
+    # Calculate velocities (articles per hour)
+    recent_velocity = len(recent_articles) / recent_span
+    older_velocity = len(older_articles) / older_span
+    
+    # Calculate velocity change ratio
+    velocity_change = recent_velocity / older_velocity if older_velocity > 0 else 1
+    
+    # Determine momentum based on velocity change
+    if velocity_change >= 1.3:
+        return "growing"
+    elif velocity_change <= 0.7:
+        return "declining"
+    else:
+        return "stable"
+
+
 def determine_lifecycle_stage(
     article_count: int,
     mention_velocity: float,
-    previous_count: Optional[int] = None
+    momentum: str = "unknown"
 ) -> str:
     """
-    Determine the lifecycle stage of a narrative.
+    Determine the lifecycle stage of a narrative with momentum awareness.
     
     Args:
         article_count: Current number of articles in narrative
         mention_velocity: Articles per day rate
-        previous_count: Previous article count (for trend detection)
+        momentum: Momentum indicator (growing, declining, stable, unknown)
     
     Returns:
-        Lifecycle stage: emerging, hot, mature, or declining
+        Lifecycle stage: emerging, rising, hot, heating, mature, cooling, or declining
     """
-    # Check if declining (requires previous count)
-    if previous_count is not None and article_count < previous_count:
-        return "declining"
+    # Calculate base lifecycle with adjusted thresholds
+    if mention_velocity >= 5:
+        lifecycle = "mature"
+    elif mention_velocity >= 1.5:
+        lifecycle = "hot"
+    elif article_count >= 5:
+        lifecycle = "hot"
+    else:
+        lifecycle = "emerging"
     
-    # Emerging: 2-4 articles
-    if article_count <= 4:
-        return "emerging"
+    # Integrate momentum to refine lifecycle
+    if lifecycle == "mature" and momentum == "declining":
+        return "cooling"
+    elif lifecycle == "hot" and momentum == "growing":
+        return "heating"
+    elif lifecycle == "emerging" and momentum == "growing":
+        return "rising"
     
-    # Hot: 5-10 articles with high velocity
-    if 5 <= article_count <= 10 and mention_velocity > 2.0:
-        return "hot"
-    
-    # Mature: 10+ articles or sustained activity
-    if article_count > 10 or mention_velocity > 3.0:
-        return "mature"
-    
-    # Default to emerging
-    return "emerging"
+    return lifecycle
 
 
 async def extract_entities_from_articles(articles: List[Dict[str, Any]]) -> List[str]:
@@ -189,11 +228,32 @@ async def detect_narratives(
                 time_span_days = hours / 24.0
                 mention_velocity = article_count / time_span_days if time_span_days > 0 else 0
                 
-                # Determine lifecycle stage
-                lifecycle = determine_lifecycle_stage(article_count, mention_velocity)
+                # Calculate momentum from article dates
+                # Get articles for this narrative to extract dates
+                article_ids = narrative_data.get("article_ids", [])
+                article_dates = []
+                for article in articles:
+                    if str(article.get("_id")) in article_ids:
+                        pub_date = article.get("published_at")
+                        if pub_date:
+                            article_dates.append(pub_date)
+                
+                # Sort dates and calculate momentum
+                article_dates.sort()
+                momentum = calculate_momentum(article_dates)
+                
+                # Determine lifecycle stage with momentum awareness
+                lifecycle = determine_lifecycle_stage(article_count, mention_velocity, momentum)
                 
                 # Use nucleus_entity as theme for database compatibility
                 theme = narrative_data.get("nucleus_entity", "unknown")
+                
+                # Enrich narrative_data with computed fields for return value
+                narrative_data["theme"] = theme
+                narrative_data["entities"] = narrative_data.get("actors", [])[:10]
+                narrative_data["mention_velocity"] = round(mention_velocity, 2)
+                narrative_data["lifecycle"] = lifecycle
+                narrative_data["momentum"] = momentum
                 
                 try:
                     narrative_id = await upsert_narrative(
@@ -205,6 +265,7 @@ async def detect_narratives(
                         article_count=article_count,
                         mention_velocity=round(mention_velocity, 2),
                         lifecycle=lifecycle,
+                        momentum=momentum,
                         first_seen=None  # Will use current time or existing
                     )
                     logger.info(f"Saved narrative {narrative_id} to database: {narrative_data['title']}")
@@ -258,15 +319,17 @@ async def detect_narratives(
                 time_span_days = hours / 24.0
                 mention_velocity = article_count / time_span_days if time_span_days > 0 else 0
                 
-                # Get previous count for lifecycle tracking
-                previous_count = None
+                # Get first_seen for lifecycle tracking
                 first_seen = datetime.now(timezone.utc)
                 if theme in existing_narratives:
-                    previous_count = existing_narratives[theme].get("article_count")
                     first_seen = existing_narratives[theme].get("first_seen", first_seen)
                 
-                # Determine lifecycle stage
-                lifecycle = determine_lifecycle_stage(article_count, mention_velocity, previous_count)
+                # Calculate momentum from article dates
+                article_dates = sorted([a.get("published_at") for a in articles if a.get("published_at")])
+                momentum = calculate_momentum(article_dates)
+                
+                # Determine lifecycle stage with momentum awareness
+                lifecycle = determine_lifecycle_stage(article_count, mention_velocity, momentum)
                 
                 # Build narrative document
                 narrative = {
@@ -279,11 +342,12 @@ async def detect_narratives(
                     "last_updated": datetime.now(timezone.utc),
                     "article_count": article_count,
                     "mention_velocity": round(mention_velocity, 2),
-                    "lifecycle": lifecycle
+                    "lifecycle": lifecycle,
+                    "momentum": momentum
                 }
                 
                 narratives.append(narrative)
-                logger.info(f"Created narrative for theme '{theme}': {article_count} articles, lifecycle={lifecycle}")
+                logger.info(f"Created narrative for theme '{theme}': {article_count} articles, lifecycle={lifecycle}, momentum={momentum}")
                 
                 # Save narrative to database
                 try:
@@ -296,6 +360,7 @@ async def detect_narratives(
                         article_count=narrative["article_count"],
                         mention_velocity=narrative["mention_velocity"],
                         lifecycle=narrative["lifecycle"],
+                        momentum=narrative["momentum"],
                         first_seen=narrative["first_seen"]
                     )
                     logger.info(f"Saved narrative {narrative_id} to database")
