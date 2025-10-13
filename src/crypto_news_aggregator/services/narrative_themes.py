@@ -5,6 +5,7 @@ This service uses Claude Sonnet to extract thematic categories from articles,
 enabling theme-based narrative clustering instead of entity co-occurrence.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -288,7 +289,7 @@ async def get_articles_by_theme(
 
 async def discover_narrative_from_article(
     article: Dict,
-    max_retries: int = 3
+    max_retries: int = 4  # Increased from 3 to allow for rate limit retries
 ) -> Optional[Dict[str, Any]]:
     """
     Extract narrative elements from article with caching.
@@ -302,8 +303,6 @@ async def discover_narrative_from_article(
     Returns:
         Dict with narrative elements including actor_salience and nucleus_entity, or None if extraction fails
     """
-    import asyncio
-    
     article_id = str(article.get('_id', 'unknown'))
     
     # Generate content hash for caching
@@ -475,7 +474,7 @@ Your JSON response:"""
                         return None
             
             except json.JSONDecodeError as e:
-                logger.warning(f"JSON parse error for article {article_id} (attempt {attempt + 1}): {e}")
+                logger.warning(f"JSON parse error for article {article_id} (attempt {attempt + 1}/{max_retries}): {e}")
                 logger.debug(f"Raw response length: {len(response)} chars")
                 logger.debug(f"Cleaned response preview: {response_clean[:200]}")
                 
@@ -486,8 +485,47 @@ Your JSON response:"""
                     return None
         
         except Exception as e:
-            logger.exception(f"Error discovering narrative for article {article_id}: {e}")
-            return None
+            error_str = str(e).lower()
+            error_type = type(e).__name__
+            
+            # Handle rate limit errors (429 Too Many Requests)
+            if '429' in str(e) or 'rate_limit' in error_str or 'rate limit' in error_str:
+                wait_time = (2 ** attempt) * 5  # Exponential backoff: 5s, 10s, 20s
+                logger.warning(
+                    f"⚠️  Rate limited for article {article_id[:8]}... "
+                    f"Waiting {wait_time}s before retry {attempt + 1}/{max_retries}"
+                )
+                await asyncio.sleep(wait_time)
+                
+                if attempt < max_retries - 1:
+                    continue
+                else:
+                    logger.error(f"❌ Max retries exhausted due to rate limiting for article {article_id[:8]}...")
+                    return None
+            
+            # Handle API overload errors (529 Overloaded)
+            elif '529' in str(e) or 'overloaded' in error_str:
+                wait_time = 10 * (attempt + 1)  # Linear backoff: 10s, 20s, 30s
+                logger.warning(
+                    f"⚠️  API overloaded for article {article_id[:8]}... "
+                    f"Waiting {wait_time}s before retry {attempt + 1}/{max_retries}"
+                )
+                await asyncio.sleep(wait_time)
+                
+                if attempt < max_retries - 1:
+                    continue
+                else:
+                    logger.error(f"❌ Max retries exhausted due to API overload for article {article_id[:8]}...")
+                    return None
+            
+            # Handle other unexpected errors (don't retry)
+            else:
+                logger.error(
+                    f"❌ Unexpected error for article {article_id[:8]}...: "
+                    f"{error_type}: {e}"
+                )
+                logger.debug(f"Full error: {str(e)}")
+                return None
     
     return None
 
