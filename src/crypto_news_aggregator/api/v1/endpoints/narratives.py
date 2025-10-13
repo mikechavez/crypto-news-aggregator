@@ -92,6 +92,7 @@ class NarrativeResponse(BaseModel):
     article_count: int = Field(..., description="Number of articles supporting this narrative")
     mention_velocity: float = Field(..., description="Articles per day rate")
     lifecycle: str = Field(..., description="Lifecycle stage: emerging, hot, mature, declining")
+    recency_score: float = Field(default=0.0, description="Freshness score (0-1, higher = more recent)")
     first_seen: str = Field(..., description="ISO timestamp when narrative was first detected")
     last_updated: str = Field(..., description="ISO timestamp of last update")
     days_active: int = Field(default=1, description="Number of days narrative has been active")
@@ -108,6 +109,7 @@ class NarrativeResponse(BaseModel):
                 "article_count": 15,
                 "mention_velocity": 3.1,
                 "lifecycle": "hot",
+                "recency_score": 0.607,
                 "first_seen": "2025-10-01T19:30:00Z",
                 "last_updated": "2025-10-06T14:20:00Z",
                 "days_active": 6,
@@ -202,6 +204,7 @@ async def get_active_narratives_endpoint(
                 "article_count": narrative.get("article_count", 0),
                 "mention_velocity": narrative.get("mention_velocity", 0.0),
                 "lifecycle": narrative.get("lifecycle", "emerging"),
+                "recency_score": narrative.get("recency_score", 0.0),
                 "first_seen": first_seen_str,
                 "last_updated": last_updated_str,
                 "days_active": days_active,
