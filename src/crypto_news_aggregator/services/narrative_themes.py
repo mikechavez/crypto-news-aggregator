@@ -12,6 +12,8 @@ import logging
 import re
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timezone
+from itertools import combinations
+from collections import defaultdict, Counter
 
 from ..db.mongodb import mongo_manager
 from ..llm.factory import get_llm_provider
@@ -825,13 +827,35 @@ async def generate_narrative_from_cluster(cluster: List[Dict[str, Any]]) -> Opti
     unique_tensions = list(set(all_tensions))
     
     # Determine primary nucleus entity (most common)
-    from collections import Counter
     nucleus_counts = Counter(nucleus_entities)
     primary_nucleus = nucleus_counts.most_common(1)[0][0] if nucleus_counts else ""
     
     logger.info(f"  Primary nucleus: {primary_nucleus}")
     logger.info(f"  Unique actors ({len(unique_actors)}): {unique_actors[:10]}")
     logger.info(f"  Unique tensions ({len(unique_tensions)}): {unique_tensions[:5]}")
+    
+    # Extract entity relationships (co-occurrence in same articles)
+    entity_links = defaultdict(int)
+    for article in cluster:
+        actors = article.get("actors", [])
+        if len(actors) >= 2:
+            for a, b in combinations(actors, 2):
+                pair = tuple(sorted([a, b]))
+                entity_links[pair] += 1
+    
+    # Store top 5 relationships by co-occurrence count
+    top_relationships = sorted(
+        entity_links.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )[:5]
+    
+    entity_relationships = [
+        {"a": pair[0], "b": pair[1], "weight": count}
+        for pair, count in top_relationships
+    ]
+    
+    logger.info(f"  Entity relationships ({len(entity_relationships)}): {entity_relationships}")
     
     # Collect article snippets for context
     article_snippets = []
@@ -887,7 +911,8 @@ Return valid JSON with no newlines in string values: {{"title": "...", "summary"
             "tensions": unique_tensions[:10],  # Limit to top 10 tensions
             "nucleus_entity": primary_nucleus,
             "article_ids": article_ids,
-            "article_count": len(cluster)
+            "article_count": len(cluster),
+            "entity_relationships": entity_relationships
         }
         
         logger.info(f"  Generated narrative: '{narrative_data['title']}'")

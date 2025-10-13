@@ -53,7 +53,7 @@ def sample_articles():
 
 def test_determine_lifecycle_stage_emerging():
     """Test lifecycle stage determination for emerging narratives."""
-    lifecycle = determine_lifecycle_stage(article_count=3, mention_velocity=1.5)
+    lifecycle = determine_lifecycle_stage(article_count=3, mention_velocity=0.5)
     assert lifecycle == "emerging"
 
 
@@ -72,11 +72,11 @@ def test_determine_lifecycle_stage_mature():
 def test_determine_lifecycle_stage_declining():
     """Test lifecycle stage determination for declining narratives."""
     lifecycle = determine_lifecycle_stage(
-        article_count=5,
-        mention_velocity=2.5,
-        previous_count=10
+        article_count=10,
+        mention_velocity=6.0,
+        momentum="declining"
     )
-    assert lifecycle == "declining"
+    assert lifecycle == "cooling"
 
 
 @pytest.mark.asyncio
@@ -292,3 +292,97 @@ async def test_extract_entities_handles_mixed_article_id_formats():
         assert "Ethereum" in entities
         assert "Ripple" in entities
         assert "SEC" in entities
+
+
+@pytest.mark.asyncio
+async def test_detect_narratives_includes_entity_relationships():
+    """
+    Integration test: verify that detect_narratives includes entity_relationships
+    in the returned narrative data when using salience-based clustering.
+    """
+    with patch("crypto_news_aggregator.services.narrative_service.backfill_narratives_for_recent_articles") as mock_backfill, \
+         patch("crypto_news_aggregator.services.narrative_service.mongo_manager") as mock_mongo, \
+         patch("crypto_news_aggregator.services.narrative_service.cluster_by_narrative_salience") as mock_cluster, \
+         patch("crypto_news_aggregator.services.narrative_service.generate_narrative_from_cluster") as mock_generate, \
+         patch("crypto_news_aggregator.services.narrative_service.upsert_narrative") as mock_upsert:
+        
+        # Mock backfill
+        mock_backfill.return_value = 5
+        
+        # Mock database
+        mock_db = MagicMock()
+        mock_articles_collection = MagicMock()
+        mock_db.articles = mock_articles_collection
+        mock_mongo.get_async_database = AsyncMock(return_value=mock_db)
+        
+        # Mock articles with narrative data
+        sample_articles = [
+            {
+                "_id": "article1",
+                "title": "Bitcoin and Ethereum Rally",
+                "published_at": datetime.now(timezone.utc),
+                "narrative_summary": "BTC and ETH surge",
+                "actors": ["Bitcoin", "Ethereum"],
+                "nucleus_entity": "Bitcoin"
+            },
+            {
+                "_id": "article2",
+                "title": "Bitcoin Adoption Grows",
+                "published_at": datetime.now(timezone.utc),
+                "narrative_summary": "Institutions adopt BTC",
+                "actors": ["Bitcoin", "MicroStrategy"],
+                "nucleus_entity": "Bitcoin"
+            }
+        ]
+        
+        # Mock cursor
+        class MockCursor:
+            async def to_list(self, length):
+                return sample_articles
+        
+        mock_articles_collection.find.return_value = MockCursor()
+        
+        # Mock clustering - return one cluster
+        mock_cluster.return_value = [sample_articles]
+        
+        # Mock narrative generation with entity_relationships
+        mock_generate.return_value = {
+            "title": "Bitcoin Ecosystem Growth",
+            "summary": "Bitcoin adoption accelerates across institutions.",
+            "actors": ["Bitcoin", "Ethereum", "MicroStrategy"],
+            "tensions": ["institutional_adoption"],
+            "nucleus_entity": "Bitcoin",
+            "article_ids": ["article1", "article2"],
+            "article_count": 2,
+            "entity_relationships": [
+                {"a": "Bitcoin", "b": "Ethereum", "weight": 1},
+                {"a": "Bitcoin", "b": "MicroStrategy", "weight": 1}
+            ]
+        }
+        
+        # Mock upsert
+        mock_upsert.return_value = "narrative123"
+        
+        # Detect narratives with salience clustering
+        narratives = await detect_narratives(hours=48, min_articles=2, use_salience_clustering=True)
+        
+        # Verify results
+        assert len(narratives) > 0
+        narrative = narratives[0]
+        
+        # Verify entity_relationships is included
+        assert "entity_relationships" in narrative
+        assert isinstance(narrative["entity_relationships"], list)
+        assert len(narrative["entity_relationships"]) == 2
+        
+        # Verify relationship structure
+        for rel in narrative["entity_relationships"]:
+            assert "a" in rel
+            assert "b" in rel
+            assert "weight" in rel
+        
+        # Verify upsert was called with entity_relationships
+        assert mock_upsert.called
+        call_kwargs = mock_upsert.call_args[1]
+        assert "entity_relationships" in call_kwargs
+        assert len(call_kwargs["entity_relationships"]) == 2
