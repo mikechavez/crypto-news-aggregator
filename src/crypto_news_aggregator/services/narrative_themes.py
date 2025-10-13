@@ -915,6 +915,32 @@ Return valid JSON with no newlines in string values: {{"title": "...", "summary"
             "entity_relationships": entity_relationships
         }
         
+        # Polish the summary for better tone and consistency
+        if narrative_data and narrative_data.get('summary'):
+            polish_prompt = f"""Rewrite this narrative summary in 1-2 punchy sentences suitable for a crypto intelligence dashboard. Make it neutral and headline-like:
+
+Original: {narrative_data['summary']}
+
+Requirements:
+- No phrases like "These articles highlight" or "The articles show"
+- Active voice, strong verbs
+- Focus on the key insight or development
+- 1-2 sentences maximum
+- Professional, neutral tone
+
+Respond with ONLY the rewritten summary, no other text."""
+
+            try:
+                polished = llm_client._get_completion(polish_prompt)
+                # Clean response
+                polished = polished.strip().strip('"').strip("'")
+                if polished and len(polished) > 10:
+                    narrative_data['summary'] = polished
+                    logger.debug(f"✓ Summary polished: {polished[:50]}...")
+            except Exception as e:
+                logger.warning(f"Summary polish failed, using original: {e}")
+                # Keep original summary
+        
         logger.info(f"  Generated narrative: '{narrative_data['title']}'")
         return narrative_data
     

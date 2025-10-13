@@ -92,7 +92,9 @@ class NarrativeResponse(BaseModel):
     article_count: int = Field(..., description="Number of articles supporting this narrative")
     mention_velocity: float = Field(..., description="Articles per day rate")
     lifecycle: str = Field(..., description="Lifecycle stage: emerging, hot, mature, declining")
-    recency_score: float = Field(default=0.0, description="Freshness score (0-1, higher = more recent)")
+    momentum: Optional[str] = Field(default="unknown", description="Momentum trend: growing, declining, stable, or unknown")
+    recency_score: float = Field(default=0.0, ge=0.0, le=1.0, description="Freshness score (0-1), higher = more recent, 24h half-life")
+    entity_relationships: Optional[List[Dict[str, Any]]] = Field(default=[], description="Top 5 entity co-occurrence pairs with weights: [{'a': 'SEC', 'b': 'Binance', 'weight': 3}]")
     first_seen: str = Field(..., description="ISO timestamp when narrative was first detected")
     last_updated: str = Field(..., description="ISO timestamp of last update")
     days_active: int = Field(default=1, description="Number of days narrative has been active")
@@ -204,7 +206,9 @@ async def get_active_narratives_endpoint(
                 "article_count": narrative.get("article_count", 0),
                 "mention_velocity": narrative.get("mention_velocity", 0.0),
                 "lifecycle": narrative.get("lifecycle", "emerging"),
+                "momentum": narrative.get("momentum", "unknown"),
                 "recency_score": narrative.get("recency_score", 0.0),
+                "entity_relationships": narrative.get("entity_relationships", []),
                 "first_seen": first_seen_str,
                 "last_updated": last_updated_str,
                 "days_active": days_active,
