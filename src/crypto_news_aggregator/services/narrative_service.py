@@ -63,9 +63,13 @@ def calculate_momentum(article_dates: List[datetime]) -> str:
     recent_articles = article_dates[midpoint:]
     older_articles = article_dates[:midpoint]
     
-    # Calculate time spans (in hours)
-    recent_span = (recent_articles[-1] - recent_articles[0]).total_seconds() / 3600 or 1
-    older_span = (older_articles[-1] - older_articles[0]).total_seconds() / 3600 or 1
+    # Calculate time spans (in hours), minimum 1 hour to avoid division issues
+    recent_span = (recent_articles[-1] - recent_articles[0]).total_seconds() / 3600
+    older_span = (older_articles[-1] - older_articles[0]).total_seconds() / 3600
+    
+    # Use minimum of 1 hour to avoid division by zero or extreme values
+    recent_span = max(1.0, recent_span)
+    older_span = max(1.0, older_span)
     
     # Calculate velocities (articles per hour)
     recent_velocity = len(recent_articles) / recent_span
