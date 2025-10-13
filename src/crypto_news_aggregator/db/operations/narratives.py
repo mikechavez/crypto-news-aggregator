@@ -71,6 +71,7 @@ async def upsert_narrative(
     mention_velocity: float,
     lifecycle: str,
     momentum: str = "unknown",
+    recency_score: float = 0.0,
     first_seen: Optional[datetime] = None
 ) -> str:
     """
@@ -89,6 +90,7 @@ async def upsert_narrative(
         mention_velocity: Articles per day rate
         lifecycle: Lifecycle stage (emerging, rising, hot, heating, mature, cooling, declining)
         momentum: Momentum indicator (growing, declining, stable, unknown)
+        recency_score: Freshness score (0-1, higher = more recent)
         first_seen: When narrative was first detected (optional)
     
     Returns:
@@ -146,6 +148,7 @@ async def upsert_narrative(
             "mention_velocity": mention_velocity,
             "lifecycle": lifecycle,
             "momentum": momentum,
+            "recency_score": recency_score,
             "last_updated": now,
             "timeline_data": timeline_data,
             "peak_activity": peak_activity,
@@ -174,6 +177,7 @@ async def upsert_narrative(
             "mention_velocity": mention_velocity,
             "lifecycle": lifecycle,
             "momentum": momentum,
+            "recency_score": recency_score,
             "timeline_data": [timeline_snapshot],
             "peak_activity": {
                 "date": today,

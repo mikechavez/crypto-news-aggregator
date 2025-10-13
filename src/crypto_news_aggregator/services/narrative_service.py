@@ -17,6 +17,7 @@ import json
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
+from math import exp
 
 from ..db.mongodb import mongo_manager
 from ..llm.factory import get_llm_provider
@@ -246,6 +247,14 @@ async def detect_narratives(
                 article_dates.sort()
                 momentum = calculate_momentum(article_dates)
                 
+                # Calculate recency score (0-1, higher = more recent)
+                newest_article = article_dates[-1] if article_dates else None
+                if newest_article:
+                    hours_since_last_update = (datetime.now(timezone.utc) - newest_article).total_seconds() / 3600
+                    recency_score = exp(-hours_since_last_update / 24)  # 24h half-life
+                else:
+                    recency_score = 0.0
+                
                 # Determine lifecycle stage with momentum awareness
                 lifecycle = determine_lifecycle_stage(article_count, mention_velocity, momentum)
                 
@@ -258,6 +267,7 @@ async def detect_narratives(
                 narrative_data["mention_velocity"] = round(mention_velocity, 2)
                 narrative_data["lifecycle"] = lifecycle
                 narrative_data["momentum"] = momentum
+                narrative_data["recency_score"] = round(recency_score, 3)
                 
                 try:
                     narrative_id = await upsert_narrative(
@@ -270,6 +280,7 @@ async def detect_narratives(
                         mention_velocity=round(mention_velocity, 2),
                         lifecycle=lifecycle,
                         momentum=momentum,
+                        recency_score=round(recency_score, 3),
                         first_seen=None  # Will use current time or existing
                     )
                     logger.info(f"Saved narrative {narrative_id} to database: {narrative_data['title']}")
@@ -332,6 +343,14 @@ async def detect_narratives(
                 article_dates = sorted([a.get("published_at") for a in articles if a.get("published_at")])
                 momentum = calculate_momentum(article_dates)
                 
+                # Calculate recency score (0-1, higher = more recent)
+                newest_article = article_dates[-1] if article_dates else None
+                if newest_article:
+                    hours_since_last_update = (datetime.now(timezone.utc) - newest_article).total_seconds() / 3600
+                    recency_score = exp(-hours_since_last_update / 24)  # 24h half-life
+                else:
+                    recency_score = 0.0
+                
                 # Determine lifecycle stage with momentum awareness
                 lifecycle = determine_lifecycle_stage(article_count, mention_velocity, momentum)
                 
@@ -347,7 +366,8 @@ async def detect_narratives(
                     "article_count": article_count,
                     "mention_velocity": round(mention_velocity, 2),
                     "lifecycle": lifecycle,
-                    "momentum": momentum
+                    "momentum": momentum,
+                    "recency_score": round(recency_score, 3)
                 }
                 
                 narratives.append(narrative)
@@ -365,6 +385,7 @@ async def detect_narratives(
                         mention_velocity=narrative["mention_velocity"],
                         lifecycle=narrative["lifecycle"],
                         momentum=narrative["momentum"],
+                        recency_score=narrative["recency_score"],
                         first_seen=narrative["first_seen"]
                     )
                     logger.info(f"Saved narrative {narrative_id} to database")
