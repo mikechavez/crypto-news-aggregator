@@ -72,6 +72,7 @@ async def upsert_narrative(
     lifecycle: str,
     momentum: str = "unknown",
     recency_score: float = 0.0,
+    entity_relationships: List[Dict] = None,
     first_seen: Optional[datetime] = None
 ) -> str:
     """
@@ -91,6 +92,7 @@ async def upsert_narrative(
         lifecycle: Lifecycle stage (emerging, rising, hot, heating, mature, cooling, declining)
         momentum: Momentum indicator (growing, declining, stable, unknown)
         recency_score: Freshness score (0-1, higher = more recent)
+        entity_relationships: List of entity co-occurrence relationships (optional)
         first_seen: When narrative was first detected (optional)
     
     Returns:
@@ -149,6 +151,7 @@ async def upsert_narrative(
             "lifecycle": lifecycle,
             "momentum": momentum,
             "recency_score": recency_score,
+            "entity_relationships": entity_relationships or [],
             "last_updated": now,
             "timeline_data": timeline_data,
             "peak_activity": peak_activity,
@@ -178,6 +181,7 @@ async def upsert_narrative(
             "lifecycle": lifecycle,
             "momentum": momentum,
             "recency_score": recency_score,
+            "entity_relationships": entity_relationships or [],
             "timeline_data": [timeline_snapshot],
             "peak_activity": {
                 "date": today,

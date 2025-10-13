@@ -18,6 +18,8 @@ import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
 from math import exp
+from itertools import combinations
+from collections import defaultdict
 
 from ..db.mongodb import mongo_manager
 from ..llm.factory import get_llm_provider
@@ -281,6 +283,7 @@ async def detect_narratives(
                         lifecycle=lifecycle,
                         momentum=momentum,
                         recency_score=round(recency_score, 3),
+                        entity_relationships=narrative_data.get("entity_relationships", []),
                         first_seen=None  # Will use current time or existing
                     )
                     logger.info(f"Saved narrative {narrative_id} to database: {narrative_data['title']}")
