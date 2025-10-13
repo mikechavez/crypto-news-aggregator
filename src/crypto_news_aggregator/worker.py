@@ -197,6 +197,7 @@ async def update_narratives():
                 article_count=narrative["article_count"],
                 mention_velocity=narrative["mention_velocity"],
                 lifecycle=narrative["lifecycle"],
+                momentum=narrative.get("momentum", "unknown"),
                 first_seen=narrative.get("first_seen")
             )
         
