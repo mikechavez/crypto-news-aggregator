@@ -72,14 +72,13 @@ type Timeframe = '24h' | '7d' | '30d';
 interface TabConfig {
   id: Timeframe;
   label: string;
-  emoji: string;
   description: string;
 }
 
 const TABS: TabConfig[] = [
-  { id: '24h', label: 'Hot', emoji: '🔥', description: 'Breaking news and sudden spikes' },
-  { id: '7d', label: 'Trending', emoji: '📈', description: 'Gaining momentum this week' },
-  { id: '30d', label: 'Top', emoji: '⭐', description: 'Major ongoing narratives' },
+  { id: '24h', label: 'Hot', description: 'Breaking news and sudden spikes' },
+  { id: '7d', label: 'Trending', description: 'Gaining momentum this week' },
+  { id: '30d', label: 'Top', description: 'Major ongoing narratives' },
 ];
 
 export function Signals() {
