@@ -54,8 +54,9 @@ export interface Narrative {
   summary: string;            // AI-generated narrative summary
   entities: string[];         // List of entities in this narrative
   article_count: number;      // Number of articles supporting this narrative
-  mention_velocity: number;   // Articles per day rate
-  lifecycle: string;          // Lifecycle stage: emerging, hot, mature, declining
+  mention_velocity?: number;  // Articles per day rate (optional)
+  lifecycle?: string;         // Lifecycle stage: emerging, hot, mature, declining (deprecated)
+  lifecycle_stage?: 'emerging' | 'rising' | 'hot' | 'heating' | 'mature' | 'cooling'; // New lifecycle field
   first_seen: string;         // ISO timestamp when narrative was first detected
   last_updated: string;       // ISO timestamp of last update
   articles: ArticleLink[];    // Articles supporting this narrative
