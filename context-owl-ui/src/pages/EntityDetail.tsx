@@ -6,8 +6,6 @@ import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
 import {
   formatRelativeTime,
-  formatSentiment,
-  getSentimentColor,
   getSignalStrengthColor,
   formatPercentage,
 } from '../lib/formatters';
@@ -109,18 +107,13 @@ export function EntityDetail() {
             {data.mentions.length > 0 ? (
               <div className="space-y-4">
                 {data.mentions.slice(0, 5).map((mention) => (
-                  <div key={mention.id} className="border-b border-gray-200 pb-3 last:border-0">
+                  <div key={mention.id} className="border-b border-gray-200 dark:border-gray-700 pb-3 last:border-0">
                     <div className="flex items-start justify-between mb-2">
-                      <span className="text-sm text-gray-700">
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
                         {mention.mention_count} mention{mention.mention_count > 1 ? 's' : ''}
                       </span>
-                      {mention.sentiment_score !== null && (
-                        <span className={`text-sm font-medium ${getSentimentColor(mention.sentiment_score)}`}>
-                          {formatSentiment(mention.sentiment_score)}
-                        </span>
-                      )}
                     </div>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
                       {formatRelativeTime(parseDateSafe(mention.created_at))}
                     </p>
                   </div>
