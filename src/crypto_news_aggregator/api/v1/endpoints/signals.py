@@ -3,6 +3,7 @@ Signals API endpoints for trending entity detection.
 """
 
 import json
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Query, HTTPException
 from typing import List, Dict, Any, Optional
 from bson import ObjectId
@@ -12,6 +13,77 @@ from ....core.redis_rest_client import redis_client
 from ....db.mongodb import mongo_manager
 
 router = APIRouter()
+
+# In-memory cache as fallback when Redis is not available
+_memory_cache: Dict[str, tuple[Any, datetime]] = {}
+_cache_duration = timedelta(seconds=60)  # Cache for 60 seconds
+
+
+def get_from_cache(cache_key: str) -> Optional[Any]:
+    """
+    Get data from cache (Redis or in-memory fallback).
+    
+    Args:
+        cache_key: The cache key to retrieve
+        
+    Returns:
+        Cached data if available and fresh, None otherwise
+    """
+    # Try Redis first
+    if redis_client.enabled:
+        try:
+            cached_result = redis_client.get(cache_key)
+            if cached_result:
+                try:
+                    return json.loads(cached_result)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        except Exception:
+            # If Redis fails, fall through to in-memory cache
+            pass
+    
+    # Fallback to in-memory cache
+    if cache_key in _memory_cache:
+        cached_data, cached_time = _memory_cache[cache_key]
+        if datetime.now() - cached_time < _cache_duration:
+            return cached_data
+        else:
+            # Remove expired entry
+            del _memory_cache[cache_key]
+    
+    return None
+
+
+def set_in_cache(cache_key: str, data: Any, ttl_seconds: int = 120):
+    """
+    Set data in cache (Redis or in-memory fallback).
+    
+    Args:
+        cache_key: The cache key to set
+        data: The data to cache
+        ttl_seconds: Time to live in seconds (default 120)
+    """
+    # Try Redis first
+    if redis_client.enabled:
+        try:
+            redis_client.set(cache_key, json.dumps(data), ex=ttl_seconds)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to cache in Redis: {e}")
+    
+    # Clean up old entries BEFORE adding new one (keep cache size manageable)
+    if len(_memory_cache) >= 100:
+        now = datetime.now()
+        expired_keys = [
+            key for key, (_, timestamp) in _memory_cache.items()
+            if now - timestamp >= _cache_duration
+        ]
+        for key in expired_keys:
+            del _memory_cache[key]
+    
+    # Always set in memory cache as fallback
+    _memory_cache[cache_key] = (data, datetime.now())
 
 
 async def get_narrative_details(narrative_ids: List[str]) -> List[Dict[str, Any]]:
@@ -151,15 +223,10 @@ async def get_trending_signals(
     # Build cache key including timeframe
     cache_key = f"signals:trending:{limit}:{min_score}:{entity_type or 'all'}:{timeframe}"
     
-    # Try to get from cache
-    cached_result = redis_client.get(cache_key)
-    if cached_result:
-        try:
-            # Parse cached JSON
-            return json.loads(cached_result)
-        except (json.JSONDecodeError, TypeError):
-            # If cache is corrupted, continue to fetch fresh data
-            pass
+    # Try to get from cache (Redis or in-memory)
+    cached_result = get_from_cache(cache_key)
+    if cached_result is not None:
+        return cached_result
     
     # Map timeframe to field names
     field_map = {
@@ -216,14 +283,8 @@ async def get_trending_signals(
             "signals": signals_with_narratives,
         }
         
-        # Cache for 2 minutes (120 seconds)
-        try:
-            redis_client.set(cache_key, json.dumps(response), ex=120)
-        except Exception as e:
-            # Log but don't fail if caching fails
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Failed to cache trending signals: {e}")
+        # Cache for 2 minutes (120 seconds) using Redis or in-memory fallback
+        set_in_cache(cache_key, response, ttl_seconds=120)
         
         return response
         
