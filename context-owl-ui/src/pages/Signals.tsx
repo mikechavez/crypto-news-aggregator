@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { TrendingUp, ArrowUp, Activity, Minus, TrendingDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { signalsAPI } from '../api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { formatRelativeTime, formatSentiment, getSentimentColor, formatEntityType, getEntityTypeColor, formatTheme, getThemeColor } from '../lib/formatters';
+import { formatRelativeTime, formatEntityType, getEntityTypeColor, formatTheme, getThemeColor } from '../lib/formatters';
+import { cn } from '../lib/cn';
 
 /**
  * Safely parse date values to ISO string format
@@ -40,7 +43,7 @@ const parseDateSafe = (dateValue: any): string => {
 
 /**
  * Get velocity indicator based on velocity value
- * Returns emoji, label, and color classes for the badge
+ * Returns icon component, label, and color classes for the badge
  * 
  * Velocity is a percentage (e.g., 1379 = 1379% growth = 13.79x increase)
  * Thresholds:
@@ -50,17 +53,17 @@ const parseDateSafe = (dateValue: any): string => {
  * - Active: >= 0 (0-50% growth - steady)
  * - Declining: < 0 (negative growth - losing momentum)
  */
-const getVelocityIndicator = (velocity: number): { emoji: string; label: string; colorClass: string } => {
+const getVelocityIndicator = (velocity: number): { icon: any; label: string; colorClass: string } => {
   if (velocity >= 500) {
-    return { emoji: '🔥', label: 'Surging', colorClass: 'bg-red-100 text-red-700' };
+    return { icon: TrendingUp, label: 'Surging', colorClass: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' };
   } else if (velocity >= 200) {
-    return { emoji: '↑', label: 'Rising', colorClass: 'bg-green-100 text-green-700' };
+    return { icon: ArrowUp, label: 'Rising', colorClass: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' };
   } else if (velocity >= 50) {
-    return { emoji: '→', label: 'Growing', colorClass: 'bg-blue-100 text-blue-700' };
+    return { icon: Activity, label: 'Growing', colorClass: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' };
   } else if (velocity >= 0) {
-    return { emoji: '', label: 'Active', colorClass: 'bg-gray-100 text-gray-700' };
+    return { icon: Minus, label: 'Active', colorClass: 'bg-gray-100 dark:bg-gray-700/30 text-gray-700 dark:text-gray-300' };
   } else {
-    return { emoji: '↓', label: 'Declining', colorClass: 'bg-orange-100 text-orange-700' };
+    return { icon: TrendingDown, label: 'Declining', colorClass: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' };
   }
 };
 
@@ -106,12 +109,12 @@ export function Signals() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Market Signals</h1>
-        <p className="mt-2 text-gray-600">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Market Signals</h1>
+        <p className="mt-2 text-gray-600 dark:text-gray-400">
           Real-time detection of unusual market activity and emerging trends
         </p>
         {dataUpdatedAt && (
-          <p className="text-sm text-gray-500 mt-2">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
             Last updated: {formatRelativeTime(parseDateSafe(dataUpdatedAt))}
           </p>
         )}
@@ -119,29 +122,38 @@ export function Signals() {
 
       {/* Tab Navigation */}
       <div className="mb-6">
-        <div className="flex gap-2 border-b border-gray-200">
+        <div className="flex gap-2 border-b border-gray-200 dark:border-dark-border">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setSelectedTimeframe(tab.id)}
-              className={`px-4 py-3 font-medium text-sm transition-colors relative ${
+              className={cn(
+                'px-4 py-3 font-medium text-sm transition-colors relative',
                 selectedTimeframe === tab.id
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
+                  ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              )}
             >
               <span className="mr-2">{tab.emoji}</span>
               {tab.label} ({tab.id})
             </button>
           ))}
         </div>
-        <p className="mt-3 text-sm text-gray-600">
+        <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
           {currentTab.description}
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {data?.signals.map((signal, index) => {
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={selectedTimeframe}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.2 }}
+          className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+        >
+          {data?.signals.map((signal, index) => {
           const ticker = signal.entity.match(/\$[A-Z]+/)?.[0];
           const entityName = signal.entity.replace(/\$[A-Z]+/g, '').trim();
           
@@ -152,12 +164,16 @@ export function Signals() {
             <CardHeader>
               <CardTitle className="text-lg">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-blue-600 font-bold">#{index + 1}</span>
+                  <span className="text-blue-600 dark:text-blue-400 font-bold">#{index + 1}</span>
                   {/* TODO: Add Link to entity detail when endpoints ready */}
                   <span>{entityName}</span>
-                  {ticker && <span className="text-gray-500">{ticker}</span>}
-                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${velocityIndicator.colorClass}`}>
-                    {velocityIndicator.emoji} {velocityIndicator.label}
+                  {ticker && <span className="text-gray-500 dark:text-gray-400">{ticker}</span>}
+                  <span className={cn('flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full', velocityIndicator.colorClass)}>
+                    {(() => {
+                      const Icon = velocityIndicator.icon;
+                      return <Icon className="w-3 h-3" />;
+                    })()}
+                    {velocityIndicator.label}
                   </span>
                 </div>
               </CardTitle>
@@ -165,42 +181,36 @@ export function Signals() {
             <CardContent>
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Type:</span>
+                  <span className="text-gray-500 dark:text-gray-400">Type:</span>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${getEntityTypeColor(signal.entity_type)}`}>
                     {formatEntityType(signal.entity_type)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Sources:</span>
-                  <span className="text-gray-700">
+                  <span className="text-gray-500 dark:text-gray-400">Sources:</span>
+                  <span className="text-gray-700 dark:text-gray-300">
                     {signal.source_count} sources
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Sentiment:</span>
-                  <span className={getSentimentColor(signal.sentiment)}>
-                    {formatSentiment(signal.sentiment)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Last Updated:</span>
-                  <span className="text-gray-700">
+                  <span className="text-gray-500 dark:text-gray-400">Last Updated:</span>
+                  <span className="text-gray-700 dark:text-gray-300">
                     {formatRelativeTime(parseDateSafe(signal.last_updated))}
                   </span>
                 </div>
                 
                 {/* Narrative context section */}
-                <div className="mt-3 pt-3 border-t border-gray-200">
+                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-dark-border">
                   {signal.is_emerging ? (
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-yellow-700 bg-yellow-100 px-2 py-1 rounded-full">
+                      <span className="text-xs font-medium text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-1 rounded-full">
                         🆕 Emerging
                       </span>
-                      <span className="text-xs text-gray-500">Not yet part of any narrative</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Not yet part of any narrative</span>
                     </div>
                   ) : signal.narratives && signal.narratives.length > 0 ? (
                     <div>
-                      <span className="text-xs text-gray-500 block mb-1">Part of:</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Part of:</span>
                       <div className="flex flex-wrap gap-1">
                         {signal.narratives.map((narrative) => (
                           <button
@@ -219,7 +229,7 @@ export function Signals() {
                 
                 {/* Recent articles section */}
                 {signal.recent_articles && signal.recent_articles.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-200">
+                  <div className="mt-3 pt-3 border-t border-gray-200 dark:border-dark-border">
                     <button
                       onClick={() => {
                         const newExpanded = new Set(expandedArticles);
@@ -230,7 +240,7 @@ export function Signals() {
                         }
                         setExpandedArticles(newExpanded);
                       }}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium flex items-center gap-1"
                     >
                       {expandedArticles.has(index) ? '▼' : '▶'} Recent mentions ({signal.recent_articles.length})
                     </button>
@@ -238,16 +248,16 @@ export function Signals() {
                     {expandedArticles.has(index) && (
                       <div className="mt-2 space-y-2">
                         {signal.recent_articles.map((article, articleIdx) => (
-                          <div key={articleIdx} className="text-xs bg-gray-50 p-2 rounded">
+                          <div key={articleIdx} className="text-xs bg-gray-50 dark:bg-dark-hover p-2 rounded">
                             <a
                               href={article.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-blue-600 hover:text-blue-800 hover:underline font-medium block mb-1"
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline font-medium block mb-1"
                             >
                               {article.title}
                             </a>
-                            <div className="flex items-center gap-2 text-gray-500">
+                            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                               <span className="capitalize">{article.source}</span>
                               <span>•</span>
                               <span>{formatRelativeTime(article.published_at)}</span>
@@ -263,11 +273,12 @@ export function Signals() {
           </Card>
           );
         })}
-      </div>
+        </motion.div>
+      </AnimatePresence>
 
       {data?.signals.length === 0 && (
         <div className="text-center py-12">
-          <p className="text-gray-500">No signals detected yet</p>
+          <p className="text-gray-500 dark:text-gray-400">No signals detected yet</p>
         </div>
       )}
     </div>
