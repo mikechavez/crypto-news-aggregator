@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, ArrowUp, Activity, Minus, TrendingDown } from 'lucide-react';
+import { TrendingUp, ArrowUp, Activity, Minus, TrendingDown, Flame, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signalsAPI } from '../api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
@@ -128,13 +128,15 @@ export function Signals() {
               key={tab.id}
               onClick={() => setSelectedTimeframe(tab.id)}
               className={cn(
-                'px-4 py-3 font-medium text-sm transition-colors relative',
+                'px-4 py-3 font-medium text-sm transition-colors relative flex items-center gap-2',
                 selectedTimeframe === tab.id
                   ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
               )}
             >
-              <span className="mr-2">{tab.emoji}</span>
+              {tab.id === '24h' && <Flame className="w-4 h-4" />}
+              {tab.id === '7d' && <TrendingUp className="w-4 h-4" />}
+              {tab.id === '30d' && <Star className="w-4 h-4" />}
               {tab.label} ({tab.id})
             </button>
           ))}
