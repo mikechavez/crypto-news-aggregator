@@ -16,6 +16,7 @@ from crypto_news_aggregator.services.narrative_themes import (
     generate_narrative_from_theme,
     cluster_by_narrative_salience,
     validate_narrative_json,
+    compute_narrative_fingerprint,
     THEME_CATEGORIES
 )
 
@@ -1038,3 +1039,233 @@ class TestValidateNarrativeJsonIntegration:
         assert is_valid is True
         assert "SEC" in data["actors"]
         assert data["actors"][0] == "SEC"  # Added at front
+
+
+# ============================================================================
+# NARRATIVE FINGERPRINT TESTS
+# ============================================================================
+
+class TestComputeNarrativeFingerprint:
+    """Unit tests for compute_narrative_fingerprint function."""
+    
+    @pytest.fixture
+    def sample_cluster_with_dict_actors(self):
+        """Sample cluster data with actors as dict (salience scores)."""
+        return {
+            "nucleus_entity": "SEC",
+            "actors": {
+                "SEC": 5,
+                "Binance": 4,
+                "Coinbase": 4,
+                "Kraken": 3,
+                "Gemini": 3,
+                "FTX": 2,
+                "Tether": 2
+            },
+            "actions": [
+                "Filed lawsuit against major exchanges",
+                "Announced new regulatory framework",
+                "Issued enforcement actions",
+                "Requested additional disclosures"
+            ]
+        }
+    
+    @pytest.fixture
+    def sample_cluster_with_list_actors(self):
+        """Sample cluster data with actors as list."""
+        return {
+            "nucleus_entity": "Ethereum",
+            "actors": ["Ethereum", "Vitalik Buterin", "EIP-4844", "Layer 2"],
+            "actions": [
+                "Deployed Dencun upgrade",
+                "Reduced transaction fees",
+                "Improved scalability"
+            ]
+        }
+    
+    def test_fingerprint_with_dict_actors(self, sample_cluster_with_dict_actors):
+        """Test fingerprint computation with actors as dict (salience scores)."""
+        fingerprint = compute_narrative_fingerprint(sample_cluster_with_dict_actors)
+        
+        # Check structure
+        assert "nucleus_entity" in fingerprint
+        assert "top_actors" in fingerprint
+        assert "key_actions" in fingerprint
+        assert "timestamp" in fingerprint
+        
+        # Check nucleus entity
+        assert fingerprint["nucleus_entity"] == "SEC"
+        
+        # Check top actors (should be sorted by salience, top 5)
+        assert len(fingerprint["top_actors"]) == 5
+        assert fingerprint["top_actors"][0] == "SEC"  # Highest salience (5)
+        # Binance and Coinbase both have salience 4, order may vary
+        assert "Binance" in fingerprint["top_actors"][:3]
+        assert "Coinbase" in fingerprint["top_actors"][:3]
+        
+        # Check key actions (top 3)
+        assert len(fingerprint["key_actions"]) == 3
+        assert fingerprint["key_actions"][0] == "Filed lawsuit against major exchanges"
+        
+        # Check timestamp is datetime
+        assert isinstance(fingerprint["timestamp"], datetime)
+    
+    def test_fingerprint_with_list_actors(self, sample_cluster_with_list_actors):
+        """Test fingerprint computation with actors as list."""
+        fingerprint = compute_narrative_fingerprint(sample_cluster_with_list_actors)
+        
+        # Check structure
+        assert "nucleus_entity" in fingerprint
+        assert "top_actors" in fingerprint
+        assert "key_actions" in fingerprint
+        assert "timestamp" in fingerprint
+        
+        # Check nucleus entity
+        assert fingerprint["nucleus_entity"] == "Ethereum"
+        
+        # Check top actors (should take first 5 from list)
+        assert len(fingerprint["top_actors"]) == 4  # Only 4 actors in sample
+        assert fingerprint["top_actors"] == ["Ethereum", "Vitalik Buterin", "EIP-4844", "Layer 2"]
+        
+        # Check key actions (top 3)
+        assert len(fingerprint["key_actions"]) == 3
+        assert "Deployed Dencun upgrade" in fingerprint["key_actions"]
+    
+    def test_fingerprint_with_empty_cluster(self):
+        """Test fingerprint computation with empty cluster."""
+        empty_cluster = {}
+        fingerprint = compute_narrative_fingerprint(empty_cluster)
+        
+        # Should handle gracefully
+        assert fingerprint["nucleus_entity"] == ""
+        assert fingerprint["top_actors"] == []
+        assert fingerprint["key_actions"] == []
+        assert isinstance(fingerprint["timestamp"], datetime)
+    
+    def test_fingerprint_with_missing_fields(self):
+        """Test fingerprint computation with missing fields."""
+        partial_cluster = {
+            "nucleus_entity": "Bitcoin"
+            # Missing actors and actions
+        }
+        fingerprint = compute_narrative_fingerprint(partial_cluster)
+        
+        # Should handle gracefully
+        assert fingerprint["nucleus_entity"] == "Bitcoin"
+        assert fingerprint["top_actors"] == []
+        assert fingerprint["key_actions"] == []
+        assert isinstance(fingerprint["timestamp"], datetime)
+    
+    def test_fingerprint_limits_actors_to_5(self):
+        """Test that fingerprint limits actors to top 5."""
+        cluster = {
+            "nucleus_entity": "DeFi",
+            "actors": {
+                "Uniswap": 5,
+                "Aave": 5,
+                "Compound": 4,
+                "MakerDAO": 4,
+                "Curve": 3,
+                "Balancer": 3,
+                "SushiSwap": 2,
+                "1inch": 2
+            },
+            "actions": ["TVL growth", "New protocols launched"]
+        }
+        
+        fingerprint = compute_narrative_fingerprint(cluster)
+        
+        # Should limit to top 5 actors
+        assert len(fingerprint["top_actors"]) == 5
+        # Top actors should include highest salience
+        assert "Uniswap" in fingerprint["top_actors"]
+        assert "Aave" in fingerprint["top_actors"]
+    
+    def test_fingerprint_limits_actions_to_3(self):
+        """Test that fingerprint limits actions to top 3."""
+        cluster = {
+            "nucleus_entity": "Regulation",
+            "actors": {"SEC": 5},
+            "actions": [
+                "Action 1",
+                "Action 2",
+                "Action 3",
+                "Action 4",
+                "Action 5"
+            ]
+        }
+        
+        fingerprint = compute_narrative_fingerprint(cluster)
+        
+        # Should limit to top 3 actions
+        assert len(fingerprint["key_actions"]) == 3
+        assert fingerprint["key_actions"] == ["Action 1", "Action 2", "Action 3"]
+    
+    def test_fingerprint_with_fewer_than_5_actors(self):
+        """Test fingerprint with fewer than 5 actors."""
+        cluster = {
+            "nucleus_entity": "Solana",
+            "actors": {
+                "Solana": 5,
+                "Anatoly Yakovenko": 4
+            },
+            "actions": ["Network upgrade"]
+        }
+        
+        fingerprint = compute_narrative_fingerprint(cluster)
+        
+        # Should include all available actors
+        assert len(fingerprint["top_actors"]) == 2
+        assert fingerprint["top_actors"] == ["Solana", "Anatoly Yakovenko"]
+    
+    def test_fingerprint_with_fewer_than_3_actions(self):
+        """Test fingerprint with fewer than 3 actions."""
+        cluster = {
+            "nucleus_entity": "NFT",
+            "actors": {"OpenSea": 5},
+            "actions": ["Marketplace update"]
+        }
+        
+        fingerprint = compute_narrative_fingerprint(cluster)
+        
+        # Should include all available actions
+        assert len(fingerprint["key_actions"]) == 1
+        assert fingerprint["key_actions"] == ["Marketplace update"]
+    
+    def test_fingerprint_timestamp_is_recent(self):
+        """Test that fingerprint timestamp is current."""
+        cluster = {
+            "nucleus_entity": "Test",
+            "actors": {"Actor1": 5},
+            "actions": ["Action1"]
+        }
+        
+        before = datetime.now(timezone.utc)
+        fingerprint = compute_narrative_fingerprint(cluster)
+        after = datetime.now(timezone.utc)
+        
+        # Timestamp should be between before and after
+        assert before <= fingerprint["timestamp"] <= after
+    
+    def test_fingerprint_sorts_actors_by_salience_descending(self):
+        """Test that actors are sorted by salience in descending order."""
+        cluster = {
+            "nucleus_entity": "Market",
+            "actors": {
+                "Actor1": 2,
+                "Actor2": 5,
+                "Actor3": 3,
+                "Actor4": 4,
+                "Actor5": 1
+            },
+            "actions": ["Event"]
+        }
+        
+        fingerprint = compute_narrative_fingerprint(cluster)
+        
+        # Should be sorted: Actor2(5), Actor4(4), Actor3(3), Actor1(2), Actor5(1)
+        assert fingerprint["top_actors"][0] == "Actor2"
+        assert fingerprint["top_actors"][1] == "Actor4"
+        assert fingerprint["top_actors"][2] == "Actor3"
+        assert fingerprint["top_actors"][3] == "Actor1"
+        assert fingerprint["top_actors"][4] == "Actor5"
