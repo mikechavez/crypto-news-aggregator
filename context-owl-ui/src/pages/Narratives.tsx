@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Sparkles, TrendingUp, Flame, Zap, Star, Wind } from 'lucide-react';
+import { Sparkles, TrendingUp, Flame, Zap, Star, Wind, LayoutGrid, Activity } from 'lucide-react';
 import { narrativesAPI } from '../api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { TimelineView } from '../components/TimelineView';
 import { formatRelativeTime, formatNumber } from '../lib/formatters';
 import { cn } from '../lib/cn';
 
@@ -51,6 +52,7 @@ const parseNarrativeDate = (dateValue: any): string => {
 
 export function Narratives() {
   const [expandedArticles, setExpandedArticles] = useState<Set<number>>(new Set());
+  const [viewMode, setViewMode] = useState<'cards' | 'pulse'>('cards');
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['narratives'],
     queryFn: () => narrativesAPI.getNarratives(),
@@ -76,6 +78,40 @@ export function Narratives() {
         )}
       </div>
 
+      {/* View mode toggle */}
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setViewMode('cards')}
+          className={cn(
+            'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors',
+            viewMode === 'cards'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 dark:bg-dark-card text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover'
+          )}
+        >
+          <LayoutGrid className="w-4 h-4" />
+          Cards
+        </button>
+        <button
+          onClick={() => setViewMode('pulse')}
+          className={cn(
+            'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors',
+            viewMode === 'pulse'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 dark:bg-dark-card text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover'
+          )}
+        >
+          <Activity className="w-4 h-4" />
+          Pulse
+        </button>
+      </div>
+
+      {viewMode === 'pulse' ? (
+        <>
+          <TimelineView narratives={narratives || []} />
+        </>
+      ) : (
+        <>
       <div className="space-y-6">
         {narratives.map((narrative, index) => {
           // Handle both old and new field names for backward compatibility
@@ -189,6 +225,8 @@ export function Narratives() {
         <div className="text-center py-12">
           <p className="text-gray-500 dark:text-gray-400">No narratives detected yet</p>
         </div>
+      )}
+        </>
       )}
     </div>
   );

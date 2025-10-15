@@ -74,6 +74,61 @@ def validate_narrative_json(data: Dict) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
+def compute_narrative_fingerprint(cluster: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Compute a composite fingerprint for a narrative cluster to enable intelligent matching.
+    
+    The fingerprint captures the structural components of a narrative:
+    - Nucleus entity (the central protagonist)
+    - Top actors by salience (key participants)
+    - Key actions (main events)
+    - Timestamp (when fingerprint was computed)
+    
+    Args:
+        cluster: Dict containing:
+            - nucleus_entity: str, the primary entity the narrative is about
+            - actors: dict with entity names as keys and salience scores as values
+            - actions: list of action/event strings
+    
+    Returns:
+        Dict with fingerprint components:
+            - nucleus_entity: str
+            - top_actors: list of top 5 actors sorted by salience (descending)
+            - key_actions: list of top 3 actions
+            - timestamp: datetime when fingerprint was computed
+    """
+    # Extract nucleus entity
+    nucleus_entity = cluster.get('nucleus_entity', '')
+    
+    # Extract and sort actors by salience
+    actors_dict = cluster.get('actors', {})
+    if isinstance(actors_dict, dict):
+        # Sort actors by salience score (descending) and take top 5
+        sorted_actors = sorted(
+            actors_dict.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )
+        top_actors = [actor for actor, _ in sorted_actors[:5]]
+    else:
+        # Handle case where actors might be a list instead of dict
+        top_actors = list(actors_dict)[:5] if actors_dict else []
+    
+    # Extract key actions (top 3)
+    actions = cluster.get('actions', [])
+    key_actions = actions[:3] if actions else []
+    
+    # Create fingerprint
+    fingerprint = {
+        'nucleus_entity': nucleus_entity,
+        'top_actors': top_actors,
+        'key_actions': key_actions,
+        'timestamp': datetime.now(timezone.utc)
+    }
+    
+    return fingerprint
+
+
 def clean_json_response(response: str) -> str:
     """
     Clean JSON response from LLM to handle control characters and newlines.
