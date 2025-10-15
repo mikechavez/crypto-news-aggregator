@@ -11,6 +11,7 @@ from bson import ObjectId
 
 from crypto_news_aggregator.services.narrative_service import (
     determine_lifecycle_stage,
+    determine_lifecycle_state,
     extract_entities_from_articles,
     detect_narratives
 )

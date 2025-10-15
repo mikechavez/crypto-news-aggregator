@@ -92,6 +92,50 @@ def calculate_momentum(article_dates: List[datetime]) -> str:
         return "stable"
 
 
+def determine_lifecycle_state(
+    article_count: int,
+    mention_velocity: float,
+    first_seen: datetime,
+    last_updated: datetime
+) -> str:
+    """
+    Determine the lifecycle state of a narrative based on activity patterns.
+    
+    Args:
+        article_count: Current number of articles in narrative
+        mention_velocity: Articles per day rate
+        first_seen: When the narrative was first detected
+        last_updated: When the narrative was last updated with new articles
+    
+    Returns:
+        Lifecycle state: emerging, rising, hot, cooling, or dormant
+    """
+    # Calculate days since last update
+    now = datetime.now(timezone.utc)
+    days_since_update = (now - last_updated).total_seconds() / 86400  # 86400 seconds in a day
+    
+    # Check for dormant or cooling states first (based on recency)
+    if days_since_update >= 7:
+        return 'dormant'
+    elif days_since_update >= 3:
+        return 'cooling'
+    
+    # Check for hot state (high activity)
+    if article_count >= 7 or mention_velocity >= 3.0:
+        return 'hot'
+    
+    # Check for rising state (moderate velocity, not yet hot)
+    if mention_velocity >= 1.5 and article_count < 7:
+        return 'rising'
+    
+    # Default to emerging for new/small narratives
+    if article_count < 4:
+        return 'emerging'
+    
+    # Fallback for edge cases (4-6 articles, low velocity, recent)
+    return 'emerging'
+
+
 def determine_lifecycle_stage(
     article_count: int,
     mention_velocity: float,
@@ -99,6 +143,8 @@ def determine_lifecycle_stage(
 ) -> str:
     """
     Determine the lifecycle stage of a narrative with momentum awareness.
+    
+    DEPRECATED: Use determine_lifecycle_state instead for new code.
     
     Args:
         article_count: Current number of articles in narrative
@@ -375,8 +421,23 @@ async def detect_narratives(
                     
                     # Get existing article_ids and append new ones from cluster
                     existing_article_ids = set(matching_narrative.get('article_ids', []))
-                    new_article_ids = set(cluster.get('article_ids', []))
+                    # Extract article_ids from cluster articles
+                    new_article_ids = set(str(article.get('_id')) for article in cluster if isinstance(article, dict))
                     combined_article_ids = list(existing_article_ids | new_article_ids)
+                    
+                    # Calculate updated metrics for lifecycle_state
+                    updated_article_count = len(combined_article_ids)
+                    first_seen = matching_narrative.get('first_seen', datetime.now(timezone.utc))
+                    last_updated = datetime.now(timezone.utc)
+                    
+                    # Calculate mention velocity based on time since first_seen
+                    time_span = (last_updated - first_seen).total_seconds() / 86400  # days
+                    mention_velocity = updated_article_count / time_span if time_span > 0 else 0
+                    
+                    # Calculate lifecycle_state for updated narrative
+                    lifecycle_state = determine_lifecycle_state(
+                        updated_article_count, mention_velocity, first_seen, last_updated
+                    )
                     
                     # Update the narrative in database
                     db = await mongo_manager.get_async_database()
@@ -384,8 +445,10 @@ async def detect_narratives(
                     
                     update_data = {
                         'article_ids': combined_article_ids,
-                        'article_count': len(combined_article_ids),
-                        'last_updated': datetime.now(timezone.utc),
+                        'article_count': updated_article_count,
+                        'last_updated': last_updated,
+                        'mention_velocity': round(mention_velocity, 2),
+                        'lifecycle_state': lifecycle_state,
                         'needs_summary_update': True,
                         'fingerprint': fingerprint
                     }
@@ -445,8 +508,15 @@ async def detect_narratives(
                     else:
                         recency_score = 0.0
                     
-                    # Determine lifecycle stage with momentum awareness
+                    # Determine lifecycle stage with momentum awareness (legacy)
                     lifecycle = determine_lifecycle_stage(article_count, mention_velocity, momentum)
+                    
+                    # Determine lifecycle state (new approach)
+                    first_seen = datetime.now(timezone.utc)
+                    last_updated = datetime.now(timezone.utc)
+                    lifecycle_state = determine_lifecycle_state(
+                        article_count, mention_velocity, first_seen, last_updated
+                    )
                     
                     # Use nucleus_entity as theme for database compatibility
                     theme = narrative_data.get("nucleus_entity", "unknown")
@@ -456,6 +526,7 @@ async def detect_narratives(
                     narrative_data["entities"] = narrative_data.get("actors", [])[:10]
                     narrative_data["mention_velocity"] = round(mention_velocity, 2)
                     narrative_data["lifecycle"] = lifecycle
+                    narrative_data["lifecycle_state"] = lifecycle_state
                     narrative_data["momentum"] = momentum
                     narrative_data["recency_score"] = round(recency_score, 3)
                     
@@ -473,13 +544,14 @@ async def detect_narratives(
                             "article_count": article_count,
                             "mention_velocity": round(mention_velocity, 2),
                             "lifecycle": lifecycle,
+                            "lifecycle_state": lifecycle_state,
                             "momentum": momentum,
                             "recency_score": round(recency_score, 3),
                             "entity_relationships": narrative_data.get("entity_relationships", []),
                             "fingerprint": fingerprint,
                             "needs_summary_update": False,
-                            "first_seen": datetime.now(timezone.utc),
-                            "last_updated": datetime.now(timezone.utc),
+                            "first_seen": first_seen,
+                            "last_updated": last_updated,
                             "timeline_data": [],
                             "peak_activity": {
                                 "date": datetime.now(timezone.utc).date().isoformat(),
@@ -564,8 +636,14 @@ async def detect_narratives(
                 else:
                     recency_score = 0.0
                 
-                # Determine lifecycle stage with momentum awareness
+                # Determine lifecycle stage with momentum awareness (legacy)
                 lifecycle = determine_lifecycle_stage(article_count, mention_velocity, momentum)
+                
+                # Determine lifecycle state (new approach)
+                last_updated = datetime.now(timezone.utc)
+                lifecycle_state = determine_lifecycle_state(
+                    article_count, mention_velocity, first_seen, last_updated
+                )
                 
                 # Build narrative document
                 narrative = {
@@ -575,16 +653,17 @@ async def detect_narratives(
                     "entities": entities[:10],  # Limit to top 10 entities
                     "article_ids": [str(a["_id"]) for a in articles],
                     "first_seen": first_seen,
-                    "last_updated": datetime.now(timezone.utc),
+                    "last_updated": last_updated,
                     "article_count": article_count,
                     "mention_velocity": round(mention_velocity, 2),
                     "lifecycle": lifecycle,
+                    "lifecycle_state": lifecycle_state,
                     "momentum": momentum,
                     "recency_score": round(recency_score, 3)
                 }
                 
                 narratives.append(narrative)
-                logger.info(f"Created narrative for theme '{theme}': {article_count} articles, lifecycle={lifecycle}, momentum={momentum}")
+                logger.info(f"Created narrative for theme '{theme}': {article_count} articles, lifecycle={lifecycle}, lifecycle_state={lifecycle_state}, momentum={momentum}")
                 
                 # Save narrative to database
                 try:
@@ -599,7 +678,8 @@ async def detect_narratives(
                         lifecycle=narrative["lifecycle"],
                         momentum=narrative["momentum"],
                         recency_score=narrative["recency_score"],
-                        first_seen=narrative["first_seen"]
+                        first_seen=narrative["first_seen"],
+                        lifecycle_state=narrative["lifecycle_state"]
                     )
                     logger.info(f"Saved narrative {narrative_id} to database")
                 except Exception as e:
