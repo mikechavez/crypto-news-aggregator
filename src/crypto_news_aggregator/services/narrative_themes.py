@@ -129,6 +129,83 @@ def compute_narrative_fingerprint(cluster: Dict[str, Any]) -> Dict[str, Any]:
     return fingerprint
 
 
+def calculate_fingerprint_similarity(
+    fingerprint1: Dict[str, Any],
+    fingerprint2: Dict[str, Any]
+) -> float:
+    """
+    Calculate similarity between two narrative fingerprints.
+    
+    Uses weighted scoring to determine if two narratives should be merged:
+    - Actor overlap (Jaccard similarity of top_actors): weight 0.5
+    - Nucleus match (exact match of nucleus_entity): weight 0.3
+    - Action overlap (Jaccard similarity of key_actions): weight 0.2
+    
+    Args:
+        fingerprint1: First fingerprint dict with nucleus_entity, top_actors, key_actions
+        fingerprint2: Second fingerprint dict with nucleus_entity, top_actors, key_actions
+    
+    Returns:
+        Similarity score between 0.0 and 1.0, where 1.0 is identical
+    
+    Example:
+        >>> fp1 = {
+        ...     'nucleus_entity': 'SEC',
+        ...     'top_actors': ['SEC', 'Binance', 'Coinbase'],
+        ...     'key_actions': ['filed lawsuit', 'regulatory enforcement']
+        ... }
+        >>> fp2 = {
+        ...     'nucleus_entity': 'SEC',
+        ...     'top_actors': ['SEC', 'Binance', 'Kraken'],
+        ...     'key_actions': ['filed lawsuit', 'compliance review']
+        ... }
+        >>> calculate_fingerprint_similarity(fp1, fp2)
+        0.75  # High similarity: same nucleus, 2/4 actors overlap, 1/3 actions overlap
+    """
+    # Extract components from fingerprints
+    nucleus1 = fingerprint1.get('nucleus_entity', '')
+    nucleus2 = fingerprint2.get('nucleus_entity', '')
+    
+    actors1 = set(fingerprint1.get('top_actors', []))
+    actors2 = set(fingerprint2.get('top_actors', []))
+    
+    actions1 = set(fingerprint1.get('key_actions', []))
+    actions2 = set(fingerprint2.get('key_actions', []))
+    
+    # Calculate nucleus match score (binary: 1.0 or 0.0)
+    nucleus_match_score = 1.0 if nucleus1 and nucleus2 and nucleus1 == nucleus2 else 0.0
+    
+    # Calculate actor overlap score (Jaccard similarity)
+    if actors1 or actors2:
+        actor_overlap = len(actors1 & actors2)
+        actor_union = len(actors1 | actors2)
+        actor_overlap_score = actor_overlap / actor_union if actor_union > 0 else 0.0
+    else:
+        actor_overlap_score = 0.0
+    
+    # Calculate action overlap score (Jaccard similarity)
+    if actions1 or actions2:
+        action_overlap = len(actions1 & actions2)
+        action_union = len(actions1 | actions2)
+        action_overlap_score = action_overlap / action_union if action_union > 0 else 0.0
+    else:
+        action_overlap_score = 0.0
+    
+    # Weighted sum of components
+    similarity = (
+        nucleus_match_score * 0.3 +
+        actor_overlap_score * 0.5 +
+        action_overlap_score * 0.2
+    )
+    
+    logger.debug(
+        f"Fingerprint similarity: {similarity:.3f} "
+        f"(nucleus={nucleus_match_score:.1f}, actors={actor_overlap_score:.3f}, actions={action_overlap_score:.3f})"
+    )
+    
+    return similarity
+
+
 def clean_json_response(response: str) -> str:
     """
     Clean JSON response from LLM to handle control characters and newlines.

@@ -17,6 +17,7 @@ from crypto_news_aggregator.services.narrative_themes import (
     cluster_by_narrative_salience,
     validate_narrative_json,
     compute_narrative_fingerprint,
+    calculate_fingerprint_similarity,
     THEME_CATEGORIES
 )
 
@@ -1269,3 +1270,251 @@ class TestComputeNarrativeFingerprint:
         assert fingerprint["top_actors"][2] == "Actor3"
         assert fingerprint["top_actors"][3] == "Actor1"
         assert fingerprint["top_actors"][4] == "Actor5"
+
+
+# ============================================================================
+# FINGERPRINT SIMILARITY TESTS
+# ============================================================================
+
+class TestCalculateFingerprintSimilarity:
+    """Unit tests for calculate_fingerprint_similarity function."""
+    
+    @pytest.fixture
+    def fingerprint_sec_binance(self):
+        """Sample fingerprint for SEC vs Binance narrative."""
+        return {
+            'nucleus_entity': 'SEC',
+            'top_actors': ['SEC', 'Binance', 'Coinbase', 'Kraken', 'Gemini'],
+            'key_actions': ['filed lawsuit', 'regulatory enforcement', 'compliance review']
+        }
+    
+    @pytest.fixture
+    def fingerprint_sec_coinbase(self):
+        """Sample fingerprint for SEC vs Coinbase narrative (similar to Binance)."""
+        return {
+            'nucleus_entity': 'SEC',
+            'top_actors': ['SEC', 'Coinbase', 'Kraken', 'FTX', 'Gemini'],
+            'key_actions': ['filed lawsuit', 'enforcement action', 'securities violation']
+        }
+    
+    @pytest.fixture
+    def fingerprint_defi_growth(self):
+        """Sample fingerprint for DeFi growth narrative (different)."""
+        return {
+            'nucleus_entity': 'Uniswap',
+            'top_actors': ['Uniswap', 'Aave', 'Compound', 'MakerDAO', 'Curve'],
+            'key_actions': ['TVL increase', 'new protocol launch', 'yield farming']
+        }
+    
+    def test_identical_fingerprints(self, fingerprint_sec_binance):
+        """Test similarity of identical fingerprints returns 1.0."""
+        similarity = calculate_fingerprint_similarity(
+            fingerprint_sec_binance,
+            fingerprint_sec_binance
+        )
+        
+        # Identical fingerprints should have similarity 1.0
+        assert similarity == 1.0
+    
+    def test_same_nucleus_high_actor_overlap(self, fingerprint_sec_binance, fingerprint_sec_coinbase):
+        """Test high similarity when nucleus matches and actors overlap significantly."""
+        similarity = calculate_fingerprint_similarity(
+            fingerprint_sec_binance,
+            fingerprint_sec_coinbase
+        )
+        
+        # Same nucleus (0.3) + high actor overlap (0.5 * 4/7) + some action overlap (0.2 * 1/5)
+        # Expected: 0.3 + 0.286 + 0.04 = ~0.626
+        # Actual: actors overlap = {SEC, Coinbase, Kraken, Gemini} = 4, union = 7
+        # Actions overlap = {filed lawsuit} = 1, union = 5
+        assert 0.60 <= similarity <= 0.70
+    
+    def test_different_nucleus_different_actors(self, fingerprint_sec_binance, fingerprint_defi_growth):
+        """Test low similarity when nucleus and actors are different."""
+        similarity = calculate_fingerprint_similarity(
+            fingerprint_sec_binance,
+            fingerprint_defi_growth
+        )
+        
+        # Different nucleus (0.0) + no actor overlap (0.0) + no action overlap (0.0)
+        # Expected: ~0.0
+        assert similarity < 0.1
+    
+    def test_same_nucleus_no_actor_overlap(self):
+        """Test moderate similarity when nucleus matches but actors don't overlap."""
+        fp1 = {
+            'nucleus_entity': 'Bitcoin',
+            'top_actors': ['Bitcoin', 'MicroStrategy', 'Saylor'],
+            'key_actions': ['institutional buying', 'treasury allocation']
+        }
+        fp2 = {
+            'nucleus_entity': 'Bitcoin',
+            'top_actors': ['Bitcoin', 'El Salvador', 'Bukele'],
+            'key_actions': ['nation-state adoption', 'legal tender']
+        }
+        
+        similarity = calculate_fingerprint_similarity(fp1, fp2)
+        
+        # Same nucleus (0.3) + some actor overlap (Bitcoin) + no action overlap
+        # Expected: 0.3 + 0.5 * (1/5) = 0.3 + 0.1 = 0.4
+        assert 0.35 <= similarity <= 0.45
+    
+    def test_different_nucleus_high_actor_overlap(self):
+        """Test similarity when nucleus differs but actors overlap significantly."""
+        fp1 = {
+            'nucleus_entity': 'SEC',
+            'top_actors': ['SEC', 'Binance', 'Coinbase', 'Kraken'],
+            'key_actions': ['regulatory action']
+        }
+        fp2 = {
+            'nucleus_entity': 'Binance',
+            'top_actors': ['Binance', 'SEC', 'Coinbase', 'Kraken'],
+            'key_actions': ['compliance response']
+        }
+        
+        similarity = calculate_fingerprint_similarity(fp1, fp2)
+        
+        # Different nucleus (0.0) + high actor overlap (4/4 = 1.0) + no action overlap
+        # Expected: 0.0 + 0.5 * 1.0 + 0.0 = 0.5
+        assert 0.45 <= similarity <= 0.55
+    
+    def test_empty_fingerprints(self):
+        """Test similarity of empty fingerprints."""
+        fp1 = {
+            'nucleus_entity': '',
+            'top_actors': [],
+            'key_actions': []
+        }
+        fp2 = {
+            'nucleus_entity': '',
+            'top_actors': [],
+            'key_actions': []
+        }
+        
+        similarity = calculate_fingerprint_similarity(fp1, fp2)
+        
+        # Empty fingerprints should have 0.0 similarity
+        assert similarity == 0.0
+    
+    def test_one_empty_fingerprint(self, fingerprint_sec_binance):
+        """Test similarity when one fingerprint is empty."""
+        empty_fp = {
+            'nucleus_entity': '',
+            'top_actors': [],
+            'key_actions': []
+        }
+        
+        similarity = calculate_fingerprint_similarity(
+            fingerprint_sec_binance,
+            empty_fp
+        )
+        
+        # Should have 0.0 similarity
+        assert similarity == 0.0
+    
+    def test_missing_fields_handled_gracefully(self):
+        """Test that missing fields are handled gracefully."""
+        fp1 = {'nucleus_entity': 'SEC'}  # Missing actors and actions
+        fp2 = {
+            'nucleus_entity': 'SEC',
+            'top_actors': ['SEC', 'Binance'],
+            'key_actions': ['lawsuit']
+        }
+        
+        similarity = calculate_fingerprint_similarity(fp1, fp2)
+        
+        # Same nucleus (0.3) + no actors in fp1 (0.0) + no actions in fp1 (0.0)
+        # Expected: 0.3
+        assert 0.25 <= similarity <= 0.35
+    
+    def test_action_overlap_contribution(self):
+        """Test that action overlap contributes to similarity score."""
+        fp1 = {
+            'nucleus_entity': 'DeFi',
+            'top_actors': ['Uniswap', 'Aave'],
+            'key_actions': ['TVL growth', 'new protocol', 'yield farming']
+        }
+        fp2 = {
+            'nucleus_entity': 'DeFi',
+            'top_actors': ['Uniswap', 'Aave'],
+            'key_actions': ['TVL growth', 'new protocol', 'liquidity mining']
+        }
+        
+        similarity = calculate_fingerprint_similarity(fp1, fp2)
+        
+        # Same nucleus (0.3) + full actor overlap (0.5 * 1.0) + partial action overlap (0.2 * 0.5)
+        # Expected: 0.3 + 0.5 + 0.1 = 0.9
+        assert 0.85 <= similarity <= 0.95
+    
+    def test_weighted_scoring(self):
+        """Test that weights are applied correctly (actors > nucleus > actions)."""
+        # Test 1: High actor overlap, different nucleus
+        fp1 = {
+            'nucleus_entity': 'EntityA',
+            'top_actors': ['A', 'B', 'C', 'D', 'E'],
+            'key_actions': ['action1']
+        }
+        fp2 = {
+            'nucleus_entity': 'EntityB',
+            'top_actors': ['A', 'B', 'C', 'D', 'E'],
+            'key_actions': ['action2']
+        }
+        
+        similarity_actors = calculate_fingerprint_similarity(fp1, fp2)
+        
+        # Test 2: Same nucleus, no actor overlap
+        fp3 = {
+            'nucleus_entity': 'EntityA',
+            'top_actors': ['A', 'B', 'C'],
+            'key_actions': ['action1']
+        }
+        fp4 = {
+            'nucleus_entity': 'EntityA',
+            'top_actors': ['X', 'Y', 'Z'],
+            'key_actions': ['action2']
+        }
+        
+        similarity_nucleus = calculate_fingerprint_similarity(fp3, fp4)
+        
+        # Actor overlap (weight 0.5) should contribute more than nucleus match (weight 0.3)
+        assert similarity_actors > similarity_nucleus
+    
+    def test_jaccard_similarity_calculation(self):
+        """Test that Jaccard similarity is calculated correctly for actors."""
+        fp1 = {
+            'nucleus_entity': 'Test',
+            'top_actors': ['A', 'B', 'C'],
+            'key_actions': []
+        }
+        fp2 = {
+            'nucleus_entity': 'Test',
+            'top_actors': ['B', 'C', 'D'],
+            'key_actions': []
+        }
+        
+        similarity = calculate_fingerprint_similarity(fp1, fp2)
+        
+        # Nucleus match: 0.3
+        # Actor Jaccard: intersection={B,C}=2, union={A,B,C,D}=4, jaccard=2/4=0.5
+        # Actor score: 0.5 * 0.5 = 0.25
+        # Total: 0.3 + 0.25 = 0.55
+        assert 0.50 <= similarity <= 0.60
+    
+    def test_case_sensitive_matching(self):
+        """Test that entity matching is case-sensitive."""
+        fp1 = {
+            'nucleus_entity': 'SEC',
+            'top_actors': ['SEC', 'Binance'],
+            'key_actions': ['lawsuit']
+        }
+        fp2 = {
+            'nucleus_entity': 'sec',  # lowercase
+            'top_actors': ['sec', 'binance'],  # lowercase
+            'key_actions': ['lawsuit']
+        }
+        
+        similarity = calculate_fingerprint_similarity(fp1, fp2)
+        
+        # Different nucleus (case mismatch), no actor overlap (case mismatch)
+        # Only action overlap: 0.2 * (1/1) = 0.2
+        assert 0.15 <= similarity <= 0.25
