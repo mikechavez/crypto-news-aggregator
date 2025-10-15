@@ -136,6 +136,69 @@ def determine_lifecycle_state(
     return 'emerging'
 
 
+def update_lifecycle_history(
+    narrative: Dict[str, Any],
+    lifecycle_state: str,
+    article_count: int,
+    mention_velocity: float
+) -> List[Dict[str, Any]]:
+    """
+    Update lifecycle history by tracking state transitions.
+    
+    Checks if the current lifecycle_state differs from the last entry in
+    lifecycle_history. If different or if lifecycle_history doesn't exist,
+    appends a new entry with state, timestamp, article_count, and mention_velocity.
+    
+    Args:
+        narrative: Narrative dict (may or may not have lifecycle_history)
+        lifecycle_state: Current lifecycle state to track
+        article_count: Current number of articles in narrative
+        mention_velocity: Current articles per day rate
+    
+    Returns:
+        Updated lifecycle_history array
+    
+    Example:
+        >>> narrative = {'lifecycle_history': [{'state': 'emerging', 'timestamp': ...}]}
+        >>> history = update_lifecycle_history(narrative, 'rising', 5, 2.3)
+        >>> len(history)
+        2
+    """
+    # Get existing lifecycle_history or initialize as empty array
+    lifecycle_history = narrative.get('lifecycle_history', [])
+    
+    # Check if we need to add a new entry
+    should_add_entry = False
+    
+    if not lifecycle_history:
+        # No history exists, add first entry
+        should_add_entry = True
+    else:
+        # Check if state differs from last entry
+        last_entry = lifecycle_history[-1]
+        last_state = last_entry.get('state')
+        
+        if last_state != lifecycle_state:
+            should_add_entry = True
+    
+    # Add new entry if needed
+    if should_add_entry:
+        new_entry = {
+            'state': lifecycle_state,
+            'timestamp': datetime.now(timezone.utc),
+            'article_count': article_count,
+            'mention_velocity': round(mention_velocity, 2)
+        }
+        lifecycle_history.append(new_entry)
+        
+        logger.debug(
+            f"Added lifecycle history entry: {lifecycle_state} "
+            f"(articles: {article_count}, velocity: {mention_velocity:.2f})"
+        )
+    
+    return lifecycle_history
+
+
 def determine_lifecycle_stage(
     article_count: int,
     mention_velocity: float,
@@ -439,6 +502,14 @@ async def detect_narratives(
                         updated_article_count, mention_velocity, first_seen, last_updated
                     )
                     
+                    # Update lifecycle history
+                    lifecycle_history = update_lifecycle_history(
+                        matching_narrative,
+                        lifecycle_state,
+                        updated_article_count,
+                        mention_velocity
+                    )
+                    
                     # Update the narrative in database
                     db = await mongo_manager.get_async_database()
                     narratives_collection = db.narratives
@@ -449,6 +520,7 @@ async def detect_narratives(
                         'last_updated': last_updated,
                         'mention_velocity': round(mention_velocity, 2),
                         'lifecycle_state': lifecycle_state,
+                        'lifecycle_history': lifecycle_history,
                         'needs_summary_update': True,
                         'fingerprint': fingerprint
                     }
@@ -518,6 +590,14 @@ async def detect_narratives(
                         article_count, mention_velocity, first_seen, last_updated
                     )
                     
+                    # Initialize lifecycle history for new narrative
+                    lifecycle_history = update_lifecycle_history(
+                        {},  # Empty dict for new narrative
+                        lifecycle_state,
+                        article_count,
+                        mention_velocity
+                    )
+                    
                     # Use nucleus_entity as theme for database compatibility
                     theme = narrative_data.get("nucleus_entity", "unknown")
                     
@@ -527,6 +607,7 @@ async def detect_narratives(
                     narrative_data["mention_velocity"] = round(mention_velocity, 2)
                     narrative_data["lifecycle"] = lifecycle
                     narrative_data["lifecycle_state"] = lifecycle_state
+                    narrative_data["lifecycle_history"] = lifecycle_history
                     narrative_data["momentum"] = momentum
                     narrative_data["recency_score"] = round(recency_score, 3)
                     
@@ -545,6 +626,7 @@ async def detect_narratives(
                             "mention_velocity": round(mention_velocity, 2),
                             "lifecycle": lifecycle,
                             "lifecycle_state": lifecycle_state,
+                            "lifecycle_history": lifecycle_history,
                             "momentum": momentum,
                             "recency_score": round(recency_score, 3),
                             "entity_relationships": narrative_data.get("entity_relationships", []),
@@ -645,6 +727,15 @@ async def detect_narratives(
                     article_count, mention_velocity, first_seen, last_updated
                 )
                 
+                # Update lifecycle history (check existing narrative for history)
+                existing_narrative = existing_narratives.get(theme, {})
+                lifecycle_history = update_lifecycle_history(
+                    existing_narrative,
+                    lifecycle_state,
+                    article_count,
+                    mention_velocity
+                )
+                
                 # Build narrative document
                 narrative = {
                     "theme": theme,
@@ -658,6 +749,7 @@ async def detect_narratives(
                     "mention_velocity": round(mention_velocity, 2),
                     "lifecycle": lifecycle,
                     "lifecycle_state": lifecycle_state,
+                    "lifecycle_history": lifecycle_history,
                     "momentum": momentum,
                     "recency_score": round(recency_score, 3)
                 }
@@ -679,7 +771,8 @@ async def detect_narratives(
                         momentum=narrative["momentum"],
                         recency_score=narrative["recency_score"],
                         first_seen=narrative["first_seen"],
-                        lifecycle_state=narrative["lifecycle_state"]
+                        lifecycle_state=narrative["lifecycle_state"],
+                        lifecycle_history=narrative["lifecycle_history"]
                     )
                     logger.info(f"Saved narrative {narrative_id} to database")
                 except Exception as e:
