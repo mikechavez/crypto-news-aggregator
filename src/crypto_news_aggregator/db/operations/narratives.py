@@ -73,7 +73,9 @@ async def upsert_narrative(
     momentum: str = "unknown",
     recency_score: float = 0.0,
     entity_relationships: Optional[List[Dict[str, Any]]] = None,
-    first_seen: Optional[datetime] = None
+    first_seen: Optional[datetime] = None,
+    lifecycle_state: Optional[str] = None,
+    lifecycle_history: Optional[List[Dict[str, Any]]] = None
 ) -> str:
     """
     Create or update a narrative record with full structure and timeline tracking.
@@ -94,6 +96,8 @@ async def upsert_narrative(
         recency_score: Freshness score (0-1, higher = more recent)
         entity_relationships: Top 5 entity co-occurrence pairs with weights: [{"a": "SEC", "b": "Binance", "weight": 3}]
         first_seen: When narrative was first detected (optional)
+        lifecycle_state: Lifecycle state (emerging, rising, hot, cooling, dormant) - optional
+        lifecycle_history: History of lifecycle state transitions - optional
     
     Returns:
         The ID of the upserted narrative
@@ -158,6 +162,14 @@ async def upsert_narrative(
             "days_active": days_active
         }
         
+        # Add lifecycle_state if provided
+        if lifecycle_state is not None:
+            update_data["lifecycle_state"] = lifecycle_state
+        
+        # Add lifecycle_history if provided
+        if lifecycle_history is not None:
+            update_data["lifecycle_history"] = lifecycle_history
+        
         await collection.update_one(
             {"theme": theme},
             {"$set": update_data}
@@ -190,6 +202,14 @@ async def upsert_narrative(
             },
             "days_active": days_active
         }
+        
+        # Add lifecycle_state if provided
+        if lifecycle_state is not None:
+            narrative_data["lifecycle_state"] = lifecycle_state
+        
+        # Add lifecycle_history if provided
+        if lifecycle_history is not None:
+            narrative_data["lifecycle_history"] = lifecycle_history
         
         result = await collection.insert_one(narrative_data)
         return str(result.inserted_id)
