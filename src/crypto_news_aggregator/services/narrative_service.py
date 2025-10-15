@@ -19,7 +19,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
 from math import exp
 from itertools import combinations
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 from ..db.mongodb import mongo_manager
 from ..llm.factory import get_llm_provider
@@ -32,6 +32,8 @@ from .narrative_themes import (
     cluster_by_narrative_salience,
     generate_narrative_from_cluster,
     merge_shallow_narratives,
+    calculate_fingerprint_similarity,
+    compute_narrative_fingerprint,
     THEME_CATEGORIES
 )
 
@@ -127,6 +129,102 @@ def determine_lifecycle_stage(
     return lifecycle
 
 
+async def find_matching_narrative(
+    fingerprint: Dict[str, Any],
+    within_days: int = 14
+) -> Optional[Dict[str, Any]]:
+    """
+    Find an existing narrative that matches the given fingerprint.
+    
+    Searches for narratives within a time window and calculates similarity
+    using fingerprint comparison. Returns the best matching narrative if
+    similarity exceeds threshold.
+    
+    Args:
+        fingerprint: Narrative fingerprint dict with nucleus_entity, top_actors, key_actions
+        within_days: Time window in days to search for matching narratives (default 14)
+    
+    Returns:
+        Best matching narrative dict if similarity > 0.6, otherwise None
+    
+    Example:
+        >>> fingerprint = {
+        ...     'nucleus_entity': 'SEC',
+        ...     'top_actors': ['SEC', 'Binance', 'Coinbase'],
+        ...     'key_actions': ['filed lawsuit', 'regulatory enforcement']
+        ... }
+        >>> narrative = await find_matching_narrative(fingerprint, within_days=14)
+        >>> if narrative:
+        ...     print(f"Found matching narrative: {narrative['title']}")
+    """
+    try:
+        db = await mongo_manager.get_async_database()
+        narratives_collection = db.narratives
+        
+        # Calculate time window
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=within_days)
+        
+        # Query for active narratives within time window
+        active_statuses = ['emerging', 'rising', 'hot', 'cooling', 'dormant']
+        query = {
+            'last_updated': {'$gte': cutoff_time},
+            'status': {'$in': active_statuses}
+        }
+        
+        cursor = narratives_collection.find(query)
+        candidates = await cursor.to_list(length=None)
+        
+        if not candidates:
+            logger.debug(f"No candidate narratives found within {within_days} days")
+            return None
+        
+        logger.info(f"Evaluating {len(candidates)} candidate narratives for similarity")
+        
+        # Calculate similarity for each candidate
+        best_match = None
+        best_similarity = 0.0
+        
+        for candidate in candidates:
+            # Extract fingerprint from candidate narrative
+            candidate_fingerprint = candidate.get('fingerprint')
+            if not candidate_fingerprint:
+                # Try to construct fingerprint from legacy fields
+                candidate_fingerprint = {
+                    'nucleus_entity': candidate.get('theme', ''),
+                    'top_actors': candidate.get('entities', []),
+                    'key_actions': []  # Legacy narratives may not have actions
+                }
+            
+            # Calculate similarity
+            similarity = calculate_fingerprint_similarity(fingerprint, candidate_fingerprint)
+            
+            logger.debug(
+                f"Narrative '{candidate.get('title', 'unknown')}' similarity: {similarity:.3f}"
+            )
+            
+            # Track best match
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_match = candidate
+        
+        # Return best match if above threshold
+        if best_similarity > 0.6:
+            logger.info(
+                f"Found matching narrative: '{best_match.get('title')}' "
+                f"(similarity: {best_similarity:.3f})"
+            )
+            return best_match
+        else:
+            logger.info(
+                f"No matching narrative found (best similarity: {best_similarity:.3f})"
+            )
+            return None
+    
+    except Exception as e:
+        logger.exception(f"Error finding matching narrative: {e}")
+        return None
+
+
 async def extract_entities_from_articles(articles: List[Dict[str, Any]]) -> List[str]:
     """
     Extract all unique entities mentioned across a list of articles.
@@ -213,84 +311,196 @@ async def detect_narratives(
             
             logger.info(f"Created {len(clusters)} narrative clusters")
             
-            # Generate narrative for each cluster
-            narratives = []
-            for cluster in clusters:
-                narrative = await generate_narrative_from_cluster(cluster)
-                if narrative:
-                    narratives.append(narrative)
-            
-            logger.info(f"Generated {len(narratives)} narratives before merging")
-            
-            # Merge shallow narratives
-            narratives = await merge_shallow_narratives(narratives)
-            
-            logger.info(f"After merging: {len(narratives)} final narratives")
-            
-            # Save narratives to database
+            # Process each cluster: compute fingerprint, check for matches, merge or create
             saved_narratives = []
-            for narrative_data in narratives:
-                # Calculate mention velocity (articles per day)
-                article_count = narrative_data.get("article_count", 0)
-                time_span_days = hours / 24.0
-                mention_velocity = article_count / time_span_days if time_span_days > 0 else 0
-                
-                # Calculate momentum from article dates
-                # Get articles for this narrative to extract dates
-                article_ids = narrative_data.get("article_ids", [])
-                article_dates = []
-                for article in articles:
-                    if str(article.get("_id")) in article_ids:
-                        pub_date = article.get("published_at")
-                        if pub_date:
-                            article_dates.append(pub_date)
-                
-                # Sort dates and calculate momentum
-                article_dates.sort()
-                momentum = calculate_momentum(article_dates)
-                
-                # Calculate recency score (0-1, higher = more recent)
-                newest_article = article_dates[-1] if article_dates else None
-                if newest_article:
-                    hours_since_last_update = (datetime.now(timezone.utc) - newest_article).total_seconds() / 3600
-                    recency_score = exp(-hours_since_last_update / 24)  # 24h half-life
-                else:
-                    recency_score = 0.0
-                
-                # Determine lifecycle stage with momentum awareness
-                lifecycle = determine_lifecycle_stage(article_count, mention_velocity, momentum)
-                
-                # Use nucleus_entity as theme for database compatibility
-                theme = narrative_data.get("nucleus_entity", "unknown")
-                
-                # Enrich narrative_data with computed fields for return value
-                narrative_data["theme"] = theme
-                narrative_data["entities"] = narrative_data.get("actors", [])[:10]
-                narrative_data["mention_velocity"] = round(mention_velocity, 2)
-                narrative_data["lifecycle"] = lifecycle
-                narrative_data["momentum"] = momentum
-                narrative_data["recency_score"] = round(recency_score, 3)
-                
-                try:
-                    narrative_id = await upsert_narrative(
-                        theme=theme,
-                        title=narrative_data["title"],
-                        summary=narrative_data["summary"],
-                        entities=narrative_data.get("actors", [])[:10],
-                        article_ids=narrative_data["article_ids"],
-                        article_count=article_count,
-                        mention_velocity=round(mention_velocity, 2),
-                        lifecycle=lifecycle,
-                        momentum=momentum,
-                        recency_score=round(recency_score, 3),
-                        entity_relationships=narrative_data.get("entity_relationships", []),
-                        first_seen=None  # Will use current time or existing
-                    )
-                    logger.info(f"Saved narrative {narrative_id} to database: {narrative_data['title']}")
-                    saved_narratives.append(narrative_data)
-                except Exception as e:
-                    logger.exception(f"Failed to save narrative '{narrative_data.get('title')}': {e}")
+            matched_count = 0
+            created_count = 0
             
+            for cluster in clusters:
+                # Build cluster data dict for fingerprint computation
+                # Aggregate nucleus entities, actors, and actions from cluster articles
+                nucleus_entities = []
+                all_actors = {}
+                all_actions = []
+                
+                for article in cluster:
+                    # Skip if article is not a dict (defensive programming)
+                    if not isinstance(article, dict):
+                        logger.warning(f"Skipping non-dict article in cluster: {type(article)}")
+                        continue
+                    
+                    nucleus = article.get('nucleus_entity')
+                    if nucleus:
+                        nucleus_entities.append(nucleus)
+                    
+                    # Aggregate actors with salience
+                    actors = article.get('actors', [])
+                    actor_salience = article.get('actor_salience', {})
+                    
+                    # Handle actors as list or dict
+                    if isinstance(actors, list):
+                        for actor in actors:
+                            salience = actor_salience.get(actor, 3) if isinstance(actor_salience, dict) else 3
+                            all_actors[actor] = max(all_actors.get(actor, 0), salience)
+                    
+                    # Aggregate actions
+                    narrative_summary = article.get('narrative_summary', {})
+                    if isinstance(narrative_summary, dict):
+                        actions = narrative_summary.get('actions', [])
+                        if isinstance(actions, list):
+                            all_actions.extend(actions)
+                
+                # Determine primary nucleus (most common)
+                nucleus_counts = Counter(nucleus_entities)
+                primary_nucleus = nucleus_counts.most_common(1)[0][0] if nucleus_counts else ''
+                
+                # Build cluster dict for fingerprint
+                cluster_data = {
+                    'nucleus_entity': primary_nucleus,
+                    'actors': all_actors,
+                    'actions': list(set(all_actions))[:5]  # Unique actions, top 5
+                }
+                
+                # Compute fingerprint from cluster data
+                fingerprint = compute_narrative_fingerprint(cluster_data)
+                logger.debug(f"Computed fingerprint for cluster with nucleus_entity: {fingerprint.get('nucleus_entity')}")
+                
+                # Check for matching existing narrative
+                matching_narrative = await find_matching_narrative(fingerprint, within_days=14)
+                
+                if matching_narrative:
+                    # Update existing narrative by appending new articles
+                    matched_count += 1
+                    narrative_id = str(matching_narrative['_id'])
+                    
+                    # Get existing article_ids and append new ones from cluster
+                    existing_article_ids = set(matching_narrative.get('article_ids', []))
+                    new_article_ids = set(cluster.get('article_ids', []))
+                    combined_article_ids = list(existing_article_ids | new_article_ids)
+                    
+                    # Update the narrative in database
+                    db = await mongo_manager.get_async_database()
+                    narratives_collection = db.narratives
+                    
+                    update_data = {
+                        'article_ids': combined_article_ids,
+                        'article_count': len(combined_article_ids),
+                        'last_updated': datetime.now(timezone.utc),
+                        'needs_summary_update': True,
+                        'fingerprint': fingerprint
+                    }
+                    
+                    await narratives_collection.update_one(
+                        {'_id': matching_narrative['_id']},
+                        {'$set': update_data}
+                    )
+                    
+                    logger.info(
+                        f"Merged {len(new_article_ids)} new articles into existing narrative: "
+                        f"'{matching_narrative.get('title')}' (ID: {narrative_id})"
+                    )
+                    
+                    # Add to saved narratives for return value
+                    matching_narrative.update(update_data)
+                    saved_narratives.append(matching_narrative)
+                    
+                else:
+                    # No match found - create new narrative
+                    created_count += 1
+                    narrative = await generate_narrative_from_cluster(cluster)
+                    
+                    if not narrative:
+                        logger.warning(f"Failed to generate narrative for cluster with nucleus: {cluster.get('nucleus_entity')}")
+                        continue
+                    
+                    # Add fingerprint to narrative data
+                    narrative['fingerprint'] = fingerprint
+                    narrative['needs_summary_update'] = False  # Fresh summary, no update needed
+                    
+                    narrative_data = narrative
+                    # Calculate mention velocity (articles per day)
+                    article_count = narrative_data.get("article_count", 0)
+                    time_span_days = hours / 24.0
+                    mention_velocity = article_count / time_span_days if time_span_days > 0 else 0
+                    
+                    # Calculate momentum from article dates
+                    # Get articles for this narrative to extract dates
+                    article_ids = narrative_data.get("article_ids", [])
+                    article_dates = []
+                    for article in articles:
+                        if str(article.get("_id")) in article_ids:
+                            pub_date = article.get("published_at")
+                            if pub_date:
+                                article_dates.append(pub_date)
+                    
+                    # Sort dates and calculate momentum
+                    article_dates.sort()
+                    momentum = calculate_momentum(article_dates)
+                    
+                    # Calculate recency score (0-1, higher = more recent)
+                    newest_article = article_dates[-1] if article_dates else None
+                    if newest_article:
+                        hours_since_last_update = (datetime.now(timezone.utc) - newest_article).total_seconds() / 3600
+                        recency_score = exp(-hours_since_last_update / 24)  # 24h half-life
+                    else:
+                        recency_score = 0.0
+                    
+                    # Determine lifecycle stage with momentum awareness
+                    lifecycle = determine_lifecycle_stage(article_count, mention_velocity, momentum)
+                    
+                    # Use nucleus_entity as theme for database compatibility
+                    theme = narrative_data.get("nucleus_entity", "unknown")
+                    
+                    # Enrich narrative_data with computed fields for return value
+                    narrative_data["theme"] = theme
+                    narrative_data["entities"] = narrative_data.get("actors", [])[:10]
+                    narrative_data["mention_velocity"] = round(mention_velocity, 2)
+                    narrative_data["lifecycle"] = lifecycle
+                    narrative_data["momentum"] = momentum
+                    narrative_data["recency_score"] = round(recency_score, 3)
+                    
+                    try:
+                        # Save new narrative to database with fingerprint
+                        db = await mongo_manager.get_async_database()
+                        narratives_collection = db.narratives
+                        
+                        narrative_doc = {
+                            "theme": theme,
+                            "title": narrative_data["title"],
+                            "summary": narrative_data["summary"],
+                            "entities": narrative_data.get("actors", [])[:10],
+                            "article_ids": narrative_data["article_ids"],
+                            "article_count": article_count,
+                            "mention_velocity": round(mention_velocity, 2),
+                            "lifecycle": lifecycle,
+                            "momentum": momentum,
+                            "recency_score": round(recency_score, 3),
+                            "entity_relationships": narrative_data.get("entity_relationships", []),
+                            "fingerprint": fingerprint,
+                            "needs_summary_update": False,
+                            "first_seen": datetime.now(timezone.utc),
+                            "last_updated": datetime.now(timezone.utc),
+                            "timeline_data": [],
+                            "peak_activity": {
+                                "date": datetime.now(timezone.utc).date().isoformat(),
+                                "article_count": article_count,
+                                "velocity": round(mention_velocity, 2)
+                            },
+                            "days_active": 1
+                        }
+                        
+                        result = await narratives_collection.insert_one(narrative_doc)
+                        narrative_id = str(result.inserted_id)
+                        
+                        logger.info(f"Created new narrative {narrative_id}: {narrative_data['title']}")
+                        saved_narratives.append(narrative_data)
+                    except Exception as e:
+                        logger.exception(f"Failed to save narrative '{narrative_data.get('title')}': {e}")
+            
+            logger.info(
+                f"Narrative detection complete: {matched_count} merged into existing, "
+                f"{created_count} newly created, {len(saved_narratives)} total"
+            )
             return saved_narratives
         
         else:

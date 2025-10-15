@@ -312,8 +312,18 @@ async def test_detect_narratives_includes_entity_relationships():
         # Mock database
         mock_db = MagicMock()
         mock_articles_collection = MagicMock()
+        mock_narratives_collection = MagicMock()
         mock_db.articles = mock_articles_collection
+        mock_db.narratives = mock_narratives_collection
         mock_mongo.get_async_database = AsyncMock(return_value=mock_db)
+        
+        # Mock narratives collection for find_matching_narrative
+        class MockNarrativesCursor:
+            async def to_list(self, length):
+                return []  # No existing narratives to match
+        
+        mock_narratives_collection.find.return_value = MockNarrativesCursor()
+        mock_narratives_collection.insert_one = AsyncMock(return_value=MagicMock(inserted_id="narrative123"))
         
         # Mock articles with narrative data
         sample_articles = [
@@ -381,8 +391,8 @@ async def test_detect_narratives_includes_entity_relationships():
             assert "b" in rel
             assert "weight" in rel
         
-        # Verify upsert was called with entity_relationships
-        assert mock_upsert.called
-        call_kwargs = mock_upsert.call_args[1]
-        assert "entity_relationships" in call_kwargs
-        assert len(call_kwargs["entity_relationships"]) == 2
+        # Verify insert_one was called with entity_relationships
+        assert mock_narratives_collection.insert_one.called
+        call_args = mock_narratives_collection.insert_one.call_args[0][0]
+        assert "entity_relationships" in call_args
+        assert len(call_args["entity_relationships"]) == 2
