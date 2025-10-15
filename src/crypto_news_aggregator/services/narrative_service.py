@@ -199,6 +199,35 @@ def update_lifecycle_history(
     return lifecycle_history
 
 
+def calculate_grace_period(mention_velocity: float) -> int:
+    """
+    Calculate adaptive grace period based on narrative velocity.
+    
+    Fast-burning narratives get shorter matching windows, slow-burn narratives
+    get longer windows. This prevents stale matches for hot topics while allowing
+    longer-term tracking of slower narratives.
+    
+    Args:
+        mention_velocity: Articles per day rate
+    
+    Returns:
+        Grace period in days (7-30 days)
+    
+    Examples:
+        >>> calculate_grace_period(3.0)  # High velocity
+        7
+        >>> calculate_grace_period(1.0)  # Medium velocity
+        14
+        >>> calculate_grace_period(0.3)  # Low velocity
+        30
+    """
+    # Formula: min(30, max(7, int(14 / max(mention_velocity, 0.5))))
+    # - High velocity (>2 articles/day): 7 days
+    # - Medium velocity (~1 article/day): 14 days
+    # - Low velocity (<0.5 articles/day): 30 days
+    return min(30, max(7, int(14 / max(mention_velocity, 0.5))))
+
+
 def determine_lifecycle_stage(
     article_count: int,
     mention_velocity: float,
@@ -240,7 +269,8 @@ def determine_lifecycle_stage(
 
 async def find_matching_narrative(
     fingerprint: Dict[str, Any],
-    within_days: int = 14
+    within_days: int = 14,
+    cluster_velocity: Optional[float] = None
 ) -> Optional[Dict[str, Any]]:
     """
     Find an existing narrative that matches the given fingerprint.
@@ -252,6 +282,7 @@ async def find_matching_narrative(
     Args:
         fingerprint: Narrative fingerprint dict with nucleus_entity, top_actors, key_actions
         within_days: Time window in days to search for matching narratives (default 14)
+        cluster_velocity: Optional cluster mention velocity for adaptive grace period
     
     Returns:
         Best matching narrative dict if similarity > 0.6, otherwise None
@@ -267,6 +298,14 @@ async def find_matching_narrative(
         ...     print(f"Found matching narrative: {narrative['title']}")
     """
     try:
+        # Calculate adaptive grace period if cluster velocity provided
+        if cluster_velocity is not None:
+            within_days = calculate_grace_period(cluster_velocity)
+            logger.debug(
+                f"Using adaptive grace period: {within_days} days "
+                f"(velocity: {cluster_velocity:.2f} articles/day)"
+            )
+        
         db = await mongo_manager.get_async_database()
         narratives_collection = db.narratives
         
@@ -474,8 +513,17 @@ async def detect_narratives(
                 fingerprint = compute_narrative_fingerprint(cluster_data)
                 logger.debug(f"Computed fingerprint for cluster with nucleus_entity: {fingerprint.get('nucleus_entity')}")
                 
-                # Check for matching existing narrative
-                matching_narrative = await find_matching_narrative(fingerprint, within_days=14)
+                # Calculate cluster velocity for adaptive grace period
+                cluster_article_count = len(cluster)
+                # Use the detection window (hours) to estimate velocity
+                cluster_time_span_days = hours / 24.0
+                cluster_velocity = cluster_article_count / cluster_time_span_days if cluster_time_span_days > 0 else 0
+                
+                # Check for matching existing narrative with adaptive grace period
+                matching_narrative = await find_matching_narrative(
+                    fingerprint,
+                    cluster_velocity=cluster_velocity
+                )
                 
                 if matching_narrative:
                     # Update existing narrative by appending new articles
