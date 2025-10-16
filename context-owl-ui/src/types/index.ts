@@ -89,6 +89,10 @@ export interface Narrative {
   days_active?: number;       // Number of days narrative has been active
   peak_activity?: PeakActivity; // Peak activity metrics
   articles: ArticleLink[];    // Articles supporting this narrative
+  // Resurrection/reawakening fields
+  reawakening_count?: number; // Number of times narrative has been reactivated from dormant state
+  reawakened_from?: string;   // ISO timestamp when narrative went dormant before most recent reactivation
+  resurrection_velocity?: number; // Articles per day in last 48 hours during reactivation
   // Backward compatibility fields
   updated_at?: string;        // Alias for last_updated
   story?: string;             // Alias for summary

@@ -325,8 +325,8 @@ async def get_resurrected_narratives(
     """
     Get narratives that have been reactivated (resurrected from dormant state).
     
-    Returns narratives with reawakening_count > 0, sorted by most recently
-    resurrected (reawakened_from descending).
+    Returns narratives with reawakening_count > 0 that have been updated within
+    the lookback window, sorted by most recently updated.
     
     Args:
         limit: Maximum number of narratives to return (default 20, max 100)
@@ -341,14 +341,15 @@ async def get_resurrected_narratives(
     # Calculate cutoff date
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
     
-    # Query for narratives with reawakening_count > 0 and reawakened_from within lookback window
+    # Query for narratives with reawakening_count > 0 and last_updated within lookback window
+    # This captures narratives that were resurrected recently, regardless of when they went dormant
     query = {
         "reawakening_count": {"$gt": 0},
-        "reawakened_from": {"$gte": cutoff_date}
+        "last_updated": {"$gte": cutoff_date}
     }
     
-    # Sort by reawakened_from descending (most recently resurrected first)
-    cursor = collection.find(query).sort("reawakened_from", -1).limit(limit)
+    # Sort by last_updated descending (most recently active first)
+    cursor = collection.find(query).sort("last_updated", -1).limit(limit)
     
     narratives = []
     async for narrative in cursor:
