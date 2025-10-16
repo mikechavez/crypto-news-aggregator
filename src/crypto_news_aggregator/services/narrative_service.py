@@ -162,13 +162,18 @@ def update_lifecycle_history(
     lifecycle_state: str,
     article_count: int,
     mention_velocity: float
-) -> List[Dict[str, Any]]:
+) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
-    Update lifecycle history by tracking state transitions.
+    Update lifecycle history by tracking state transitions and resurrection metrics.
     
     Checks if the current lifecycle_state differs from the last entry in
     lifecycle_history. If different or if lifecycle_history doesn't exist,
     appends a new entry with state, timestamp, article_count, and mention_velocity.
+    
+    When transitioning to 'reactivated' state, also tracks resurrection metrics:
+    - reawakening_count: Number of times narrative has been reactivated
+    - reawakened_from: Timestamp when narrative went dormant
+    - resurrection_velocity: Articles per day in last 48 hours
     
     Args:
         narrative: Narrative dict (may or may not have lifecycle_history)
@@ -177,16 +182,19 @@ def update_lifecycle_history(
         mention_velocity: Current articles per day rate
     
     Returns:
-        Updated lifecycle_history array
+        Tuple of (updated lifecycle_history array, resurrection_fields dict)
     
     Example:
         >>> narrative = {'lifecycle_history': [{'state': 'emerging', 'timestamp': ...}]}
-        >>> history = update_lifecycle_history(narrative, 'rising', 5, 2.3)
+        >>> history, resurrection = update_lifecycle_history(narrative, 'rising', 5, 2.3)
         >>> len(history)
         2
     """
     # Get existing lifecycle_history or initialize as empty array
     lifecycle_history = narrative.get('lifecycle_history', [])
+    
+    # Initialize resurrection fields dict
+    resurrection_fields = {}
     
     # Check if we need to add a new entry
     should_add_entry = False
@@ -201,6 +209,33 @@ def update_lifecycle_history(
         
         if last_state != lifecycle_state:
             should_add_entry = True
+            
+            # Track resurrection if transitioning to 'reactivated' state
+            if lifecycle_state == 'reactivated':
+                # Find when narrative went dormant by looking backwards in history
+                dormant_timestamp = None
+                for entry in reversed(lifecycle_history):
+                    if entry.get('state') in ['dormant', 'echo']:
+                        dormant_timestamp = entry.get('timestamp')
+                        break
+                
+                # Increment reawakening_count
+                current_count = narrative.get('reawakening_count', 0)
+                resurrection_fields['reawakening_count'] = current_count + 1
+                
+                # Set reawakened_from timestamp
+                if dormant_timestamp:
+                    resurrection_fields['reawakened_from'] = dormant_timestamp
+                
+                # Calculate resurrection_velocity (articles in last 48 hours / 2)
+                # Use mention_velocity as proxy: velocity is articles/day, so multiply by 2 for 48h
+                resurrection_velocity = mention_velocity * 2.0
+                resurrection_fields['resurrection_velocity'] = round(resurrection_velocity, 2)
+                
+                logger.info(
+                    f"Resurrection detected: count={resurrection_fields['reawakening_count']}, "
+                    f"velocity={resurrection_fields['resurrection_velocity']:.2f}"
+                )
     
     # Add new entry if needed
     if should_add_entry:
@@ -217,7 +252,7 @@ def update_lifecycle_history(
             f"(articles: {article_count}, velocity: {mention_velocity:.2f})"
         )
     
-    return lifecycle_history
+    return lifecycle_history, resurrection_fields
 
 
 def calculate_grace_period(mention_velocity: float) -> int:
@@ -591,8 +626,8 @@ async def detect_narratives(
                         updated_article_count, mention_velocity, first_seen, last_updated, previous_state
                     )
                     
-                    # Update lifecycle history
-                    lifecycle_history = update_lifecycle_history(
+                    # Update lifecycle history and get resurrection fields
+                    lifecycle_history, resurrection_fields = update_lifecycle_history(
                         matching_narrative,
                         lifecycle_state,
                         updated_article_count,
@@ -613,6 +648,10 @@ async def detect_narratives(
                         'needs_summary_update': True,
                         'fingerprint': fingerprint
                     }
+                    
+                    # Add resurrection tracking fields if present
+                    if resurrection_fields:
+                        update_data.update(resurrection_fields)
                     
                     await narratives_collection.update_one(
                         {'_id': matching_narrative['_id']},
@@ -684,7 +723,7 @@ async def detect_narratives(
                     )
                     
                     # Initialize lifecycle history for new narrative
-                    lifecycle_history = update_lifecycle_history(
+                    lifecycle_history, resurrection_fields = update_lifecycle_history(
                         {},  # Empty dict for new narrative
                         lifecycle_state,
                         article_count,
@@ -830,7 +869,7 @@ async def detect_narratives(
                 )
                 
                 # Update lifecycle history (check existing narrative for history)
-                lifecycle_history = update_lifecycle_history(
+                lifecycle_history, resurrection_fields = update_lifecycle_history(
                     existing_narrative,
                     lifecycle_state,
                     article_count,
@@ -860,21 +899,33 @@ async def detect_narratives(
                 
                 # Save narrative to database
                 try:
-                    narrative_id = await upsert_narrative(
-                        theme=narrative["theme"],
-                        title=narrative["title"],
-                        summary=narrative["summary"],
-                        entities=narrative["entities"],
-                        article_ids=narrative["article_ids"],
-                        article_count=narrative["article_count"],
-                        mention_velocity=narrative["mention_velocity"],
-                        lifecycle=narrative["lifecycle"],
-                        momentum=narrative["momentum"],
-                        recency_score=narrative["recency_score"],
-                        first_seen=narrative["first_seen"],
-                        lifecycle_state=narrative["lifecycle_state"],
-                        lifecycle_history=narrative["lifecycle_history"]
-                    )
+                    # Prepare upsert arguments with resurrection fields if present
+                    upsert_args = {
+                        "theme": narrative["theme"],
+                        "title": narrative["title"],
+                        "summary": narrative["summary"],
+                        "entities": narrative["entities"],
+                        "article_ids": narrative["article_ids"],
+                        "article_count": narrative["article_count"],
+                        "mention_velocity": narrative["mention_velocity"],
+                        "lifecycle": narrative["lifecycle"],
+                        "momentum": narrative["momentum"],
+                        "recency_score": narrative["recency_score"],
+                        "first_seen": narrative["first_seen"],
+                        "lifecycle_state": narrative["lifecycle_state"],
+                        "lifecycle_history": narrative["lifecycle_history"]
+                    }
+                    
+                    # Add resurrection fields if present
+                    if resurrection_fields:
+                        if "reawakening_count" in resurrection_fields:
+                            upsert_args["reawakening_count"] = resurrection_fields["reawakening_count"]
+                        if "reawakened_from" in resurrection_fields:
+                            upsert_args["reawakened_from"] = resurrection_fields["reawakened_from"]
+                        if "resurrection_velocity" in resurrection_fields:
+                            upsert_args["resurrection_velocity"] = resurrection_fields["resurrection_velocity"]
+                    
+                    narrative_id = await upsert_narrative(**upsert_args)
                     logger.info(f"Saved narrative {narrative_id} to database")
                 except Exception as e:
                     logger.exception(f"Failed to save narrative for theme '{theme}': {e}")
