@@ -81,7 +81,9 @@ const TimelineRow = ({ narrative, dateRange, onNarrativeClick }: TimelineRowProp
     cooling: { Icon: Wind, iconColor: 'text-gray-500', barColor: 'bg-gray-500', gradientColor: 'from-gray-400 to-gray-600' },
   };
 
-  const { Icon, iconColor, gradientColor } = lifecycleConfig[narrative.lifecycle_stage as keyof typeof lifecycleConfig] || lifecycleConfig.emerging;
+  // Use lifecycle_state if available, otherwise fall back to lifecycle
+  const lifecycleValue = narrative.lifecycle_state || narrative.lifecycle || 'emerging';
+  const { Icon, iconColor, gradientColor } = lifecycleConfig[lifecycleValue as keyof typeof lifecycleConfig] || lifecycleConfig.emerging;
 
   return (
     <motion.div
@@ -138,7 +140,7 @@ const TimelineRow = ({ narrative, dateRange, onNarrativeClick }: TimelineRowProp
               <div>Start: {format(startDate, 'MMM d, yyyy')}</div>
               <div>Latest: {format(endDate, 'MMM d, yyyy')}</div>
               <div>Articles: {narrative.article_count}</div>
-              <div>Stage: {narrative.lifecycle_stage}</div>
+              <div>Stage: {narrative.lifecycle_state || narrative.lifecycle}</div>
               {narrative.mention_velocity && (
                 <div>Velocity: {narrative.mention_velocity.toFixed(1)} per day</div>
               )}
@@ -199,7 +201,7 @@ export const TimelineView = ({ narratives }: TimelineViewProps) => {
                 <CardTitle className="text-2xl mb-2">{expandedNarrative.title}</CardTitle>
                 <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                   <span className="px-2 py-1 rounded bg-gray-200 dark:bg-gray-700">
-                    {expandedNarrative.lifecycle_stage}
+                    {expandedNarrative.lifecycle_state || expandedNarrative.lifecycle}
                   </span>
                   <span>{expandedNarrative.article_count} articles</span>
                   <span>•</span>
