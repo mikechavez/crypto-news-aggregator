@@ -13,13 +13,47 @@ interface TimelineRowProps {
     totalDays: number;
   };
   onNarrativeClick: (narrative: Narrative) => void;
+  selectedDate?: Date | null;
 }
 
 interface TimelineViewProps {
   narratives: Narrative[];
+  selectedDate?: Date | null;
 }
 
-const TimelineRow = ({ narrative, dateRange, onNarrativeClick }: TimelineRowProps) => {
+/**
+ * Find the lifecycle state that was active on a given date
+ * Returns the most recent state entry before or on the selected date
+ */
+const getHistoricalLifecycleState = (
+  narrative: Narrative,
+  selectedDate: Date
+): { state: string; isHistorical: boolean } => {
+  const currentState = narrative.lifecycle_state || narrative.lifecycle || 'emerging';
+  
+  // If no lifecycle history, return current state
+  if (!narrative.lifecycle_history || narrative.lifecycle_history.length === 0) {
+    return { state: currentState, isHistorical: false };
+  }
+
+  // Find the most recent state entry before or on selectedDate
+  const historicalEntry = narrative.lifecycle_history
+    .filter(entry => parseISO(entry.timestamp) <= selectedDate)
+    .sort((a, b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime())[0];
+
+  if (!historicalEntry) {
+    // Selected date is before any lifecycle history entries
+    // Return the earliest state or current state
+    const earliestEntry = narrative.lifecycle_history
+      .sort((a, b) => parseISO(a.timestamp).getTime() - parseISO(b.timestamp).getTime())[0];
+    return { state: earliestEntry?.state || currentState, isHistorical: false };
+  }
+
+  const isHistorical = historicalEntry.state !== currentState;
+  return { state: historicalEntry.state, isHistorical };
+};
+
+const TimelineRow = ({ narrative, dateRange, onNarrativeClick, selectedDate }: TimelineRowProps) => {
   const startDate = parseISO(narrative.first_seen);
   const endDate = parseISO(narrative.last_updated);
   
@@ -73,17 +107,27 @@ const TimelineRow = ({ narrative, dateRange, onNarrativeClick }: TimelineRowProp
   }, [narrative.articles, dateRange, startDate]);
 
   const lifecycleConfig = {
-    emerging: { Icon: Sparkles, iconColor: 'text-blue-500', barColor: 'bg-blue-500', gradientColor: 'from-blue-400 to-blue-600' },
-    rising: { Icon: TrendingUp, iconColor: 'text-green-500', barColor: 'bg-green-500', gradientColor: 'from-blue-500 to-green-500' },
-    hot: { Icon: Flame, iconColor: 'text-orange-500', barColor: 'bg-orange-500', gradientColor: 'from-orange-400 to-orange-600' },
-    heating: { Icon: Zap, iconColor: 'text-red-500', barColor: 'bg-red-500', gradientColor: 'from-red-400 to-red-600' },
-    mature: { Icon: Star, iconColor: 'text-purple-500', barColor: 'bg-purple-500', gradientColor: 'from-purple-400 to-purple-600' },
-    cooling: { Icon: Wind, iconColor: 'text-gray-500', barColor: 'bg-gray-500', gradientColor: 'from-gray-400 to-gray-600' },
+    emerging: { Icon: Sparkles, iconColor: 'text-blue-500', barColor: 'bg-blue-500', gradientColor: 'from-blue-400 to-blue-600', label: 'Emerging' },
+    rising: { Icon: TrendingUp, iconColor: 'text-green-500', barColor: 'bg-green-500', gradientColor: 'from-blue-500 to-green-500', label: 'Rising' },
+    hot: { Icon: Flame, iconColor: 'text-orange-500', barColor: 'bg-orange-500', gradientColor: 'from-orange-400 to-orange-600', label: 'Hot' },
+    heating: { Icon: Zap, iconColor: 'text-red-500', barColor: 'bg-red-500', gradientColor: 'from-red-400 to-red-600', label: 'Heating' },
+    mature: { Icon: Star, iconColor: 'text-purple-500', barColor: 'bg-purple-500', gradientColor: 'from-purple-400 to-purple-600', label: 'Mature' },
+    cooling: { Icon: Wind, iconColor: 'text-gray-500', barColor: 'bg-gray-500', gradientColor: 'from-gray-400 to-gray-600', label: 'Cooling' },
+    dormant: { Icon: Wind, iconColor: 'text-gray-400', barColor: 'bg-gray-400', gradientColor: 'from-gray-300 to-gray-500', label: 'Dormant' },
   };
 
-  // Use lifecycle_state if available, otherwise fall back to lifecycle
-  const lifecycleValue = narrative.lifecycle_state || narrative.lifecycle || 'emerging';
-  const { Icon, iconColor, gradientColor } = lifecycleConfig[lifecycleValue as keyof typeof lifecycleConfig] || lifecycleConfig.emerging;
+  // Determine which lifecycle state to display
+  const currentState = narrative.lifecycle_state || narrative.lifecycle || 'emerging';
+  let displayState = currentState;
+  let isHistoricalState = false;
+  
+  if (selectedDate) {
+    const historical = getHistoricalLifecycleState(narrative, selectedDate);
+    displayState = historical.state;
+    isHistoricalState = historical.isHistorical;
+  }
+
+  const { Icon, iconColor, gradientColor, label } = lifecycleConfig[displayState as keyof typeof lifecycleConfig] || lifecycleConfig.emerging;
 
   return (
     <motion.div
@@ -99,6 +143,12 @@ const TimelineRow = ({ narrative, dateRange, onNarrativeClick }: TimelineRowProp
         <span className="text-xs text-gray-500 dark:text-gray-400">
           ({narrative.article_count} articles)
         </span>
+        {/* Historical state indicator */}
+        {isHistoricalState && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium">
+            was {label}, now {lifecycleConfig[currentState as keyof typeof lifecycleConfig]?.label || currentState}
+          </span>
+        )}
         {narrative.entities && narrative.entities.length > 0 && (
           <>
             {narrative.entities.slice(0, 2).map((entity, index) => (
@@ -140,7 +190,12 @@ const TimelineRow = ({ narrative, dateRange, onNarrativeClick }: TimelineRowProp
               <div>Start: {format(startDate, 'MMM d, yyyy')}</div>
               <div>Latest: {format(endDate, 'MMM d, yyyy')}</div>
               <div>Articles: {narrative.article_count}</div>
-              <div>Stage: {narrative.lifecycle_state || narrative.lifecycle}</div>
+              <div>
+                Stage: {label}
+                {isHistoricalState && (
+                  <span className="text-amber-300"> (historical, now {lifecycleConfig[currentState as keyof typeof lifecycleConfig]?.label || currentState})</span>
+                )}
+              </div>
               {narrative.mention_velocity && (
                 <div>Velocity: {narrative.mention_velocity.toFixed(1)} per day</div>
               )}
@@ -152,7 +207,7 @@ const TimelineRow = ({ narrative, dateRange, onNarrativeClick }: TimelineRowProp
   );
 };
 
-export const TimelineView = ({ narratives }: TimelineViewProps) => {
+export const TimelineView = ({ narratives, selectedDate }: TimelineViewProps) => {
   const [expandedNarrative, setExpandedNarrative] = useState<Narrative | null>(null);
 
   const dateRange = useMemo(() => {
@@ -185,6 +240,7 @@ export const TimelineView = ({ narratives }: TimelineViewProps) => {
             narrative={narrative}
             dateRange={dateRange}
             onNarrativeClick={setExpandedNarrative}
+            selectedDate={selectedDate}
           />
         ))}
       </div>
