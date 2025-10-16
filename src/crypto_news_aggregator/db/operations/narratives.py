@@ -318,6 +318,46 @@ async def get_narrative_timeline(narrative_id: str) -> Optional[List[Dict[str, A
         return None
 
 
+async def get_resurrected_narratives(
+    limit: int = 20,
+    days: int = 7
+) -> List[Dict[str, Any]]:
+    """
+    Get narratives that have been reactivated (resurrected from dormant state).
+    
+    Returns narratives with reawakening_count > 0, sorted by most recently
+    resurrected (reawakened_from descending).
+    
+    Args:
+        limit: Maximum number of narratives to return (default 20, max 100)
+        days: Look back X days from now (default 7)
+    
+    Returns:
+        List of resurrected narrative documents with resurrection metrics
+    """
+    db = await mongo_manager.get_async_database()
+    collection = db.narratives
+    
+    # Calculate cutoff date
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+    
+    # Query for narratives with reawakening_count > 0 and reawakened_from within lookback window
+    query = {
+        "reawakening_count": {"$gt": 0},
+        "reawakened_from": {"$gte": cutoff_date}
+    }
+    
+    # Sort by reawakened_from descending (most recently resurrected first)
+    cursor = collection.find(query).sort("reawakened_from", -1).limit(limit)
+    
+    narratives = []
+    async for narrative in cursor:
+        narrative["_id"] = str(narrative["_id"])
+        narratives.append(narrative)
+    
+    return narratives
+
+
 async def ensure_indexes():
     """
     Ensure required indexes exist on the narratives collection.
@@ -326,6 +366,7 @@ async def ensure_indexes():
     - last_updated (for sorting and cleanup)
     - theme (for upsert uniqueness)
     - lifecycle (for filtering)
+    - reawakened_from (for resurrection queries)
     """
     db = await mongo_manager.get_async_database()
     collection = db.narratives
@@ -338,3 +379,6 @@ async def ensure_indexes():
     
     # Index on lifecycle for filtering
     await collection.create_index("lifecycle", name="idx_lifecycle")
+    
+    # Index on reawakened_from for resurrection queries
+    await collection.create_index("reawakened_from", name="idx_reawakened_from")
