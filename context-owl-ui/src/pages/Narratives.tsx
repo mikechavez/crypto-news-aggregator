@@ -126,21 +126,25 @@ export function Narratives() {
                 <CardTitle>{displayTitle}</CardTitle>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {/* Lifecycle badge */}
-                  {narrative.lifecycle_stage && lifecycleConfig[narrative.lifecycle_stage as keyof typeof lifecycleConfig] && (
-                    <span className={cn(
-                      'flex items-center gap-1.5 text-sm font-semibold px-3 py-1 rounded-full',
-                      `text-${lifecycleConfig[narrative.lifecycle_stage as keyof typeof lifecycleConfig].color}`,
-                      `bg-${lifecycleConfig[narrative.lifecycle_stage as keyof typeof lifecycleConfig].color}/10`,
-                      `dark:bg-${lifecycleConfig[narrative.lifecycle_stage as keyof typeof lifecycleConfig].color}/20`,
-                      lifecycleConfig[narrative.lifecycle_stage as keyof typeof lifecycleConfig].glow
-                    )}>
-                      {(() => {
-                        const Icon = lifecycleConfig[narrative.lifecycle_stage as keyof typeof lifecycleConfig].icon;
-                        return <Icon className="w-4 h-4" />;
-                      })()}
-                      {lifecycleConfig[narrative.lifecycle_stage as keyof typeof lifecycleConfig].label}
-                    </span>
-                  )}
+                  {(() => {
+                    const lifecycleValue = narrative.lifecycle_state || narrative.lifecycle;
+                    const config = lifecycleValue && lifecycleConfig[lifecycleValue as keyof typeof lifecycleConfig];
+                    if (!config) return null;
+                    
+                    const Icon = config.icon;
+                    return (
+                      <span className={cn(
+                        'flex items-center gap-1.5 text-sm font-semibold px-3 py-1 rounded-full',
+                        `text-${config.color}`,
+                        `bg-${config.color}/10`,
+                        `dark:bg-${config.color}/20`,
+                        config.glow
+                      )}>
+                        <Icon className="w-4 h-4" />
+                        {config.label}
+                      </span>
+                    );
+                  })()}
                   {/* Article count badge */}
                   <span className="text-sm font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-full">
                     {formatNumber(narrative.article_count)} articles

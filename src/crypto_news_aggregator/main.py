@@ -146,11 +146,11 @@ app = FastAPI(
 )
 
 # CORS middleware configuration
-# Use regex pattern to match all localhost and Vercel deployments
+# Use regex pattern to match all localhost, 127.0.0.1, and Vercel deployments
 # This avoids conflicts between allow_origins and allow_origin_regex
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^(http://localhost:\d+|https://.*\.vercel\.app)$",
+    allow_origin_regex=r"^(http://(localhost|127\.0\.0\.1):\d+|https://.*\.vercel\.app)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

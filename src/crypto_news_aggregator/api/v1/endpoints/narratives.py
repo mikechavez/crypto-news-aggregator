@@ -83,6 +83,14 @@ class PeakActivity(BaseModel):
     velocity: float = Field(..., description="Velocity at peak")
 
 
+class LifecycleHistoryEntry(BaseModel):
+    """Lifecycle history entry."""
+    state: str = Field(..., description="Lifecycle state (emerging, rising, hot, cooling, dormant)")
+    timestamp: str = Field(..., description="ISO timestamp when state changed")
+    article_count: int = Field(..., description="Article count at time of change")
+    velocity: float = Field(..., description="Velocity at time of change")
+
+
 class NarrativeResponse(BaseModel):
     """Response model for a narrative."""
     theme: str = Field(..., description="Theme category (e.g., regulatory, defi_adoption)")
@@ -92,6 +100,9 @@ class NarrativeResponse(BaseModel):
     article_count: int = Field(..., description="Number of articles supporting this narrative")
     mention_velocity: float = Field(..., description="Articles per day rate")
     lifecycle: str = Field(..., description="Lifecycle stage: emerging, hot, mature, declining")
+    lifecycle_state: Optional[str] = Field(default=None, description="New lifecycle state (emerging, rising, hot, cooling, dormant)")
+    lifecycle_history: Optional[List[LifecycleHistoryEntry]] = Field(default=None, description="History of lifecycle state transitions")
+    fingerprint: Optional[List[float]] = Field(default=None, description="Narrative fingerprint vector for similarity matching")
     momentum: Optional[str] = Field(default="unknown", description="Momentum trend: growing, declining, stable, or unknown")
     recency_score: float = Field(default=0.0, ge=0.0, le=1.0, description="Freshness score (0-1), higher = more recent, 24h half-life")
     entity_relationships: Optional[List[Dict[str, Any]]] = Field(default=[], description="Top 5 entity co-occurrence pairs with weights: [{'a': 'SEC', 'b': 'Binance', 'weight': 3}]")
@@ -198,6 +209,43 @@ async def get_active_narratives_endpoint(
             article_ids = narrative.get("article_ids", [])
             articles = await get_articles_for_narrative(article_ids, limit=20)
             
+            # Get new lifecycle fields and normalize them
+            lifecycle_state = narrative.get("lifecycle_state")
+            
+            # Normalize lifecycle_history: convert timestamps and rename mention_velocity to velocity
+            lifecycle_history_raw = narrative.get("lifecycle_history")
+            lifecycle_history = None
+            if lifecycle_history_raw:
+                lifecycle_history = []
+                for entry in lifecycle_history_raw:
+                    # Convert timestamp to ISO string if it's a datetime
+                    timestamp = entry.get("timestamp")
+                    if hasattr(timestamp, 'isoformat'):
+                        timestamp_str = timestamp.isoformat()
+                    else:
+                        timestamp_str = str(timestamp)
+                    
+                    # Use 'velocity' if present, otherwise use 'mention_velocity'
+                    velocity = entry.get("velocity", entry.get("mention_velocity", 0.0))
+                    
+                    lifecycle_history.append({
+                        "state": entry.get("state", ""),
+                        "timestamp": timestamp_str,
+                        "article_count": entry.get("article_count", 0),
+                        "velocity": velocity
+                    })
+            
+            # Normalize fingerprint: extract vector if it's a dict with 'vector' field
+            fingerprint_raw = narrative.get("fingerprint")
+            fingerprint = None
+            if fingerprint_raw:
+                if isinstance(fingerprint_raw, dict):
+                    # Old format: {'vector': [...], 'nucleus_entity': '...', ...}
+                    fingerprint = fingerprint_raw.get("vector")
+                elif isinstance(fingerprint_raw, list):
+                    # New format: already a list
+                    fingerprint = fingerprint_raw
+            
             response_data.append({
                 "theme": narrative.get("theme", ""),
                 "title": narrative.get("title", narrative.get("theme", "")),  # Fallback to theme if no title
@@ -206,6 +254,9 @@ async def get_active_narratives_endpoint(
                 "article_count": narrative.get("article_count", 0),
                 "mention_velocity": narrative.get("mention_velocity", 0.0),
                 "lifecycle": narrative.get("lifecycle", "emerging"),
+                "lifecycle_state": lifecycle_state,
+                "lifecycle_history": lifecycle_history,
+                "fingerprint": fingerprint,
                 "momentum": narrative.get("momentum", "unknown"),
                 "recency_score": narrative.get("recency_score", 0.0),
                 "entity_relationships": narrative.get("entity_relationships", []),

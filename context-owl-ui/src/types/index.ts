@@ -47,6 +47,28 @@ export interface SignalScore {
   created_at: string;
 }
 
+// Lifecycle history entry
+export interface LifecycleHistoryEntry {
+  state: string;              // Lifecycle state (emerging, rising, hot, cooling, dormant)
+  timestamp: string;          // ISO timestamp when state changed
+  article_count: number;      // Article count at time of change
+  velocity: number;           // Velocity at time of change
+}
+
+// Peak activity metrics
+export interface PeakActivity {
+  date: string;               // Date of peak activity (YYYY-MM-DD)
+  article_count: number;      // Number of articles at peak
+  velocity: number;           // Velocity at peak
+}
+
+// Entity relationship
+export interface EntityRelationship {
+  a: string;                  // First entity name
+  b: string;                  // Second entity name
+  weight: number;             // Co-occurrence weight
+}
+
 // Narrative types
 export interface Narrative {
   theme: string;              // Theme category (e.g., regulatory, defi_adoption)
@@ -54,11 +76,18 @@ export interface Narrative {
   summary: string;            // AI-generated narrative summary
   entities: string[];         // List of entities in this narrative
   article_count: number;      // Number of articles supporting this narrative
-  mention_velocity?: number;  // Articles per day rate (optional)
-  lifecycle?: string;         // Lifecycle stage: emerging, hot, mature, declining (deprecated)
-  lifecycle_stage?: 'emerging' | 'rising' | 'hot' | 'heating' | 'mature' | 'cooling'; // New lifecycle field
+  mention_velocity: number;   // Articles per day rate
+  lifecycle: string;          // Lifecycle stage: emerging, rising, hot, cooling, dormant
+  lifecycle_state?: string;   // New lifecycle state field (if backend returns it)
+  lifecycle_history?: LifecycleHistoryEntry[]; // History of lifecycle transitions
+  fingerprint?: number[];     // Narrative fingerprint vector (if backend returns it)
+  momentum?: string;          // Momentum trend: growing, declining, stable, unknown
+  recency_score?: number;     // Freshness score (0-1), higher = more recent
+  entity_relationships?: EntityRelationship[]; // Top entity co-occurrence pairs
   first_seen: string;         // ISO timestamp when narrative was first detected
   last_updated: string;       // ISO timestamp of last update
+  days_active?: number;       // Number of days narrative has been active
+  peak_activity?: PeakActivity; // Peak activity metrics
   articles: ArticleLink[];    // Articles supporting this narrative
   // Backward compatibility fields
   updated_at?: string;        // Alias for last_updated

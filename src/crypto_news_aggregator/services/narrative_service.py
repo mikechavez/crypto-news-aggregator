@@ -316,7 +316,10 @@ async def find_matching_narrative(
         active_statuses = ['emerging', 'rising', 'hot', 'cooling', 'dormant']
         query = {
             'last_updated': {'$gte': cutoff_time},
-            'status': {'$in': active_statuses}
+            '$or': [
+                {'status': {'$in': active_statuses}},
+                {'lifecycle_state': {'$in': active_statuses}}
+            ]
         }
         
         cursor = narratives_collection.find(query)
@@ -356,16 +359,22 @@ async def find_matching_narrative(
                 best_match = candidate
         
         # Return best match if above threshold
-        if best_similarity > 0.6:
+        if best_similarity >= 0.6:
             logger.info(
                 f"Found matching narrative: '{best_match.get('title')}' "
                 f"(similarity: {best_similarity:.3f})"
             )
             return best_match
         else:
-            logger.info(
-                f"No matching narrative found (best similarity: {best_similarity:.3f})"
-            )
+            if best_match:
+                logger.info(
+                    f"No matching narrative found - best candidate '{best_match.get('title')}' "
+                    f"below threshold (similarity: {best_similarity:.3f} < 0.6)"
+                )
+            else:
+                logger.info(
+                    f"No matching narrative found (best similarity: {best_similarity:.3f})"
+                )
             return None
     
     except Exception as e:
@@ -529,6 +538,10 @@ async def detect_narratives(
                     # Update existing narrative by appending new articles
                     matched_count += 1
                     narrative_id = str(matching_narrative['_id'])
+                    logger.debug(
+                        f"Match found for cluster with nucleus '{primary_nucleus}': "
+                        f"merging into narrative '{matching_narrative.get('title')}' (ID: {narrative_id})"
+                    )
                     
                     # Get existing article_ids and append new ones from cluster
                     existing_article_ids = set(matching_narrative.get('article_ids', []))
@@ -539,6 +552,9 @@ async def detect_narratives(
                     # Calculate updated metrics for lifecycle_state
                     updated_article_count = len(combined_article_ids)
                     first_seen = matching_narrative.get('first_seen', datetime.now(timezone.utc))
+                    # Ensure first_seen is timezone-aware
+                    if first_seen.tzinfo is None:
+                        first_seen = first_seen.replace(tzinfo=timezone.utc)
                     last_updated = datetime.now(timezone.utc)
                     
                     # Calculate mention velocity based on time since first_seen
@@ -623,6 +639,9 @@ async def detect_narratives(
                     # Calculate recency score (0-1, higher = more recent)
                     newest_article = article_dates[-1] if article_dates else None
                     if newest_article:
+                        # Ensure newest_article is timezone-aware
+                        if newest_article.tzinfo is None:
+                            newest_article = newest_article.replace(tzinfo=timezone.utc)
                         hours_since_last_update = (datetime.now(timezone.utc) - newest_article).total_seconds() / 3600
                         recency_score = exp(-hours_since_last_update / 24)  # 24h half-life
                     else:
@@ -688,7 +707,8 @@ async def detect_narratives(
                                 "article_count": article_count,
                                 "velocity": round(mention_velocity, 2)
                             },
-                            "days_active": 1
+                            "days_active": 1,
+                            "status": lifecycle_state  # Add status field for matching logic
                         }
                         
                         result = await narratives_collection.insert_one(narrative_doc)
@@ -761,6 +781,9 @@ async def detect_narratives(
                 # Calculate recency score (0-1, higher = more recent)
                 newest_article = article_dates[-1] if article_dates else None
                 if newest_article:
+                    # Ensure newest_article is timezone-aware
+                    if newest_article.tzinfo is None:
+                        newest_article = newest_article.replace(tzinfo=timezone.utc)
                     hours_since_last_update = (datetime.now(timezone.utc) - newest_article).total_seconds() / 3600
                     recency_score = exp(-hours_since_last_update / 24)  # 24h half-life
                 else:
