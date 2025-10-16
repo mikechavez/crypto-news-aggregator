@@ -1,0 +1,152 @@
+================================================================================
+NARRATIVE DATABASE ANALYSIS SUMMARY
+================================================================================
+Analysis Date: October 16, 2025
+Database: MongoDB crypto_news.narratives collection
+
+TOTAL NARRATIVES: 164
+UI SHOWING: 13 (10 in Pulse, 3 in Archive)
+MISSING FROM UI: 151 narratives (92%)
+
+================================================================================
+ROOT CAUSE: HARD-CODED QUERY LIMIT
+================================================================================
+
+The API endpoint has a default limit of 10 narratives:
+  File: src/crypto_news_aggregator/api/v1/endpoints/narratives.py
+  Line: 143
+  Code: limit: int = Query(10, ge=1, le=20, ...)
+
+The database query function also defaults to 10:
+  File: src/crypto_news_aggregator/db/operations/narratives.py
+  Line: 241
+  Code: async def get_active_narratives(limit: int = 10, ...)
+
+NO DATE FILTERING IS APPLIED - This is purely a limit issue.
+
+================================================================================
+BREAKDOWN BY LIFECYCLE STATE
+================================================================================
+
+State           Count    Percentage   Date Range (last_updated)
+--------------- -------- ------------ ------------------------------------
+hot             101      61.6%        Oct 15 23:50 → Oct 16 22:00
+emerging        19       11.6%        Oct 16 00:10 → Oct 16 22:00
+rising          6        3.7%         Oct 15 23:53 → Oct 15 23:54
+dormant         2        1.2%         Oct 15 23:50 → Oct 16 18:14
+NO FIELD        36       22.0%        Oct 12 16:57 → Oct 16 22:00
+--------------- -------- ------------ ------------------------------------
+TOTAL           164      100%
+
+Note: 36 narratives (22%) are missing the lifecycle_state field entirely.
+These are likely older narratives that need migration.
+
+================================================================================
+WHAT THE UI IS SHOWING
+================================================================================
+
+PULSE VIEW (10 narratives):
+  - Calls: GET /api/v1/narratives/active
+  - Gets: 10 most recently updated narratives (default limit)
+  - Missing: 154 other narratives
+
+ARCHIVE VIEW (3 narratives):
+  - Calls: GET /api/v1/narratives/resurrections?limit=20&days=7
+  - Filters: reawakening_count > 0 AND last_updated >= (now - 7 days)
+  - Gets: Only 3 narratives meet resurrection criteria
+  - This is working correctly - only 3 narratives have been resurrected
+
+CARDS VIEW (10 narratives):
+  - Uses same data as Pulse view
+  - Just different display format
+
+================================================================================
+DATE RANGE VERIFICATION
+================================================================================
+
+All narratives are recent - NO old data being filtered out:
+  ✓ Updated in last 7 days:  164 narratives (100%)
+  ✓ Updated in last 30 days: 164 narratives (100%)
+  ✓ Older than 30 days:      0 narratives (0%)
+
+Oldest narrative by last_updated:
+  Date: Oct 12, 2025 16:57:23
+  Title: NFT Gaming Platforms Migrate and Expand
+  State: N/A (missing lifecycle_state field)
+
+Newest narrative by last_updated:
+  Date: Oct 16, 2025 22:00:39
+  Title: Multiple narratives updated at this time
+  State: Various (hot, emerging)
+
+================================================================================
+SOLUTION: INCREASE THE LIMIT
+================================================================================
+
+QUICK FIX (5 minutes):
+  Change line 143 in api/v1/endpoints/narratives.py:
+  
+  FROM: limit: int = Query(10, ge=1, le=20, ...)
+  TO:   limit: int = Query(100, ge=1, le=200, ...)
+  
+  This will show all 164 narratives immediately.
+
+BETTER SOLUTION (30 minutes):
+  Add pagination with skip/limit parameters:
+  
+  async def get_active_narratives_endpoint(
+      skip: int = Query(0, ge=0),
+      limit: int = Query(50, ge=1, le=200)
+  ):
+  
+  Then update frontend to support "Load More" functionality.
+
+BEST SOLUTION (2 hours):
+  Add lifecycle state filtering + pagination:
+  
+  - Allow users to filter by hot/emerging/rising/dormant
+  - Add pagination for scalability
+  - Fix the 36 narratives missing lifecycle_state field
+
+================================================================================
+ADDITIONAL ISSUE: MISSING LIFECYCLE_STATE FIELD
+================================================================================
+
+36 narratives (22%) don't have the lifecycle_state field.
+
+Sample narratives without lifecycle_state:
+  1. Crypto Market Reckoning: Maturity, Discipline, and Regulation
+  2. Shiba Inu Struggles: Analysts Doubt ATH Revival
+  3. Investors Flee to Gold and Crypto Amid Economic Volatility
+  4. SEC Navigates Balancing Crypto Regulation and Innovation
+  5. Benzinga's Comprehensive Finance Content Spanning Bonds...
+
+These narratives are still being updated (last_updated: Oct 16 22:00:39)
+but lack the new lifecycle_state field.
+
+RECOMMENDATION: Run migration to backfill lifecycle_state based on:
+  - article_count
+  - mention_velocity
+  - days_active
+  - recency_score
+
+================================================================================
+VERIFICATION COMMANDS
+================================================================================
+
+Check narrative states:
+  poetry run python scripts/check_narrative_states.py
+
+Check article narrative coverage:
+  poetry run python scripts/check_narrative_coverage.py
+
+Query MongoDB directly:
+  # Count by lifecycle_state
+  db.narratives.aggregate([
+    { $group: { _id: "$lifecycle_state", count: { $sum: 1 } } }
+  ])
+
+  # Count narratives without lifecycle_state
+  db.narratives.countDocuments({ lifecycle_state: { $exists: false } })
+
+================================================================================

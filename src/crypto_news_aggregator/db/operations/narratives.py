@@ -244,6 +244,10 @@ async def get_active_narratives(
     """
     Get active narratives sorted by most recently updated.
     
+    Filters narratives to only include active states (emerging, rising, hot, 
+    cooling, reactivated). Excludes dormant and echo states which should appear
+    in the archive view.
+    
     Args:
         limit: Maximum number of narratives to return (default 10)
         lifecycle_filter: Optional filter by lifecycle stage
@@ -254,8 +258,17 @@ async def get_active_narratives(
     db = await mongo_manager.get_async_database()
     collection = db.narratives
     
-    # Build query filter
-    query = {}
+    # Build query filter - exclude dormant and echo states
+    # Active states: emerging, rising, hot, cooling, reactivated
+    active_states = ['emerging', 'rising', 'hot', 'cooling', 'reactivated']
+    
+    query = {
+        '$or': [
+            {'lifecycle_state': {'$in': active_states}},
+            {'lifecycle_state': {'$exists': False}}  # Include narratives without lifecycle_state for backward compatibility
+        ]
+    }
+    
     if lifecycle_filter:
         query["lifecycle"] = lifecycle_filter
     
@@ -316,6 +329,47 @@ async def get_narrative_timeline(narrative_id: str) -> Optional[List[Dict[str, A
         return narrative.get("timeline_data", [])
     except Exception:
         return None
+
+
+async def get_archived_narratives(
+    limit: int = 50,
+    days: int = 30
+) -> List[Dict[str, Any]]:
+    """
+    Get archived (dormant) narratives sorted by most recently updated.
+    
+    Returns narratives with lifecycle_state = 'dormant' that have been updated
+    within the lookback window. These are narratives that have gone quiet but
+    may still be relevant.
+    
+    Args:
+        limit: Maximum number of narratives to return (default 50)
+        days: Look back X days from now (default 30)
+    
+    Returns:
+        List of dormant narrative documents
+    """
+    db = await mongo_manager.get_async_database()
+    collection = db.narratives
+    
+    # Calculate cutoff date
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+    
+    # Query for narratives with lifecycle_state = 'dormant' within lookback window
+    query = {
+        "lifecycle_state": "dormant",
+        "last_updated": {"$gte": cutoff_date}
+    }
+    
+    # Sort by last_updated descending (most recently dormant first)
+    cursor = collection.find(query).sort("last_updated", -1).limit(limit)
+    
+    narratives = []
+    async for narrative in cursor:
+        narrative["_id"] = str(narrative["_id"])
+        narratives.append(narrative)
+    
+    return narratives
 
 
 async def get_resurrected_narratives(
