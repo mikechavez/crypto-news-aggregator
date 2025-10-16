@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Sparkles, TrendingUp, Flame, Zap, Star, Wind, LayoutGrid, Activity } from 'lucide-react';
+import { Sparkles, TrendingUp, Flame, Zap, Star, Wind, LayoutGrid, Activity, Archive } from 'lucide-react';
 import { narrativesAPI } from '../api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Loading } from '../components/Loading';
@@ -52,10 +52,10 @@ const parseNarrativeDate = (dateValue: any): string => {
 
 export function Narratives() {
   const [expandedArticles, setExpandedArticles] = useState<Set<number>>(new Set());
-  const [viewMode, setViewMode] = useState<'cards' | 'pulse'>('cards');
+  const [viewMode, setViewMode] = useState<'cards' | 'pulse' | 'archive'>('cards');
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
-    queryKey: ['narratives'],
-    queryFn: () => narrativesAPI.getNarratives(),
+    queryKey: ['narratives', viewMode],
+    queryFn: () => viewMode === 'archive' ? narrativesAPI.getResurrectedNarratives(20, 7) : narrativesAPI.getNarratives(),
     refetchInterval: 60000, // 60 seconds
   });
 
@@ -67,9 +67,14 @@ export function Narratives() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Emerging Narratives</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+          {viewMode === 'archive' ? 'Archived Narratives' : 'Emerging Narratives'}
+        </h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Clustered stories and trending topics in the crypto space
+          {viewMode === 'archive' 
+            ? 'Dormant narratives that have been reactivated in the past 7 days'
+            : 'Clustered stories and trending topics in the crypto space'
+          }
         </p>
         {dataUpdatedAt && (
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
@@ -104,6 +109,18 @@ export function Narratives() {
           <Activity className="w-4 h-4" />
           Pulse
         </button>
+        <button
+          onClick={() => setViewMode('archive')}
+          className={cn(
+            'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors',
+            viewMode === 'archive'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 dark:bg-dark-card text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover'
+          )}
+        >
+          <Archive className="w-4 h-4" />
+          Archive
+        </button>
       </div>
 
       {viewMode === 'pulse' ? (
@@ -112,6 +129,81 @@ export function Narratives() {
         </>
       ) : (
         <>
+      {/* Resurrection Summary Card - only shown in archive view */}
+      {viewMode === 'archive' && narratives.length > 0 && (
+        <Card className="mb-6 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-2 border-amber-300 dark:border-amber-700">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-500 dark:bg-amber-600 rounded-lg">
+                <Zap className="w-6 h-6 text-white" />
+              </div>
+              <CardTitle className="text-amber-900 dark:text-amber-100">
+                Resurrection Summary
+              </CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Total count */}
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-bold text-amber-900 dark:text-amber-100">
+                  {narratives.length}
+                </span>
+                <span className="text-gray-700 dark:text-gray-300">
+                  {narratives.length === 1 ? 'narrative has' : 'narratives have'} been resurrected in the past 7 days
+                </span>
+              </div>
+
+              {/* Top Resurrections */}
+              {narratives.length > 0 && (
+                <div className="pt-4 border-t border-amber-200 dark:border-amber-800">
+                  <h3 className="text-lg font-semibold text-amber-900 dark:text-amber-100 mb-3">
+                    ⚡ Top Resurrections
+                  </h3>
+                  <div className="space-y-3">
+                    {narratives
+                      .filter(n => n.reawakening_count && n.reawakening_count > 0)
+                      .sort((a, b) => (b.reawakening_count || 0) - (a.reawakening_count || 0))
+                      .slice(0, 3)
+                      .map((narrative, idx) => {
+                        const displayTitle = narrative.title || narrative.theme;
+                        return (
+                          <div 
+                            key={idx}
+                            className="flex items-start justify-between gap-4 p-3 bg-white/50 dark:bg-gray-900/30 rounded-lg"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-lg font-bold text-amber-700 dark:text-amber-400">
+                                  #{idx + 1}
+                                </span>
+                                <h4 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                                  {displayTitle}
+                                </h4>
+                              </div>
+                              <div className="flex flex-wrap gap-3 text-sm">
+                                <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400 font-medium">
+                                  <Zap className="w-3.5 h-3.5" />
+                                  {narrative.reawakening_count}x reawakened
+                                </span>
+                                {narrative.resurrection_velocity && narrative.resurrection_velocity > 0 && (
+                                  <span className="text-green-700 dark:text-green-400 font-medium">
+                                    +{formatNumber(narrative.resurrection_velocity)} resurrections/day
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="space-y-6">
         {narratives.map((narrative, index) => {
           // Handle both old and new field names for backward compatibility
@@ -120,10 +212,24 @@ export function Narratives() {
           const displayUpdated = narrative.last_updated || narrative.updated_at;
           
           return (
-          <Card key={`${narrative.theme}-${index}`}>
+          <Card key={`${narrative.theme}-${index}`} className={cn(
+            viewMode === 'archive' && 'border-2 border-purple-300 dark:border-purple-700 bg-purple-50/30 dark:bg-purple-900/10'
+          )}>
             <CardHeader>
               <div className="flex items-start justify-between gap-4">
-                <CardTitle>{displayTitle}</CardTitle>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {viewMode === 'archive' && (
+                    <Archive className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                  )}
+                  <CardTitle>{displayTitle}</CardTitle>
+                  {/* Reawakened badge */}
+                  {viewMode === 'archive' && narrative.reawakening_count && narrative.reawakening_count > 0 && (
+                    <span className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">
+                      <Zap className="w-4 h-4" />
+                      Reawakened{narrative.reawakening_count > 1 ? ` ${narrative.reawakening_count}x` : ''}
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {/* Lifecycle badge */}
                   {(() => {
@@ -216,8 +322,15 @@ export function Narratives() {
                 </div>
               )}
 
-              <div className="flex items-center justify-end text-sm text-gray-500 dark:text-gray-400 pt-4 border-t border-gray-200 dark:border-dark-border">
-                <span>Updated {formatRelativeTime(parseNarrativeDate(displayUpdated))}</span>
+              <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 pt-4 border-t border-gray-200 dark:border-dark-border">
+                {viewMode === 'archive' && narrative.reawakened_from && (
+                  <span className="text-amber-700 dark:text-amber-400 font-medium">
+                    Dormant since {formatRelativeTime(parseNarrativeDate(narrative.reawakened_from))}
+                  </span>
+                )}
+                <span className={cn(viewMode === 'archive' && narrative.reawakened_from ? '' : 'ml-auto')}>
+                  Updated {formatRelativeTime(parseNarrativeDate(displayUpdated))}
+                </span>
               </div>
             </CardContent>
           </Card>
