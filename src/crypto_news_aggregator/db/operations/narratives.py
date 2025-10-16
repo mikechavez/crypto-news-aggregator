@@ -75,7 +75,10 @@ async def upsert_narrative(
     entity_relationships: Optional[List[Dict[str, Any]]] = None,
     first_seen: Optional[datetime] = None,
     lifecycle_state: Optional[str] = None,
-    lifecycle_history: Optional[List[Dict[str, Any]]] = None
+    lifecycle_history: Optional[List[Dict[str, Any]]] = None,
+    reawakening_count: Optional[int] = None,
+    reawakened_from: Optional[datetime] = None,
+    resurrection_velocity: Optional[float] = None
 ) -> str:
     """
     Create or update a narrative record with full structure and timeline tracking.
@@ -98,6 +101,9 @@ async def upsert_narrative(
         first_seen: When narrative was first detected (optional)
         lifecycle_state: Lifecycle state (emerging, rising, hot, cooling, dormant) - optional
         lifecycle_history: History of lifecycle state transitions - optional
+        reawakening_count: Number of times narrative has been reactivated (optional)
+        reawakened_from: Timestamp when narrative went dormant before reactivation (optional)
+        resurrection_velocity: Articles per day in last 48 hours during reactivation (optional)
     
     Returns:
         The ID of the upserted narrative
@@ -170,6 +176,14 @@ async def upsert_narrative(
         if lifecycle_history is not None:
             update_data["lifecycle_history"] = lifecycle_history
         
+        # Add resurrection tracking fields if provided
+        if reawakening_count is not None:
+            update_data["reawakening_count"] = reawakening_count
+        if reawakened_from is not None:
+            update_data["reawakened_from"] = reawakened_from
+        if resurrection_velocity is not None:
+            update_data["resurrection_velocity"] = resurrection_velocity
+        
         await collection.update_one(
             {"theme": theme},
             {"$set": update_data}
@@ -210,6 +224,14 @@ async def upsert_narrative(
         # Add lifecycle_history if provided
         if lifecycle_history is not None:
             narrative_data["lifecycle_history"] = lifecycle_history
+        
+        # Add resurrection tracking fields if provided
+        if reawakening_count is not None:
+            narrative_data["reawakening_count"] = reawakening_count
+        if reawakened_from is not None:
+            narrative_data["reawakened_from"] = reawakened_from
+        if resurrection_velocity is not None:
+            narrative_data["resurrection_velocity"] = resurrection_velocity
         
         result = await collection.insert_one(narrative_data)
         return str(result.inserted_id)
