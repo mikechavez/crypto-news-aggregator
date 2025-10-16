@@ -96,7 +96,8 @@ def determine_lifecycle_state(
     article_count: int,
     mention_velocity: float,
     first_seen: datetime,
-    last_updated: datetime
+    last_updated: datetime,
+    previous_state: Optional[str] = None
 ) -> str:
     """
     Determine the lifecycle state of a narrative based on activity patterns.
@@ -106,13 +107,33 @@ def determine_lifecycle_state(
         mention_velocity: Articles per day rate
         first_seen: When the narrative was first detected
         last_updated: When the narrative was last updated with new articles
+        previous_state: Previous lifecycle state from lifecycle_history (optional)
     
     Returns:
-        Lifecycle state: emerging, rising, hot, cooling, or dormant
+        Lifecycle state: emerging, rising, hot, cooling, dormant, echo, or reactivated
     """
     # Calculate days since last update
     now = datetime.now(timezone.utc)
     days_since_update = (now - last_updated).total_seconds() / 86400  # 86400 seconds in a day
+    
+    # Calculate recent activity (last 24h and 48h)
+    cutoff_24h = now - timedelta(hours=24)
+    cutoff_48h = now - timedelta(hours=48)
+    
+    # Estimate articles in last 24h and 48h based on velocity
+    # This is an approximation; in practice, you'd query actual article timestamps
+    articles_last_24h = mention_velocity * 1.0  # velocity is articles/day
+    articles_last_48h = mention_velocity * 2.0
+    
+    # Check for reactivated state first: echo or dormant narrative with sustained activity (4+ articles in 48h)
+    # This takes priority over echo to handle the transition properly
+    if previous_state in ['echo', 'dormant'] and articles_last_48h >= 4:
+        return 'reactivated'
+    
+    # Check for echo state: dormant narrative with light activity (1-3 articles in 24h) but NOT sustained (< 4 in 48h)
+    # Echo represents a brief "pulse" of activity, not sustained reactivation
+    if previous_state == 'dormant' and 1 <= articles_last_24h <= 3 and articles_last_48h < 4:
+        return 'echo'
     
     # Check for dormant or cooling states first (based on recency)
     if days_since_update >= 7:
@@ -313,7 +334,7 @@ async def find_matching_narrative(
         cutoff_time = datetime.now(timezone.utc) - timedelta(days=within_days)
         
         # Query for active narratives within time window
-        active_statuses = ['emerging', 'rising', 'hot', 'cooling', 'dormant']
+        active_statuses = ['emerging', 'rising', 'hot', 'cooling', 'dormant', 'echo', 'reactivated']
         query = {
             'last_updated': {'$gte': cutoff_time},
             '$or': [
@@ -561,9 +582,13 @@ async def detect_narratives(
                     time_span = (last_updated - first_seen).total_seconds() / 86400  # days
                     mention_velocity = updated_article_count / time_span if time_span > 0 else 0
                     
+                    # Get previous state from lifecycle_history
+                    lifecycle_history_existing = matching_narrative.get('lifecycle_history', [])
+                    previous_state = lifecycle_history_existing[-1].get('state') if lifecycle_history_existing else None
+                    
                     # Calculate lifecycle_state for updated narrative
                     lifecycle_state = determine_lifecycle_state(
-                        updated_article_count, mention_velocity, first_seen, last_updated
+                        updated_article_count, mention_velocity, first_seen, last_updated, previous_state
                     )
                     
                     # Update lifecycle history
@@ -653,8 +678,9 @@ async def detect_narratives(
                     # Determine lifecycle state (new approach)
                     first_seen = datetime.now(timezone.utc)
                     last_updated = datetime.now(timezone.utc)
+                    # No previous state for new narratives
                     lifecycle_state = determine_lifecycle_state(
-                        article_count, mention_velocity, first_seen, last_updated
+                        article_count, mention_velocity, first_seen, last_updated, previous_state=None
                     )
                     
                     # Initialize lifecycle history for new narrative
@@ -792,14 +818,18 @@ async def detect_narratives(
                 # Determine lifecycle stage with momentum awareness (legacy)
                 lifecycle = determine_lifecycle_stage(article_count, mention_velocity, momentum)
                 
+                # Get previous state from existing narrative's lifecycle_history
+                existing_narrative = existing_narratives.get(theme, {})
+                lifecycle_history_existing = existing_narrative.get('lifecycle_history', [])
+                previous_state = lifecycle_history_existing[-1].get('state') if lifecycle_history_existing else None
+                
                 # Determine lifecycle state (new approach)
                 last_updated = datetime.now(timezone.utc)
                 lifecycle_state = determine_lifecycle_state(
-                    article_count, mention_velocity, first_seen, last_updated
+                    article_count, mention_velocity, first_seen, last_updated, previous_state
                 )
                 
                 # Update lifecycle history (check existing narrative for history)
-                existing_narrative = existing_narratives.get(theme, {})
                 lifecycle_history = update_lifecycle_history(
                     existing_narrative,
                     lifecycle_state,

@@ -214,6 +214,171 @@ class TestDetermineLifecycleState:
         )
         
         assert state == 'emerging'
+    
+    def test_echo_state_from_dormant(self):
+        """Test echo state when dormant narrative has light activity (1-3 articles/24h, <4 in 48h)."""
+        now = datetime.now(timezone.utc)
+        first_seen = now - timedelta(days=30)
+        last_updated = now - timedelta(hours=12)  # Recent update
+        
+        # Light activity: 1.5 articles/day = 1.5 in 24h, 3 in 48h (below reactivated threshold)
+        state = determine_lifecycle_state(
+            article_count=10,
+            mention_velocity=1.5,  # 1.5 articles/day
+            first_seen=first_seen,
+            last_updated=last_updated,
+            previous_state='dormant'
+        )
+        
+        assert state == 'echo'
+    
+    def test_echo_state_boundary_lower(self):
+        """Test echo state at lower boundary (exactly 1 article/day)."""
+        now = datetime.now(timezone.utc)
+        first_seen = now - timedelta(days=20)
+        last_updated = now - timedelta(hours=6)
+        
+        state = determine_lifecycle_state(
+            article_count=8,
+            mention_velocity=1.0,  # Exactly 1 article/day
+            first_seen=first_seen,
+            last_updated=last_updated,
+            previous_state='dormant'
+        )
+        
+        assert state == 'echo'
+    
+    def test_echo_state_boundary_upper(self):
+        """Test echo state at upper boundary (just below reactivated threshold)."""
+        now = datetime.now(timezone.utc)
+        first_seen = now - timedelta(days=15)
+        last_updated = now - timedelta(hours=4)
+        
+        # 1.9 articles/day = 1.9 in 24h, 3.8 in 48h (just below 4, so echo not reactivated)
+        state = determine_lifecycle_state(
+            article_count=12,
+            mention_velocity=1.9,  # Just below reactivated threshold
+            first_seen=first_seen,
+            last_updated=last_updated,
+            previous_state='dormant'
+        )
+        
+        assert state == 'echo'
+    
+    def test_no_echo_without_dormant_previous_state(self):
+        """Test that echo requires previous state to be dormant."""
+        now = datetime.now(timezone.utc)
+        first_seen = now - timedelta(days=10)
+        last_updated = now - timedelta(hours=6)
+        
+        # Same velocity as echo test, but previous state is 'cooling'
+        state = determine_lifecycle_state(
+            article_count=8,
+            mention_velocity=2.0,
+            first_seen=first_seen,
+            last_updated=last_updated,
+            previous_state='cooling'
+        )
+        
+        # Should not be echo since previous state wasn't dormant
+        assert state != 'echo'
+    
+    def test_reactivated_state_from_dormant(self):
+        """Test reactivated state when dormant narrative has sustained activity (4+ articles in 48h)."""
+        now = datetime.now(timezone.utc)
+        first_seen = now - timedelta(days=30)
+        last_updated = now - timedelta(hours=6)  # Recent update
+        
+        # Sustained activity: 8 articles in last 48h (4 articles/day * 2 days)
+        state = determine_lifecycle_state(
+            article_count=15,
+            mention_velocity=4.0,  # 4 articles/day
+            first_seen=first_seen,
+            last_updated=last_updated,
+            previous_state='dormant'
+        )
+        
+        assert state == 'reactivated'
+    
+    def test_reactivated_state_from_echo(self):
+        """Test reactivated state when echo narrative has sustained activity."""
+        now = datetime.now(timezone.utc)
+        first_seen = now - timedelta(days=25)
+        last_updated = now - timedelta(hours=4)
+        
+        # Sustained activity: 10 articles in last 48h (5 articles/day * 2 days)
+        state = determine_lifecycle_state(
+            article_count=20,
+            mention_velocity=5.0,  # 5 articles/day
+            first_seen=first_seen,
+            last_updated=last_updated,
+            previous_state='echo'
+        )
+        
+        assert state == 'reactivated'
+    
+    def test_reactivated_state_boundary(self):
+        """Test reactivated state at exact boundary (4 articles in 48h)."""
+        now = datetime.now(timezone.utc)
+        first_seen = now - timedelta(days=20)
+        last_updated = now - timedelta(hours=8)
+        
+        # Exactly 4 articles in 48h (2 articles/day * 2 days)
+        state = determine_lifecycle_state(
+            article_count=12,
+            mention_velocity=2.0,  # 2 articles/day
+            first_seen=first_seen,
+            last_updated=last_updated,
+            previous_state='dormant'
+        )
+        
+        # At boundary, should be reactivated (4+ articles in 48h)
+        assert state == 'reactivated'
+    
+    def test_no_reactivated_without_echo_or_dormant(self):
+        """Test that reactivated requires previous state to be echo or dormant."""
+        now = datetime.now(timezone.utc)
+        first_seen = now - timedelta(days=5)
+        last_updated = now - timedelta(hours=4)
+        
+        # High velocity but previous state is 'hot'
+        state = determine_lifecycle_state(
+            article_count=10,
+            mention_velocity=5.0,
+            first_seen=first_seen,
+            last_updated=last_updated,
+            previous_state='hot'
+        )
+        
+        # Should not be reactivated since previous state wasn't echo/dormant
+        assert state != 'reactivated'
+    
+    def test_echo_to_reactivated_transition(self):
+        """Test transition from echo to reactivated as activity increases."""
+        now = datetime.now(timezone.utc)
+        first_seen = now - timedelta(days=30)
+        
+        # First: dormant narrative gets light activity -> echo
+        last_updated_1 = now - timedelta(hours=24)
+        state_1 = determine_lifecycle_state(
+            article_count=10,
+            mention_velocity=1.5,  # 1.5 articles/day (echo range: <4 in 48h)
+            first_seen=first_seen,
+            last_updated=last_updated_1,
+            previous_state='dormant'
+        )
+        assert state_1 == 'echo'
+        
+        # Then: echo narrative gets sustained activity -> reactivated
+        last_updated_2 = now - timedelta(hours=6)
+        state_2 = determine_lifecycle_state(
+            article_count=15,
+            mention_velocity=4.5,  # 4.5 articles/day (9 in 48h)
+            first_seen=first_seen,
+            last_updated=last_updated_2,
+            previous_state='echo'
+        )
+        assert state_2 == 'reactivated'
 
 
 class TestLifecycleStateIntegration:
@@ -298,13 +463,13 @@ class TestLifecycleStateIntegration:
             assert len(narratives) > 0
             narrative = narratives[0]
             assert "lifecycle_state" in narrative
-            assert narrative["lifecycle_state"] in ['emerging', 'rising', 'hot', 'cooling', 'dormant']
+            assert narrative["lifecycle_state"] in ['emerging', 'rising', 'hot', 'cooling', 'dormant', 'echo', 'reactivated']
             
             # Verify database insert included lifecycle_state
             assert len(inserted_docs) > 0
             inserted_doc = inserted_docs[0]
             assert "lifecycle_state" in inserted_doc
-            assert inserted_doc["lifecycle_state"] in ['emerging', 'rising', 'hot', 'cooling', 'dormant']
+            assert inserted_doc["lifecycle_state"] in ['emerging', 'rising', 'hot', 'cooling', 'dormant', 'echo', 'reactivated']
     
     @pytest.mark.asyncio
     async def test_updated_narrative_recalculates_lifecycle_state(self):
@@ -405,7 +570,7 @@ class TestLifecycleStateIntegration:
             update_doc = updated_docs[0]
             assert "lifecycle_state" in update_doc
             # Should be recalculated based on new article count and timing
-            assert update_doc["lifecycle_state"] in ['emerging', 'rising', 'hot', 'cooling', 'dormant']
+            assert update_doc["lifecycle_state"] in ['emerging', 'rising', 'hot', 'cooling', 'dormant', 'echo', 'reactivated']
     
     @pytest.mark.asyncio
     async def test_theme_based_narratives_include_lifecycle_state(self):
@@ -480,10 +645,10 @@ class TestLifecycleStateIntegration:
             assert len(narratives) > 0
             narrative = narratives[0]
             assert "lifecycle_state" in narrative
-            assert narrative["lifecycle_state"] in ['emerging', 'rising', 'hot', 'cooling', 'dormant']
+            assert narrative["lifecycle_state"] in ['emerging', 'rising', 'hot', 'cooling', 'dormant', 'echo', 'reactivated']
             
             # Verify lifecycle_state was passed to upsert_narrative
             assert len(upsert_calls) > 0
             upsert_call = upsert_calls[0]
             assert "lifecycle_state" in upsert_call
-            assert upsert_call["lifecycle_state"] in ['emerging', 'rising', 'hot', 'cooling', 'dormant']
+            assert upsert_call["lifecycle_state"] in ['emerging', 'rising', 'hot', 'cooling', 'dormant', 'echo', 'reactivated']
