@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Sparkles, TrendingUp, Flame, Zap, Star, Wind, LayoutGrid, Activity, Archive } from 'lucide-react';
+import { Sparkles, TrendingUp, Flame, Zap, Star, Wind, LayoutGrid, Activity, Archive, RotateCcw, FileText, Users } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { narrativesAPI } from '../api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Loading } from '../components/Loading';
@@ -53,6 +54,7 @@ const parseNarrativeDate = (dateValue: any): string => {
 export function Narratives() {
   const [expandedArticles, setExpandedArticles] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<'cards' | 'pulse' | 'archive'>('cards');
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['narratives', viewMode],
     queryFn: () => viewMode === 'archive' ? narrativesAPI.getResurrectedNarratives(20, 7) : narrativesAPI.getNarratives(),
@@ -60,6 +62,140 @@ export function Narratives() {
   });
 
   const narratives = data || [];
+
+  // Calculate date range from narratives for the timeline scrubber
+  const dateRange = useMemo(() => {
+    if (narratives.length === 0) {
+      return { minDate: new Date(), maxDate: new Date(), totalDays: 0 };
+    }
+
+    const dates = narratives.flatMap(narrative => {
+      const firstSeen = narrative.first_seen ? new Date(narrative.first_seen) : new Date();
+      const lastUpdated = narrative.last_updated ? new Date(narrative.last_updated) : new Date();
+      return [firstSeen, lastUpdated];
+    });
+
+    const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+    const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+    const totalDays = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    return { minDate, maxDate, totalDays };
+  }, [narratives]);
+
+  // Calculate activity by day for heatmap
+  const activityByDay = useMemo(() => {
+    if (narratives.length === 0 || dateRange.totalDays === 0) {
+      return [];
+    }
+
+    const activityMap = new Map<string, number>();
+    
+    // For each day in the range, count how many narratives were active
+    for (let i = 0; i <= dateRange.totalDays; i++) {
+      const currentDate = new Date(dateRange.minDate.getTime() + i * 24 * 60 * 60 * 1000);
+      const dateKey = currentDate.toISOString().split('T')[0];
+      
+      const count = narratives.filter(narrative => {
+        const firstSeen = narrative.first_seen ? new Date(narrative.first_seen) : null;
+        const lastUpdated = narrative.last_updated ? new Date(narrative.last_updated) : null;
+        
+        if (!firstSeen || !lastUpdated) return false;
+        
+        // Check if currentDate is between first_seen and last_updated
+        return currentDate >= firstSeen && currentDate <= lastUpdated;
+      }).length;
+      
+      activityMap.set(dateKey, count);
+    }
+    
+    // Convert to array with date and count
+    return Array.from(activityMap.entries()).map(([dateKey, count]) => ({
+      date: new Date(dateKey),
+      count
+    }));
+  }, [narratives, dateRange]);
+
+  // Calculate max activity for color scaling
+  const maxActivity = useMemo(() => {
+    return Math.max(...activityByDay.map(d => d.count), 1);
+  }, [activityByDay]);
+
+  // Filter narratives based on selected date
+  const filteredNarratives = useMemo(() => {
+    if (!selectedDate || viewMode !== 'pulse') {
+      return narratives;
+    }
+
+    return narratives.filter(narrative => {
+      const firstSeen = narrative.first_seen ? new Date(narrative.first_seen) : null;
+      const lastUpdated = narrative.last_updated ? new Date(narrative.last_updated) : null;
+      
+      if (!firstSeen || !lastUpdated) return false;
+      
+      // Check if selectedDate is between first_seen and last_updated
+      return selectedDate >= firstSeen && selectedDate <= lastUpdated;
+    });
+  }, [narratives, selectedDate, viewMode]);
+
+  // Calculate dynamic stats for the selected date
+  const dateStats = useMemo(() => {
+    const activeNarratives = viewMode === 'pulse' ? filteredNarratives : narratives;
+    
+    // Total narratives
+    const total = activeNarratives.length;
+    
+    // Breakdown by lifecycle state
+    const lifecycleBreakdown = activeNarratives.reduce((acc, narrative) => {
+      const state = narrative.lifecycle_state || narrative.lifecycle || 'unknown';
+      acc[state] = (acc[state] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    // Most active entity (entity appearing in most narratives)
+    const entityCounts = new Map<string, number>();
+    activeNarratives.forEach(narrative => {
+      narrative.entities.forEach(entity => {
+        entityCounts.set(entity, (entityCounts.get(entity) || 0) + 1);
+      });
+    });
+    
+    let mostActiveEntity = 'None';
+    let maxCount = 0;
+    entityCounts.forEach((count, entity) => {
+      if (count > maxCount) {
+        maxCount = count;
+        mostActiveEntity = entity;
+      }
+    });
+    
+    // Average article count per narrative
+    const totalArticles = activeNarratives.reduce((sum, n) => sum + (n.article_count || 0), 0);
+    const avgArticles = total > 0 ? (totalArticles / total).toFixed(1) : '0';
+    
+    return {
+      total,
+      lifecycleBreakdown,
+      mostActiveEntity,
+      avgArticles
+    };
+  }, [filteredNarratives, narratives, viewMode]);
+
+  // Format date for display
+  const formatDateForDisplay = (date: Date) => {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  // Get color for activity level (gradient from gray to red/orange)
+  const getActivityColor = (count: number, max: number) => {
+    if (count === 0) return 'bg-gray-200 dark:bg-gray-700';
+    
+    const intensity = count / max;
+    
+    if (intensity < 0.25) return 'bg-orange-200 dark:bg-orange-900/40';
+    if (intensity < 0.5) return 'bg-orange-300 dark:bg-orange-800/60';
+    if (intensity < 0.75) return 'bg-orange-400 dark:bg-orange-700/80';
+    return 'bg-red-500 dark:bg-red-600';
+  };
 
   if (isLoading) return <Loading />;
   if (error) return <ErrorMessage message={error.message} onRetry={() => refetch()} />;
@@ -125,7 +261,291 @@ export function Narratives() {
 
       {viewMode === 'pulse' ? (
         <>
-          <TimelineView narratives={narratives || []} />
+          {/* Timeline Scrubber */}
+          <div className="mb-8 p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  Timeline Filter
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  {selectedDate 
+                    ? `Showing narratives active on ${formatDateForDisplay(selectedDate)}`
+                    : 'Showing all current narratives'
+                  }
+                </p>
+              </div>
+              {selectedDate && (
+                <button
+                  onClick={() => setSelectedDate(null)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Reset to Current
+                </button>
+              )}
+            </div>
+
+            {/* Activity Heatmap */}
+            {activityByDay.length > 0 && (
+              <div className="mb-6">
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Activity by Day
+                </h4>
+                <div className="flex items-end h-16 gap-0.5">
+                  {activityByDay.map((day, index) => {
+                    const heightPercent = (day.count / maxActivity) * 100;
+                    const isSelected = selectedDate && 
+                      day.date.toDateString() === selectedDate.toDateString();
+                    
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => setSelectedDate(day.date)}
+                        className={cn(
+                          'flex-1 transition-all duration-200 rounded-t hover:opacity-80 relative group',
+                          getActivityColor(day.count, maxActivity),
+                          isSelected && 'ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-gray-900'
+                        )}
+                        style={{ height: `${Math.max(heightPercent, 5)}%` }}
+                        title={`${formatDateForDisplay(day.date)}: ${day.count} narratives`}
+                      >
+                        {/* Tooltip on hover */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                          {formatDateForDisplay(day.date)}: {day.count}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {dateRange.totalDays > 0 && (
+              <div className="relative">
+                {/* Date labels */}
+                <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 mb-2">
+                  <span>{formatDateForDisplay(dateRange.minDate)}</span>
+                  <span>{formatDateForDisplay(dateRange.maxDate)}</span>
+                </div>
+
+                {/* Slider container */}
+                <div className="relative h-12 flex items-center">
+                  {/* Gradient track */}
+                  <div className="absolute inset-x-0 h-2 bg-gradient-to-r from-blue-300 via-indigo-400 to-purple-500 dark:from-blue-600 dark:via-indigo-700 dark:to-purple-800 rounded-full" />
+                  
+                  {/* Range input */}
+                  <input
+                    type="range"
+                    min="0"
+                    max={activityByDay.length - 1}
+                    step="1"
+                    value={selectedDate 
+                      ? activityByDay.findIndex(day => day.date.toDateString() === selectedDate.toDateString())
+                      : activityByDay.length - 1
+                    }
+                    onChange={(e) => {
+                      const index = parseInt(e.target.value);
+                      if (index >= 0 && index < activityByDay.length) {
+                        setSelectedDate(activityByDay[index].date);
+                      }
+                    }}
+                    className="absolute inset-x-0 w-full h-12 opacity-0 cursor-pointer z-10"
+                    style={{ margin: 0 }}
+                  />
+
+                  {/* Custom thumb */}
+                  <div 
+                    className="absolute w-6 h-6 bg-white dark:bg-gray-800 border-4 border-blue-600 dark:border-blue-400 rounded-full shadow-lg pointer-events-none transition-all duration-200"
+                    style={{
+                      left: (() => {
+                        const index = selectedDate 
+                          ? activityByDay.findIndex(day => day.date.toDateString() === selectedDate.toDateString())
+                          : activityByDay.length - 1;
+                        const totalBars = activityByDay.length;
+                        // Calculate position to center on each bar
+                        const barWidth = 100 / totalBars;
+                        const centerOffset = barWidth / 2;
+                        const position = (index * barWidth) + centerOffset;
+                        return `calc(${position}% - 12px)`;
+                      })()
+                    }}
+                  />
+                </div>
+
+                {/* Selected date display */}
+                {selectedDate && (
+                  <div 
+                    className="absolute -bottom-8 bg-blue-600 dark:bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg"
+                    style={{
+                      left: (() => {
+                        const index = activityByDay.findIndex(day => day.date.toDateString() === selectedDate.toDateString());
+                        const totalBars = activityByDay.length;
+                        const barWidth = 100 / totalBars;
+                        const centerOffset = barWidth / 2;
+                        const position = (index * barWidth) + centerOffset;
+                        return `calc(${position}% - 40px)`;
+                      })()
+                    }}
+                  >
+                    {formatDateForDisplay(selectedDate)}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Results count */}
+            <div className="mt-10 text-sm text-gray-600 dark:text-gray-400">
+              {selectedDate 
+                ? `${filteredNarratives.length} of ${narratives.length} narratives active on this date`
+                : `${narratives.length} total narratives`
+              }
+            </div>
+          </div>
+
+          {/* Dynamic Stats Panel */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {selectedDate ? `Stats for ${formatDateForDisplay(selectedDate)}` : 'Right Now'}
+              </h3>
+            </div>
+            
+            <AnimatePresence mode="wait">
+              <motion.div 
+                key={selectedDate ? selectedDate.toISOString() : 'current'}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+              >
+                {/* Total Narratives */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3, delay: 0 }}
+                >
+                  <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-blue-600 dark:bg-blue-500 rounded-lg">
+                          <TrendingUp className="w-6 h-6 text-white" />
+                        </div>
+                        <div>
+                          <div className="text-3xl font-bold text-blue-900 dark:text-blue-100">
+                            {dateStats.total}
+                          </div>
+                          <div className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                            Total Narratives
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                {/* Lifecycle Breakdown */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3, delay: 0.1 }}
+                >
+                  <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-indigo-600 dark:bg-indigo-500 rounded-lg">
+                          <Activity className="w-6 h-6 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm text-indigo-700 dark:text-indigo-300 font-medium mb-2">
+                            Lifecycle States
+                          </div>
+                          <div className="space-y-1">
+                            {Object.entries(dateStats.lifecycleBreakdown)
+                              .sort(([, a], [, b]) => b - a)
+                              .slice(0, 3)
+                              .map(([state, count]) => (
+                                <div key={state} className="flex items-center justify-between text-xs">
+                                  <span className="text-indigo-800 dark:text-indigo-200 capitalize">
+                                    {state}
+                                  </span>
+                                  <span className="font-bold text-indigo-900 dark:text-indigo-100">
+                                    {count}
+                                  </span>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                {/* Most Active Entity */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3, delay: 0.2 }}
+                >
+                  <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-purple-600 dark:bg-purple-500 rounded-lg">
+                          <Users className="w-6 h-6 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-purple-700 dark:text-purple-300 font-medium mb-1">
+                            Most Active Entity
+                          </div>
+                          <div className="text-lg font-bold text-purple-900 dark:text-purple-100 truncate">
+                            {dateStats.mostActiveEntity}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                {/* Average Article Count */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3, delay: 0.3 }}
+                >
+                  <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-green-600 dark:bg-green-500 rounded-lg">
+                          <FileText className="w-6 h-6 text-white" />
+                        </div>
+                        <div>
+                          <div className="text-3xl font-bold text-green-900 dark:text-green-100">
+                            {dateStats.avgArticles}
+                          </div>
+                          <div className="text-sm text-green-700 dark:text-green-300 font-medium">
+                            Avg Articles/Narrative
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={selectedDate ? selectedDate.toISOString() : 'current'}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <TimelineView narratives={filteredNarratives || []} selectedDate={selectedDate} />
+            </motion.div>
+          </AnimatePresence>
         </>
       ) : (
         <>
