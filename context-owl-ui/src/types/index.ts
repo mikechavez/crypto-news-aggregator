@@ -71,6 +71,7 @@ export interface EntityRelationship {
 
 // Narrative types
 export interface Narrative {
+  _id?: string;               // MongoDB ObjectId (optional, for unique keys)
   theme: string;              // Theme category (e.g., regulatory, defi_adoption)
   title: string;              // Generated narrative title
   summary: string;            // AI-generated narrative summary

@@ -234,9 +234,9 @@ export const TimelineView = ({ narratives, selectedDate }: TimelineViewProps) =>
         <span>{format(dateRange.maxDate, 'MMM d')}</span>
       </div>
       <div className="space-y-3">
-        {narratives.map((narrative) => (
+        {narratives.map((narrative, index) => (
           <TimelineRow
-            key={`${narrative.theme}-${narrative.title}`}
+            key={narrative._id || `${narrative.theme}-${narrative.title}-${index}`}
             narrative={narrative}
             dateRange={dateRange}
             onNarrativeClick={setExpandedNarrative}

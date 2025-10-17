@@ -549,8 +549,12 @@ export function Narratives() {
         </>
       ) : (
         <>
-      {/* Resurrection Summary Card - only shown in archive view */}
-      {viewMode === 'archive' && narratives.length > 0 && (
+      {/* Resurrection Summary Card - only shown in archive view when there are resurrected narratives */}
+      {viewMode === 'archive' && narratives.length > 0 && (() => {
+        const resurrectedNarratives = narratives.filter(n => n.reawakening_count && n.reawakening_count > 0);
+        if (resurrectedNarratives.length === 0) return null;
+        
+        return (
         <Card className="mb-6 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-2 border-amber-300 dark:border-amber-700">
           <CardHeader>
             <div className="flex items-center gap-3">
@@ -567,10 +571,10 @@ export function Narratives() {
               {/* Total count */}
               <div className="flex items-center gap-2">
                 <span className="text-2xl font-bold text-amber-900 dark:text-amber-100">
-                  {narratives.length}
+                  {resurrectedNarratives.length}
                 </span>
                 <span className="text-gray-700 dark:text-gray-300">
-                  {narratives.length === 1 ? 'narrative has' : 'narratives have'} been resurrected in the past 7 days
+                  {resurrectedNarratives.length === 1 ? 'narrative has' : 'narratives have'} been resurrected in the past 7 days
                 </span>
               </div>
 
@@ -622,7 +626,8 @@ export function Narratives() {
             </div>
           </CardContent>
         </Card>
-      )}
+        );
+      })()}
 
       <div className="space-y-6">
         {narratives.map((narrative, index) => {

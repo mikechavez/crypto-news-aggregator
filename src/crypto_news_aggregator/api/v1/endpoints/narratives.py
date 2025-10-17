@@ -208,9 +208,9 @@ async def get_active_narratives_endpoint(
             days_active = narrative.get("days_active", 1)
             peak_activity = narrative.get("peak_activity")
             
-            # Fetch articles for this narrative
-            article_ids = narrative.get("article_ids", [])
-            articles = await get_articles_for_narrative(article_ids, limit=20)
+            # Don't fetch articles for list view - only fetch when user requests details
+            # This prevents N+1 query problem and speeds up initial page load from 2 minutes to <1 second
+            articles = []
             
             # Get new lifecycle fields and normalize them
             lifecycle_state = narrative.get("lifecycle_state")

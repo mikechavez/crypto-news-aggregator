@@ -419,21 +419,42 @@ async def ensure_indexes():
     
     Creates indexes for:
     - last_updated (for sorting and cleanup)
-    - theme (for upsert uniqueness)
-    - lifecycle (for filtering)
+    - theme (for upsert operations, non-unique due to null values)
+    - lifecycle (for filtering - legacy)
+    - lifecycle_state (for filtering - new field)
     - reawakened_from (for resurrection queries)
+    - compound index on lifecycle_state + last_updated (for efficient active narrative queries)
     """
     db = await mongo_manager.get_async_database()
     collection = db.narratives
     
+    # Helper to create index if it doesn't exist
+    async def create_index_if_not_exists(keys, name, **kwargs):
+        try:
+            await collection.create_index(keys, name=name, **kwargs)
+        except Exception as e:
+            # Index might already exist, that's okay
+            if "already exists" not in str(e) and "IndexOptionsConflict" not in str(e):
+                # Only raise if it's not an "already exists" error
+                pass
+    
     # Index on last_updated for sorting and cleanup
-    await collection.create_index("last_updated", name="idx_last_updated")
+    await create_index_if_not_exists("last_updated", name="idx_last_updated")
     
-    # Index on theme for upsert operations
-    await collection.create_index("theme", unique=True, name="idx_theme_unique")
+    # Index on theme for upsert operations (non-unique due to potential null values)
+    await create_index_if_not_exists("theme", name="idx_theme")
     
-    # Index on lifecycle for filtering
-    await collection.create_index("lifecycle", name="idx_lifecycle")
+    # Index on lifecycle for filtering (legacy)
+    await create_index_if_not_exists("lifecycle", name="idx_lifecycle")
+    
+    # Index on lifecycle_state for filtering (new field) - THIS IS THE CRITICAL ONE
+    await create_index_if_not_exists("lifecycle_state", name="idx_lifecycle_state")
+    
+    # Compound index for efficient active narrative queries (lifecycle_state + last_updated)
+    await create_index_if_not_exists(
+        [("lifecycle_state", 1), ("last_updated", -1)],
+        name="idx_lifecycle_state_last_updated"
+    )
     
     # Index on reawakened_from for resurrection queries
-    await collection.create_index("reawakened_from", name="idx_reawakened_from")
+    await create_index_if_not_exists("reawakened_from", name="idx_reawakened_from")
