@@ -50,6 +50,53 @@ SALIENCE_CLUSTERING_CONFIG = {
 }
 
 
+def calculate_recent_velocity(article_dates: List[datetime], lookback_days: int = 7) -> float:
+    """
+    Calculate article velocity based on recent activity (last N days).
+    
+    This provides a more accurate measure of current narrative momentum
+    compared to dividing total articles by total time span.
+    
+    Args:
+        article_dates: List of article publication dates
+        lookback_days: Number of days to look back for velocity calculation (default: 7)
+    
+    Returns:
+        Articles per day over the lookback period
+    """
+    if not article_dates:
+        return 0.0
+    
+    # Get current time
+    now = datetime.now(timezone.utc)
+    
+    # Filter articles from the last N days
+    cutoff_date = now - timedelta(days=lookback_days)
+    recent_articles = [d for d in article_dates if d >= cutoff_date]
+    
+    # Debug logging
+    logger.info(f"[VELOCITY DEBUG] Total articles: {len(article_dates)}")
+    logger.info(f"[VELOCITY DEBUG] Current time (now): {now}")
+    logger.info(f"[VELOCITY DEBUG] Cutoff date ({lookback_days} days ago): {cutoff_date}")
+    logger.info(f"[VELOCITY DEBUG] Time delta: {(now - cutoff_date).total_seconds() / 86400:.2f} days")
+    logger.info(f"[VELOCITY DEBUG] Articles within window: {len(recent_articles)}")
+    if recent_articles:
+        oldest = min(recent_articles)
+        newest = max(recent_articles)
+        logger.info(f"[VELOCITY DEBUG] Oldest article in window: {oldest}")
+        logger.info(f"[VELOCITY DEBUG] Newest article in window: {newest}")
+        logger.info(f"[VELOCITY DEBUG] Article span: {(newest - oldest).total_seconds() / 86400:.2f} days")
+    logger.info(f"[VELOCITY DEBUG] Velocity calculation: {len(recent_articles)} / {lookback_days} = {len(recent_articles) / lookback_days:.2f}")
+    
+    # If no recent articles, return 0
+    if not recent_articles:
+        return 0.0
+    
+    # Calculate velocity: articles / lookback period
+    # Always use the full lookback_days window for consistent velocity measurement
+    return len(recent_articles) / lookback_days
+
+
 def calculate_momentum(article_dates: List[datetime]) -> str:
     """
     Calculate momentum based on velocity change over time.
@@ -613,9 +660,20 @@ async def detect_narratives(
                         first_seen = first_seen.replace(tzinfo=timezone.utc)
                     last_updated = datetime.now(timezone.utc)
                     
-                    # Calculate mention velocity based on time since first_seen
-                    time_span = (last_updated - first_seen).total_seconds() / 86400  # days
-                    mention_velocity = updated_article_count / time_span if time_span > 0 else 0
+                    # Calculate mention velocity based on recent activity (last 7 days)
+                    # Fetch article dates for velocity calculation
+                    article_dates = []
+                    for article in articles:
+                        if str(article.get('_id')) in combined_article_ids:
+                            pub_date = article.get('published_at')
+                            if pub_date:
+                                # Ensure timezone-aware
+                                if pub_date.tzinfo is None:
+                                    pub_date = pub_date.replace(tzinfo=timezone.utc)
+                                article_dates.append(pub_date)
+                    
+                    # Use recent velocity calculation (last 7 days) for more accurate current activity
+                    mention_velocity = calculate_recent_velocity(article_dates, lookback_days=7)
                     
                     # Get previous state from lifecycle_history
                     lifecycle_history_existing = matching_narrative.get('lifecycle_history', [])
@@ -681,12 +739,9 @@ async def detect_narratives(
                     narrative['needs_summary_update'] = False  # Fresh summary, no update needed
                     
                     narrative_data = narrative
-                    # Calculate mention velocity (articles per day)
+                    # Calculate mention velocity (articles per day) based on recent activity
                     article_count = narrative_data.get("article_count", 0)
-                    time_span_days = hours / 24.0
-                    mention_velocity = article_count / time_span_days if time_span_days > 0 else 0
                     
-                    # Calculate momentum from article dates
                     # Get articles for this narrative to extract dates
                     article_ids = narrative_data.get("article_ids", [])
                     article_dates = []
@@ -694,7 +749,15 @@ async def detect_narratives(
                         if str(article.get("_id")) in article_ids:
                             pub_date = article.get("published_at")
                             if pub_date:
+                                # Ensure timezone-aware
+                                if pub_date.tzinfo is None:
+                                    pub_date = pub_date.replace(tzinfo=timezone.utc)
                                 article_dates.append(pub_date)
+                    
+                    # Use recent velocity calculation (last 7 days) for more accurate current activity
+                    mention_velocity = calculate_recent_velocity(article_dates, lookback_days=7)
+                    
+                    # Calculate momentum from article dates
                     
                     # Sort dates and calculate momentum
                     article_dates.sort()

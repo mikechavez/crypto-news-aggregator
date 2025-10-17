@@ -197,7 +197,7 @@ const TimelineRow = ({ narrative, dateRange, onNarrativeClick, selectedDate }: T
                 )}
               </div>
               {narrative.mention_velocity && (
-                <div>Velocity: {narrative.mention_velocity.toFixed(1)} per day</div>
+                <div>Velocity: {Math.round(narrative.mention_velocity)} per day</div>
               )}
             </div>
           </div>
@@ -256,9 +256,24 @@ export const TimelineView = ({ narratives, selectedDate }: TimelineViewProps) =>
               <div className="flex-1">
                 <CardTitle className="text-2xl mb-2">{expandedNarrative.title}</CardTitle>
                 <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                  <span className="px-2 py-1 rounded bg-gray-200 dark:bg-gray-700">
-                    {expandedNarrative.lifecycle_state || expandedNarrative.lifecycle}
-                  </span>
+                  {(() => {
+                    const lifecycleValue = expandedNarrative.lifecycle_state || expandedNarrative.lifecycle;
+                    const gradientStyles: Record<string, string> = {
+                      emerging: 'text-white bg-gradient-to-r from-blue-500 to-indigo-500 dark:from-blue-600 dark:to-indigo-600 shadow-lg shadow-blue-500/50 dark:shadow-blue-600/50',
+                      rising: 'text-white bg-gradient-to-r from-green-500 to-emerald-500 dark:from-green-600 dark:to-emerald-600 shadow-lg shadow-green-500/50 dark:shadow-green-600/50',
+                      hot: 'text-white bg-gradient-to-r from-orange-500 to-red-500 dark:from-orange-600 dark:to-red-600 shadow-lg shadow-orange-500/50 dark:shadow-orange-600/50',
+                      heating: 'text-white bg-gradient-to-r from-red-500 to-pink-500 dark:from-red-600 dark:to-pink-600 shadow-lg shadow-red-500/50 dark:shadow-red-600/50',
+                      mature: 'text-white bg-gradient-to-r from-purple-500 to-violet-500 dark:from-purple-600 dark:to-violet-600 shadow-lg shadow-purple-500/50 dark:shadow-purple-600/50',
+                      cooling: 'text-white bg-gradient-to-r from-gray-500 to-slate-500 dark:from-gray-600 dark:to-slate-600 shadow-lg shadow-gray-500/50 dark:shadow-gray-600/50',
+                    };
+                    const gradientClass = gradientStyles[lifecycleValue as string] || 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+                    
+                    return (
+                      <span className={`px-3 py-1 rounded-full font-semibold ${gradientClass}`}>
+                        {lifecycleValue}
+                      </span>
+                    );
+                  })()}
                   <span>{expandedNarrative.article_count} articles</span>
                   <span>•</span>
                   <span>
