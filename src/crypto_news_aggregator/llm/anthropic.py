@@ -26,32 +26,76 @@ class AnthropicProvider(LLMProvider):
         self.model_name = model_name
 
     def _get_completion(self, prompt: str) -> str:
-        headers = {
-            "x-api-key": self.api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        }
-        payload = {
-            "model": self.model_name,
-            "max_tokens": 2048,  # Increased for narrative JSON responses
-            "messages": [{"role": "user", "content": prompt}],
-        }
-        try:
-            with httpx.Client() as client:
-                response = client.post(
-                    self.API_URL, headers=headers, json=payload, timeout=30
-                )
-                response.raise_for_status()
-                data = response.json()
-                return data.get("content", [{}])[0].get("text", "")
-        except httpx.HTTPStatusError as e:
-            print(
-                f"Anthropic API request failed with status {e.response.status_code}: {e.response.text}"
-            )
-            return ""
-        except Exception as e:
-            print(f"An unexpected error occurred: {e}")
-            return ""
+        """
+        Get completion from Claude with automatic fallback on 403 errors.
+        Tries multiple models in order until one succeeds.
+        """
+        # Try multiple models in fallback order
+        models_to_try = [
+            self.model_name,  # Primary model from config
+            "claude-3-5-sonnet-20241022",  # Sonnet 3.5 (Oct 2024)
+            "claude-3-5-sonnet-20240620",  # Sonnet 3.5 (June 2024)
+            "claude-3-haiku-20240307",  # Haiku 3.0 (fallback)
+        ]
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        models_to_try = [m for m in models_to_try if not (m in seen or seen.add(m))]
+        
+        last_error = None
+        
+        for model in models_to_try:
+            headers = {
+                "x-api-key": self.api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            }
+            payload = {
+                "model": model,
+                "max_tokens": 2048,  # Increased for narrative JSON responses
+                "messages": [{"role": "user", "content": prompt}],
+            }
+            try:
+                with httpx.Client() as client:
+                    response = client.post(
+                        self.API_URL, headers=headers, json=payload, timeout=30
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    # Log which model was used if not the primary
+                    if model != self.model_name:
+                        logger.info(f"Using fallback model: {model}")
+                    
+                    return data.get("content", [{}])[0].get("text", "")
+            except httpx.HTTPStatusError as e:
+                last_error = e
+                # If 403 Forbidden, try next model
+                if e.response.status_code == 403:
+                    logger.warning(
+                        f"403 Forbidden for model {model}, trying next fallback..."
+                    )
+                    try:
+                        error_json = e.response.json()
+                        error_msg = error_json.get("error", {}).get("message", "")
+                        logger.debug(f"Error details: {error_msg}")
+                    except:
+                        pass
+                    continue
+                else:
+                    # For non-403 errors, log and return empty
+                    logger.error(
+                        f"Anthropic API request failed with status {e.response.status_code}: {e.response.text}"
+                    )
+                    return ""
+            except Exception as e:
+                last_error = e
+                logger.error(f"An unexpected error occurred: {e}")
+                return ""
+        
+        # All models failed
+        logger.error(f"All models failed. Last error: {last_error}")
+        return ""
 
     @track_usage
     def analyze_sentiment(self, text: str) -> float:

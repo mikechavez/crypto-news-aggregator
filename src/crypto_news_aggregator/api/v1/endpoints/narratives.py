@@ -11,7 +11,7 @@ from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel, Field
 from bson import ObjectId
 
-from ....db.operations.narratives import get_active_narratives, get_narrative_timeline, get_resurrected_narratives
+from ....db.operations.narratives import get_active_narratives, get_narrative_timeline, get_resurrected_narratives, get_archived_narratives
 from ....core.redis_rest_client import redis_client
 from ....db.mongodb import mongo_manager
 
@@ -140,7 +140,7 @@ class NarrativeResponse(BaseModel):
 
 @router.get("/active", response_model=List[NarrativeResponse])
 async def get_active_narratives_endpoint(
-    limit: int = Query(10, ge=1, le=20, description="Maximum number of narratives to return")
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of narratives to return")
 ):
     """
     Get active narrative clusters.
@@ -151,7 +151,7 @@ async def get_active_narratives_endpoint(
     Results are cached for 10 minutes to reduce database load.
     
     Args:
-        limit: Maximum number of narratives (1-20, default 10)
+        limit: Maximum number of narratives (1-200, default 50)
     
     Returns:
         List of narrative objects with theme, entities, story, and metadata
@@ -208,9 +208,9 @@ async def get_active_narratives_endpoint(
             days_active = narrative.get("days_active", 1)
             peak_activity = narrative.get("peak_activity")
             
-            # Fetch articles for this narrative
-            article_ids = narrative.get("article_ids", [])
-            articles = await get_articles_for_narrative(article_ids, limit=20)
+            # Don't fetch articles for list view - only fetch when user requests details
+            # This prevents N+1 query problem and speeds up initial page load from 2 minutes to <1 second
+            articles = []
             
             # Get new lifecycle fields and normalize them
             lifecycle_state = narrative.get("lifecycle_state")
@@ -297,6 +297,131 @@ async def get_active_narratives_endpoint(
     except Exception as e:
         logger.exception(f"Error fetching active narratives: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch narratives")
+
+
+@router.get("/archived", response_model=List[NarrativeResponse])
+async def get_archived_narratives_endpoint(
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of narratives to return"),
+    days: int = Query(30, ge=1, le=90, description="Look back X days for archived narratives")
+):
+    """
+    Get archived (dormant) narratives.
+    
+    Returns narratives with lifecycle_state = 'dormant' that have gone quiet
+    but may still be relevant. These narratives have not received new articles
+    for 7+ days.
+    
+    Args:
+        limit: Maximum number of narratives (1-200, default 50)
+        days: Look back X days from now (1-90, default 30)
+    
+    Returns:
+        List of dormant narrative objects
+    """
+    try:
+        narratives = await get_archived_narratives(limit=limit, days=days)
+        
+        if not narratives:
+            return []
+        
+        # Convert to response models and fetch articles
+        response_data = []
+        for narrative in narratives:
+            # Handle both old (updated_at) and new (last_updated) field names
+            last_updated = narrative.get("last_updated") or narrative.get("updated_at")
+            if last_updated:
+                last_updated_str = last_updated.isoformat() if hasattr(last_updated, 'isoformat') else str(last_updated)
+            else:
+                # Fallback to current time if no timestamp
+                from datetime import datetime, timezone as tz
+                last_updated_str = datetime.now(tz.utc).isoformat()
+            
+            first_seen = narrative.get("first_seen") or narrative.get("created_at")
+            if first_seen:
+                first_seen_str = first_seen.isoformat() if hasattr(first_seen, 'isoformat') else str(first_seen)
+            else:
+                # Use last_updated as fallback
+                first_seen_str = last_updated_str
+            
+            # Handle both old (story) and new (summary) field names
+            summary = narrative.get("summary") or narrative.get("story", "")
+            
+            # Get timeline tracking fields
+            days_active = narrative.get("days_active", 1)
+            peak_activity = narrative.get("peak_activity")
+            
+            # Fetch articles for this narrative
+            article_ids = narrative.get("article_ids", [])
+            articles = await get_articles_for_narrative(article_ids, limit=20)
+            
+            # Get lifecycle fields
+            lifecycle_state = narrative.get("lifecycle_state")
+            
+            # Normalize lifecycle_history
+            lifecycle_history_raw = narrative.get("lifecycle_history")
+            lifecycle_history = None
+            if lifecycle_history_raw:
+                lifecycle_history = []
+                for entry in lifecycle_history_raw:
+                    timestamp = entry.get("timestamp")
+                    if hasattr(timestamp, 'isoformat'):
+                        timestamp_str = timestamp.isoformat()
+                    else:
+                        timestamp_str = str(timestamp)
+                    
+                    velocity = entry.get("velocity", entry.get("mention_velocity", 0.0))
+                    
+                    lifecycle_history.append({
+                        "state": entry.get("state", ""),
+                        "timestamp": timestamp_str,
+                        "article_count": entry.get("article_count", 0),
+                        "velocity": velocity
+                    })
+            
+            # Normalize fingerprint
+            fingerprint_raw = narrative.get("fingerprint")
+            fingerprint = None
+            if fingerprint_raw:
+                if isinstance(fingerprint_raw, dict):
+                    fingerprint = fingerprint_raw.get("vector")
+                elif isinstance(fingerprint_raw, list):
+                    fingerprint = fingerprint_raw
+            
+            # Handle reawakened_from timestamp
+            reawakened_from = narrative.get("reawakened_from")
+            reawakened_from_str = None
+            if reawakened_from:
+                reawakened_from_str = reawakened_from.isoformat() if hasattr(reawakened_from, 'isoformat') else str(reawakened_from)
+            
+            response_data.append({
+                "theme": narrative.get("theme", ""),
+                "title": narrative.get("title", narrative.get("theme", "")),
+                "summary": summary,
+                "entities": narrative.get("entities", []),
+                "article_count": narrative.get("article_count", 0),
+                "mention_velocity": narrative.get("mention_velocity", 0.0),
+                "lifecycle": narrative.get("lifecycle", "emerging"),
+                "lifecycle_state": lifecycle_state,
+                "lifecycle_history": lifecycle_history,
+                "fingerprint": fingerprint,
+                "momentum": narrative.get("momentum", "unknown"),
+                "recency_score": narrative.get("recency_score", 0.0),
+                "entity_relationships": narrative.get("entity_relationships", []),
+                "first_seen": first_seen_str,
+                "last_updated": last_updated_str,
+                "days_active": days_active,
+                "peak_activity": peak_activity,
+                "articles": articles,
+                "reawakening_count": narrative.get("reawakening_count"),
+                "reawakened_from": reawakened_from_str,
+                "resurrection_velocity": narrative.get("resurrection_velocity")
+            })
+        
+        return [NarrativeResponse(**n) for n in response_data]
+    
+    except Exception as e:
+        logger.exception(f"Error fetching archived narratives: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch archived narratives")
 
 
 @router.get("/resurrections", response_model=List[NarrativeResponse])

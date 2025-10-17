@@ -57,7 +57,7 @@ export function Narratives() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['narratives', viewMode],
-    queryFn: () => viewMode === 'archive' ? narrativesAPI.getResurrectedNarratives(20, 7) : narrativesAPI.getNarratives(),
+    queryFn: () => viewMode === 'archive' ? narrativesAPI.getArchivedNarratives(50, 30) : narrativesAPI.getNarratives(),
     refetchInterval: 60000, // 60 seconds
   });
 
@@ -208,7 +208,7 @@ export function Narratives() {
         </h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
           {viewMode === 'archive' 
-            ? 'Dormant narratives that have been reactivated in the past 7 days'
+            ? 'Dormant narratives that have gone quiet (no new articles for 7+ days)'
             : 'Clustered stories and trending topics in the crypto space'
           }
         </p>
@@ -549,8 +549,12 @@ export function Narratives() {
         </>
       ) : (
         <>
-      {/* Resurrection Summary Card - only shown in archive view */}
-      {viewMode === 'archive' && narratives.length > 0 && (
+      {/* Resurrection Summary Card - only shown in archive view when there are resurrected narratives */}
+      {viewMode === 'archive' && narratives.length > 0 && (() => {
+        const resurrectedNarratives = narratives.filter(n => n.reawakening_count && n.reawakening_count > 0);
+        if (resurrectedNarratives.length === 0) return null;
+        
+        return (
         <Card className="mb-6 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-2 border-amber-300 dark:border-amber-700">
           <CardHeader>
             <div className="flex items-center gap-3">
@@ -567,10 +571,10 @@ export function Narratives() {
               {/* Total count */}
               <div className="flex items-center gap-2">
                 <span className="text-2xl font-bold text-amber-900 dark:text-amber-100">
-                  {narratives.length}
+                  {resurrectedNarratives.length}
                 </span>
                 <span className="text-gray-700 dark:text-gray-300">
-                  {narratives.length === 1 ? 'narrative has' : 'narratives have'} been resurrected in the past 7 days
+                  {resurrectedNarratives.length === 1 ? 'narrative has' : 'narratives have'} been resurrected in the past 7 days
                 </span>
               </div>
 
@@ -622,7 +626,8 @@ export function Narratives() {
             </div>
           </CardContent>
         </Card>
-      )}
+        );
+      })()}
 
       <div className="space-y-6">
         {narratives.map((narrative, index) => {
@@ -743,12 +748,44 @@ export function Narratives() {
               )}
 
               <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 pt-4 border-t border-gray-200 dark:border-dark-border">
-                {viewMode === 'archive' && narrative.reawakened_from && (
-                  <span className="text-amber-700 dark:text-amber-400 font-medium">
-                    Dormant since {formatRelativeTime(parseNarrativeDate(narrative.reawakened_from))}
-                  </span>
-                )}
-                <span className={cn(viewMode === 'archive' && narrative.reawakened_from ? '' : 'ml-auto')}>
+                {viewMode === 'archive' && (() => {
+                  const lifecycleState = narrative.lifecycle_state || narrative.lifecycle;
+                  
+                  // For reactivated narratives, show "Reawakened on [last_updated]"
+                  if (lifecycleState === 'reactivated') {
+                    return (
+                      <span className="text-amber-700 dark:text-amber-400 font-medium">
+                        Reawakened on {formatRelativeTime(parseNarrativeDate(displayUpdated))}
+                      </span>
+                    );
+                  }
+                  
+                  // For truly dormant narratives, find the last dormant transition in lifecycle_history
+                  if (narrative.lifecycle_history && narrative.lifecycle_history.length > 0) {
+                    // Find the most recent dormant state transition
+                    const dormantTransitions = narrative.lifecycle_history.filter(entry => entry.state === 'dormant');
+                    if (dormantTransitions.length > 0) {
+                      const lastDormantTransition = dormantTransitions[dormantTransitions.length - 1];
+                      return (
+                        <span className="text-purple-700 dark:text-purple-400 font-medium">
+                          Dormant since {formatRelativeTime(parseNarrativeDate(lastDormantTransition.timestamp))}
+                        </span>
+                      );
+                    }
+                  }
+                  
+                  // Fallback: use reawakened_from if available
+                  if (narrative.reawakened_from) {
+                    return (
+                      <span className="text-purple-700 dark:text-purple-400 font-medium">
+                        Dormant since {formatRelativeTime(parseNarrativeDate(narrative.reawakened_from))}
+                      </span>
+                    );
+                  }
+                  
+                  return null;
+                })()}
+                <span className={cn(viewMode === 'archive' ? '' : 'ml-auto')}>
                   Updated {formatRelativeTime(parseNarrativeDate(displayUpdated))}
                 </span>
               </div>
