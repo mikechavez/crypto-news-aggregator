@@ -75,10 +75,21 @@ def calculate_recent_velocity(article_dates: List[datetime], lookback_days: int 
     recent_articles = [d for d in article_dates if d >= cutoff_date]
     
     # Debug logging
+    logger.info(f"[VELOCITY DEBUG] ========== VELOCITY CALCULATION START ==========")
     logger.info(f"[VELOCITY DEBUG] Total articles: {len(article_dates)}")
-    logger.info(f"[VELOCITY DEBUG] Current time (now): {now}")
-    logger.info(f"[VELOCITY DEBUG] Cutoff date ({lookback_days} days ago): {cutoff_date}")
-    logger.info(f"[VELOCITY DEBUG] Time delta: {(now - cutoff_date).total_seconds() / 86400:.2f} days")
+    logger.info(f"[VELOCITY DEBUG] Current time (now): {now} (UTC)")
+    logger.info(f"[VELOCITY DEBUG] Cutoff date ({lookback_days} days ago): {cutoff_date} (UTC)")
+    logger.info(f"[VELOCITY DEBUG] Time delta calculation: ({now} - {cutoff_date}).total_seconds() / 86400")
+    logger.info(f"[VELOCITY DEBUG] Time delta result: {(now - cutoff_date).total_seconds() / 86400:.2f} days")
+    logger.info(f"[VELOCITY DEBUG] Time delta in seconds: {(now - cutoff_date).total_seconds():.0f} seconds")
+    
+    # Log all article dates for debugging
+    if article_dates:
+        logger.info(f"[VELOCITY DEBUG] All article dates (sorted):")
+        for i, date in enumerate(sorted(article_dates, reverse=True)):
+            in_window = "✓ IN WINDOW" if date >= cutoff_date else "✗ EXCLUDED"
+            logger.info(f"[VELOCITY DEBUG]   [{i+1}] {date} {in_window}")
+    
     logger.info(f"[VELOCITY DEBUG] Articles within window: {len(recent_articles)}")
     if recent_articles:
         oldest = min(recent_articles)
@@ -86,7 +97,10 @@ def calculate_recent_velocity(article_dates: List[datetime], lookback_days: int 
         logger.info(f"[VELOCITY DEBUG] Oldest article in window: {oldest}")
         logger.info(f"[VELOCITY DEBUG] Newest article in window: {newest}")
         logger.info(f"[VELOCITY DEBUG] Article span: {(newest - oldest).total_seconds() / 86400:.2f} days")
-    logger.info(f"[VELOCITY DEBUG] Velocity calculation: {len(recent_articles)} / {lookback_days} = {len(recent_articles) / lookback_days:.2f}")
+    
+    logger.info(f"[VELOCITY DEBUG] Final calculation: {len(recent_articles)} articles / {lookback_days} days")
+    logger.info(f"[VELOCITY DEBUG] Result: {len(recent_articles) / lookback_days:.2f} articles/day")
+    logger.info(f"[VELOCITY DEBUG] ========== VELOCITY CALCULATION END ==========")
     
     # If no recent articles, return 0
     if not recent_articles:
