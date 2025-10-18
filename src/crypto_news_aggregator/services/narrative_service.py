@@ -49,6 +49,71 @@ SALIENCE_CLUSTERING_CONFIG = {
     'ubiquitous_entities': {'Bitcoin', 'Ethereum', 'crypto', 'blockchain'},
 }
 
+# Blacklist of entities that should not become narrative nucleus entities
+# These are typically advertising/promotional content or irrelevant entities
+BLACKLIST_ENTITIES = {'Benzinga', 'Sarah Edwards'}
+
+
+def calculate_recent_velocity(article_dates: List[datetime], lookback_days: int = 7) -> float:
+    """
+    Calculate article velocity based on recent activity (last N days).
+    
+    This provides a more accurate measure of current narrative momentum
+    compared to dividing total articles by total time span.
+    
+    Args:
+        article_dates: List of article publication dates
+        lookback_days: Number of days to look back for velocity calculation (default: 7)
+    
+    Returns:
+        Articles per day over the lookback period
+    """
+    if not article_dates:
+        return 0.0
+    
+    # Get current time
+    now = datetime.now(timezone.utc)
+    
+    # Filter articles from the last N days
+    cutoff_date = now - timedelta(days=lookback_days)
+    recent_articles = [d for d in article_dates if d >= cutoff_date]
+    
+    # Debug logging
+    logger.info(f"[VELOCITY DEBUG] ========== VELOCITY CALCULATION START ==========")
+    logger.info(f"[VELOCITY DEBUG] Total articles: {len(article_dates)}")
+    logger.info(f"[VELOCITY DEBUG] Current time (now): {now} (UTC)")
+    logger.info(f"[VELOCITY DEBUG] Cutoff date ({lookback_days} days ago): {cutoff_date} (UTC)")
+    logger.info(f"[VELOCITY DEBUG] Time delta calculation: ({now} - {cutoff_date}).total_seconds() / 86400")
+    logger.info(f"[VELOCITY DEBUG] Time delta result: {(now - cutoff_date).total_seconds() / 86400:.2f} days")
+    logger.info(f"[VELOCITY DEBUG] Time delta in seconds: {(now - cutoff_date).total_seconds():.0f} seconds")
+    
+    # Log all article dates for debugging
+    if article_dates:
+        logger.info(f"[VELOCITY DEBUG] All article dates (sorted):")
+        for i, date in enumerate(sorted(article_dates, reverse=True)):
+            in_window = "✓ IN WINDOW" if date >= cutoff_date else "✗ EXCLUDED"
+            logger.info(f"[VELOCITY DEBUG]   [{i+1}] {date} {in_window}")
+    
+    logger.info(f"[VELOCITY DEBUG] Articles within window: {len(recent_articles)}")
+    if recent_articles:
+        oldest = min(recent_articles)
+        newest = max(recent_articles)
+        logger.info(f"[VELOCITY DEBUG] Oldest article in window: {oldest}")
+        logger.info(f"[VELOCITY DEBUG] Newest article in window: {newest}")
+        logger.info(f"[VELOCITY DEBUG] Article span: {(newest - oldest).total_seconds() / 86400:.2f} days")
+    
+    logger.info(f"[VELOCITY DEBUG] Final calculation: {len(recent_articles)} articles / {lookback_days} days")
+    logger.info(f"[VELOCITY DEBUG] Result: {len(recent_articles) / lookback_days:.2f} articles/day")
+    logger.info(f"[VELOCITY DEBUG] ========== VELOCITY CALCULATION END ==========")
+    
+    # If no recent articles, return 0
+    if not recent_articles:
+        return 0.0
+    
+    # Calculate velocity: articles / lookback period
+    # Always use the full lookback_days window for consistent velocity measurement
+    return len(recent_articles) / lookback_days
+
 
 def calculate_momentum(article_dates: List[datetime]) -> str:
     """
@@ -332,8 +397,16 @@ async def find_matching_narrative(
     Find an existing narrative that matches the given fingerprint.
     
     Searches for narratives within a time window and calculates similarity
-    using fingerprint comparison. Returns the best matching narrative if
-    similarity exceeds threshold.
+    using fingerprint comparison. Uses adaptive thresholds based on narrative
+    recency to allow easier continuation of recent stories while maintaining
+    strict matching for older narratives.
+    
+    Adaptive Threshold Strategy:
+    - Recent narratives (updated within 48h): 0.5 threshold
+      Allows near-term continuations to merge more easily, accounting for
+      natural variance in actor mentions and phrasing.
+    - Older narratives (>48h): 0.6 threshold
+      Maintains strict matching to prevent unrelated stories from merging.
     
     Args:
         fingerprint: Narrative fingerprint dict with nucleus_entity, top_actors, key_actions
@@ -341,7 +414,7 @@ async def find_matching_narrative(
         cluster_velocity: Optional cluster mention velocity for adaptive grace period
     
     Returns:
-        Best matching narrative dict if similarity > 0.6, otherwise None
+        Best matching narrative dict if similarity exceeds adaptive threshold, otherwise None
     
     Example:
         >>> fingerprint = {
@@ -390,6 +463,11 @@ async def find_matching_narrative(
         # Calculate similarity for each candidate
         best_match = None
         best_similarity = 0.0
+        best_threshold = 0.6  # Track which threshold applies to best match
+        
+        # Calculate 48-hour cutoff for adaptive threshold
+        now = datetime.now(timezone.utc)
+        recent_cutoff = now - timedelta(hours=48)
         
         for candidate in candidates:
             # Extract fingerprint from candidate narrative
@@ -405,32 +483,43 @@ async def find_matching_narrative(
             # Calculate similarity
             similarity = calculate_fingerprint_similarity(fingerprint, candidate_fingerprint)
             
+            # Determine adaptive threshold based on last_updated
+            candidate_last_updated = candidate.get('last_updated')
+            # Ensure timezone-aware for comparison
+            if candidate_last_updated and candidate_last_updated.tzinfo is None:
+                candidate_last_updated = candidate_last_updated.replace(tzinfo=timezone.utc)
+            if candidate_last_updated and candidate_last_updated >= recent_cutoff:
+                # Recent narrative (within 48h): use lower threshold (0.5)
+                threshold = 0.5
+                recency_label = "recent (48h)"
+            else:
+                # Older narrative: use stricter threshold (0.6)
+                threshold = 0.6
+                recency_label = "older (>48h)"
+            
             logger.debug(
-                f"Narrative '{candidate.get('title', 'unknown')}' similarity: {similarity:.3f}"
+                f"Narrative '{candidate.get('title', 'unknown')}' similarity: {similarity:.3f} "
+                f"(threshold: {threshold}, {recency_label})"
             )
             
-            # Track best match
-            if similarity > best_similarity:
+            # Track best match that meets its threshold
+            if similarity >= threshold and similarity > best_similarity:
                 best_similarity = similarity
                 best_match = candidate
+                best_threshold = threshold
         
-        # Return best match if above threshold
-        if best_similarity >= 0.6:
+        # Return best match if found
+        if best_match:
             logger.info(
                 f"Found matching narrative: '{best_match.get('title')}' "
-                f"(similarity: {best_similarity:.3f})"
+                f"(similarity: {best_similarity:.3f}, threshold: {best_threshold})"
             )
             return best_match
         else:
-            if best_match:
-                logger.info(
-                    f"No matching narrative found - best candidate '{best_match.get('title')}' "
-                    f"below threshold (similarity: {best_similarity:.3f} < 0.6)"
-                )
-            else:
-                logger.info(
-                    f"No matching narrative found (best similarity: {best_similarity:.3f})"
-                )
+            logger.info(
+                f"No matching narrative found - best similarity: {best_similarity:.3f} "
+                f"(adaptive thresholds: 0.5 for recent, 0.6 for older)"
+            )
             return None
     
     except Exception as e:
@@ -578,6 +667,12 @@ async def detect_narratives(
                 fingerprint = compute_narrative_fingerprint(cluster_data)
                 logger.debug(f"Computed fingerprint for cluster with nucleus_entity: {fingerprint.get('nucleus_entity')}")
                 
+                # Check if nucleus_entity is blacklisted (advertising/promotional content)
+                nucleus_entity = fingerprint.get('nucleus_entity', '')
+                if nucleus_entity in BLACKLIST_ENTITIES:
+                    logger.info(f"Skipping blacklisted nucleus_entity: {nucleus_entity}")
+                    continue
+                
                 # Calculate cluster velocity for adaptive grace period
                 cluster_article_count = len(cluster)
                 # Use the detection window (hours) to estimate velocity
@@ -613,9 +708,20 @@ async def detect_narratives(
                         first_seen = first_seen.replace(tzinfo=timezone.utc)
                     last_updated = datetime.now(timezone.utc)
                     
-                    # Calculate mention velocity based on time since first_seen
-                    time_span = (last_updated - first_seen).total_seconds() / 86400  # days
-                    mention_velocity = updated_article_count / time_span if time_span > 0 else 0
+                    # Calculate mention velocity based on recent activity (last 7 days)
+                    # Fetch article dates for velocity calculation
+                    article_dates = []
+                    for article in articles:
+                        if str(article.get('_id')) in combined_article_ids:
+                            pub_date = article.get('published_at')
+                            if pub_date:
+                                # Ensure timezone-aware
+                                if pub_date.tzinfo is None:
+                                    pub_date = pub_date.replace(tzinfo=timezone.utc)
+                                article_dates.append(pub_date)
+                    
+                    # Use recent velocity calculation (last 7 days) for more accurate current activity
+                    mention_velocity = calculate_recent_velocity(article_dates, lookback_days=7)
                     
                     # Get previous state from lifecycle_history
                     lifecycle_history_existing = matching_narrative.get('lifecycle_history', [])
@@ -681,12 +787,9 @@ async def detect_narratives(
                     narrative['needs_summary_update'] = False  # Fresh summary, no update needed
                     
                     narrative_data = narrative
-                    # Calculate mention velocity (articles per day)
+                    # Calculate mention velocity (articles per day) based on recent activity
                     article_count = narrative_data.get("article_count", 0)
-                    time_span_days = hours / 24.0
-                    mention_velocity = article_count / time_span_days if time_span_days > 0 else 0
                     
-                    # Calculate momentum from article dates
                     # Get articles for this narrative to extract dates
                     article_ids = narrative_data.get("article_ids", [])
                     article_dates = []
@@ -694,7 +797,15 @@ async def detect_narratives(
                         if str(article.get("_id")) in article_ids:
                             pub_date = article.get("published_at")
                             if pub_date:
+                                # Ensure timezone-aware
+                                if pub_date.tzinfo is None:
+                                    pub_date = pub_date.replace(tzinfo=timezone.utc)
                                 article_dates.append(pub_date)
+                    
+                    # Use recent velocity calculation (last 7 days) for more accurate current activity
+                    mention_velocity = calculate_recent_velocity(article_dates, lookback_days=7)
+                    
+                    # Calculate momentum from article dates
                     
                     # Sort dates and calculate momentum
                     article_dates.sort()
@@ -775,6 +886,11 @@ async def detect_narratives(
                             "days_active": 1,
                             "status": lifecycle_state  # Add status field for matching logic
                         }
+                        
+                        # Validate fingerprint before insertion
+                        if not fingerprint or not fingerprint.get('nucleus_entity'):
+                            logger.error(f"Cannot create narrative - invalid fingerprint: {fingerprint}")
+                            raise ValueError("Narrative fingerprint must have a valid nucleus_entity")
                         
                         result = await narratives_collection.insert_one(narrative_doc)
                         narrative_id = str(result.inserted_id)
