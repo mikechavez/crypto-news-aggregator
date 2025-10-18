@@ -93,6 +93,7 @@ class LifecycleHistoryEntry(BaseModel):
 
 class NarrativeResponse(BaseModel):
     """Response model for a narrative."""
+    id: Optional[str] = Field(default=None, alias="_id", description="MongoDB ObjectId as string")
     theme: str = Field(..., description="Theme category (e.g., regulatory, defi_adoption)")
     title: str = Field(..., description="Generated narrative title")
     summary: str = Field(..., description="AI-generated narrative summary")
@@ -116,6 +117,8 @@ class NarrativeResponse(BaseModel):
     resurrection_velocity: Optional[float] = Field(default=None, description="Articles per day in last 48 hours during reactivation")
     
     class Config:
+        populate_by_name = True  # Allow both 'id' and '_id' as field names
+        json_encoders = {str: lambda v: v}  # Ensure strings are serialized properly
         json_schema_extra = {
             "example": {
                 "theme": "regulatory",
@@ -255,7 +258,10 @@ async def get_active_narratives_endpoint(
             if reawakened_from:
                 reawakened_from_str = reawakened_from.isoformat() if hasattr(reawakened_from, 'isoformat') else str(reawakened_from)
             
+            narrative_id = str(narrative.get("_id", ""))
             response_data.append({
+                "id": narrative_id,  # Include as 'id' for Pydantic model
+                "_id": narrative_id,  # Also include as '_id' for frontend compatibility
                 "theme": narrative.get("theme", ""),
                 "title": narrative.get("title", narrative.get("theme", "")),  # Fallback to theme if no title
                 "summary": summary,
@@ -321,6 +327,10 @@ async def get_archived_narratives_endpoint(
     try:
         narratives = await get_archived_narratives(limit=limit, days=days)
         
+        logger.info(f"[DEBUG] get_archived_narratives returned {len(narratives)} narratives")
+        if narratives:
+            logger.info(f"[DEBUG] First narrative: {narratives[0].get('theme', 'N/A')}, lifecycle_state: {narratives[0].get('lifecycle_state', 'N/A')}")
+        
         if not narratives:
             return []
         
@@ -343,8 +353,30 @@ async def get_archived_narratives_endpoint(
                 # Use last_updated as fallback
                 first_seen_str = last_updated_str
             
-            # Handle both old (story) and new (summary) field names
-            summary = narrative.get("summary") or narrative.get("story", "")
+            # Handle both old (story, narrative_summary) and new (summary) field names
+            summary = narrative.get("summary") or narrative.get("story") or narrative.get("narrative_summary", "")
+            
+            # Handle old schema: extract entities from actors dict or use nucleus_entity
+            entities = narrative.get("entities", [])
+            if not entities:
+                # Old schema: try actors dict keys or nucleus_entity
+                actors = narrative.get("actors", {})
+                if actors:
+                    # Get top 10 actors by count
+                    entities = sorted(actors.keys(), key=lambda k: actors[k], reverse=True)[:10]
+                elif narrative.get("nucleus_entity"):
+                    entities = [narrative.get("nucleus_entity")]
+            
+            # Handle old schema: use nucleus_entity or first action as title
+            title = narrative.get("title") or narrative.get("theme")
+            if not title:
+                # Old schema fallback: use nucleus_entity or first action
+                if narrative.get("nucleus_entity"):
+                    title = f"{narrative.get('nucleus_entity')} Activity"
+                elif narrative.get("actions") and len(narrative.get("actions", [])) > 0:
+                    title = narrative.get("actions")[0][:100]  # Use first action, truncated
+                else:
+                    title = "Untitled Narrative"
             
             # Get timeline tracking fields
             days_active = narrative.get("days_active", 1)
@@ -394,10 +426,11 @@ async def get_archived_narratives_endpoint(
                 reawakened_from_str = reawakened_from.isoformat() if hasattr(reawakened_from, 'isoformat') else str(reawakened_from)
             
             response_data.append({
-                "theme": narrative.get("theme", ""),
-                "title": narrative.get("title", narrative.get("theme", "")),
+                "_id": str(narrative.get("_id", "")),  # Include MongoDB ObjectId as string
+                "theme": narrative.get("theme", narrative.get("nucleus_entity", "")),
+                "title": title,
                 "summary": summary,
-                "entities": narrative.get("entities", []),
+                "entities": entities,
                 "article_count": narrative.get("article_count", 0),
                 "mention_velocity": narrative.get("mention_velocity", 0.0),
                 "lifecycle": narrative.get("lifecycle", "emerging"),
@@ -522,6 +555,7 @@ async def get_resurrected_narratives_endpoint(
                     fingerprint = fingerprint_raw
             
             response_data.append({
+                "_id": str(narrative.get("_id", "")),  # Include MongoDB ObjectId as string
                 "theme": narrative.get("theme", ""),
                 "title": narrative.get("title", narrative.get("theme", "")),
                 "summary": summary,
@@ -550,6 +584,137 @@ async def get_resurrected_narratives_endpoint(
     except Exception as e:
         logger.exception(f"Error fetching resurrected narratives: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch resurrected narratives")
+
+
+@router.get("/{narrative_id}", response_model=NarrativeResponse)
+async def get_narrative_by_id_endpoint(narrative_id: str):
+    """
+    Get a single narrative by ID with articles.
+    
+    Returns the full narrative details including recent articles.
+    Useful for fetching articles on-demand when a card is expanded.
+    
+    Args:
+        narrative_id: MongoDB ObjectId of the narrative (as string)
+    
+    Returns:
+        Narrative object with articles
+    
+    Raises:
+        404: If narrative not found
+        500: If database error occurs
+    """
+    try:
+        # Get database connection
+        db = await mongo_manager.get_async_database()
+        narratives_collection = db.narratives
+        
+        # Convert string ID to ObjectId
+        try:
+            narrative_obj_id = ObjectId(narrative_id)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid narrative ID format")
+        
+        # Fetch narrative
+        narrative = await narratives_collection.find_one({"_id": narrative_obj_id})
+        
+        if not narrative:
+            raise HTTPException(status_code=404, detail="Narrative not found")
+        
+        # Handle timestamps
+        last_updated = narrative.get("last_updated") or narrative.get("updated_at")
+        if last_updated:
+            last_updated_str = last_updated.isoformat() if hasattr(last_updated, 'isoformat') else str(last_updated)
+        else:
+            from datetime import datetime, timezone as tz
+            last_updated_str = datetime.now(tz.utc).isoformat()
+        
+        first_seen = narrative.get("first_seen") or narrative.get("created_at")
+        if first_seen:
+            first_seen_str = first_seen.isoformat() if hasattr(first_seen, 'isoformat') else str(first_seen)
+        else:
+            first_seen_str = last_updated_str
+        
+        # Handle summary
+        summary = narrative.get("summary") or narrative.get("story", "")
+        
+        # Fetch articles
+        article_ids = narrative.get("article_ids", [])
+        articles = await get_articles_for_narrative(article_ids, limit=20)
+        
+        # Get lifecycle fields
+        lifecycle_state = narrative.get("lifecycle_state")
+        
+        # Normalize lifecycle_history
+        lifecycle_history_raw = narrative.get("lifecycle_history")
+        lifecycle_history = None
+        if lifecycle_history_raw:
+            lifecycle_history = []
+            for entry in lifecycle_history_raw:
+                timestamp = entry.get("timestamp")
+                if hasattr(timestamp, 'isoformat'):
+                    timestamp_str = timestamp.isoformat()
+                else:
+                    timestamp_str = str(timestamp)
+                
+                velocity = entry.get("velocity", entry.get("mention_velocity", 0.0))
+                
+                lifecycle_history.append({
+                    "state": entry.get("state", ""),
+                    "timestamp": timestamp_str,
+                    "article_count": entry.get("article_count", 0),
+                    "velocity": velocity
+                })
+        
+        # Normalize fingerprint
+        fingerprint_raw = narrative.get("fingerprint")
+        fingerprint = None
+        if fingerprint_raw:
+            if isinstance(fingerprint_raw, dict):
+                fingerprint = fingerprint_raw.get("vector")
+            elif isinstance(fingerprint_raw, list):
+                fingerprint = fingerprint_raw
+        
+        # Handle reawakened_from timestamp
+        reawakened_from = narrative.get("reawakened_from")
+        reawakened_from_str = None
+        if reawakened_from:
+            reawakened_from_str = reawakened_from.isoformat() if hasattr(reawakened_from, 'isoformat') else str(reawakened_from)
+        
+        narrative_id = str(narrative.get("_id", ""))
+        response_data = {
+            "id": narrative_id,  # Include as 'id' for Pydantic model
+            "_id": narrative_id,  # Also include as '_id' for frontend compatibility
+            "theme": narrative.get("theme", ""),
+            "title": narrative.get("title", narrative.get("theme", "")),
+            "summary": summary,
+            "entities": narrative.get("entities", []),
+            "article_count": narrative.get("article_count", 0),
+            "mention_velocity": narrative.get("mention_velocity", 0.0),
+            "lifecycle": narrative.get("lifecycle", "emerging"),
+            "lifecycle_state": lifecycle_state,
+            "lifecycle_history": lifecycle_history,
+            "fingerprint": fingerprint,
+            "momentum": narrative.get("momentum", "unknown"),
+            "recency_score": narrative.get("recency_score", 0.0),
+            "entity_relationships": narrative.get("entity_relationships", []),
+            "first_seen": first_seen_str,
+            "last_updated": last_updated_str,
+            "days_active": narrative.get("days_active", 1),
+            "peak_activity": narrative.get("peak_activity"),
+            "articles": articles,
+            "reawakening_count": narrative.get("reawakening_count"),
+            "reawakened_from": reawakened_from_str,
+            "resurrection_velocity": narrative.get("resurrection_velocity")
+        }
+        
+        return NarrativeResponse(**response_data)
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error fetching narrative by ID: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch narrative")
 
 
 @router.get("/{narrative_id}/timeline", response_model=List[TimelineSnapshot])
