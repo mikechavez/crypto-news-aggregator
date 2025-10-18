@@ -49,6 +49,10 @@ SALIENCE_CLUSTERING_CONFIG = {
     'ubiquitous_entities': {'Bitcoin', 'Ethereum', 'crypto', 'blockchain'},
 }
 
+# Blacklist of entities that should not become narrative nucleus entities
+# These are typically advertising/promotional content or irrelevant entities
+BLACKLIST_ENTITIES = {'Benzinga', 'Sarah Edwards'}
+
 
 def calculate_recent_velocity(article_dates: List[datetime], lookback_days: int = 7) -> float:
     """
@@ -393,8 +397,16 @@ async def find_matching_narrative(
     Find an existing narrative that matches the given fingerprint.
     
     Searches for narratives within a time window and calculates similarity
-    using fingerprint comparison. Returns the best matching narrative if
-    similarity exceeds threshold.
+    using fingerprint comparison. Uses adaptive thresholds based on narrative
+    recency to allow easier continuation of recent stories while maintaining
+    strict matching for older narratives.
+    
+    Adaptive Threshold Strategy:
+    - Recent narratives (updated within 48h): 0.5 threshold
+      Allows near-term continuations to merge more easily, accounting for
+      natural variance in actor mentions and phrasing.
+    - Older narratives (>48h): 0.6 threshold
+      Maintains strict matching to prevent unrelated stories from merging.
     
     Args:
         fingerprint: Narrative fingerprint dict with nucleus_entity, top_actors, key_actions
@@ -402,7 +414,7 @@ async def find_matching_narrative(
         cluster_velocity: Optional cluster mention velocity for adaptive grace period
     
     Returns:
-        Best matching narrative dict if similarity > 0.6, otherwise None
+        Best matching narrative dict if similarity exceeds adaptive threshold, otherwise None
     
     Example:
         >>> fingerprint = {
@@ -451,6 +463,11 @@ async def find_matching_narrative(
         # Calculate similarity for each candidate
         best_match = None
         best_similarity = 0.0
+        best_threshold = 0.6  # Track which threshold applies to best match
+        
+        # Calculate 48-hour cutoff for adaptive threshold
+        now = datetime.now(timezone.utc)
+        recent_cutoff = now - timedelta(hours=48)
         
         for candidate in candidates:
             # Extract fingerprint from candidate narrative
@@ -466,32 +483,43 @@ async def find_matching_narrative(
             # Calculate similarity
             similarity = calculate_fingerprint_similarity(fingerprint, candidate_fingerprint)
             
+            # Determine adaptive threshold based on last_updated
+            candidate_last_updated = candidate.get('last_updated')
+            # Ensure timezone-aware for comparison
+            if candidate_last_updated and candidate_last_updated.tzinfo is None:
+                candidate_last_updated = candidate_last_updated.replace(tzinfo=timezone.utc)
+            if candidate_last_updated and candidate_last_updated >= recent_cutoff:
+                # Recent narrative (within 48h): use lower threshold (0.5)
+                threshold = 0.5
+                recency_label = "recent (48h)"
+            else:
+                # Older narrative: use stricter threshold (0.6)
+                threshold = 0.6
+                recency_label = "older (>48h)"
+            
             logger.debug(
-                f"Narrative '{candidate.get('title', 'unknown')}' similarity: {similarity:.3f}"
+                f"Narrative '{candidate.get('title', 'unknown')}' similarity: {similarity:.3f} "
+                f"(threshold: {threshold}, {recency_label})"
             )
             
-            # Track best match
-            if similarity > best_similarity:
+            # Track best match that meets its threshold
+            if similarity >= threshold and similarity > best_similarity:
                 best_similarity = similarity
                 best_match = candidate
+                best_threshold = threshold
         
-        # Return best match if above threshold
-        if best_similarity >= 0.6:
+        # Return best match if found
+        if best_match:
             logger.info(
                 f"Found matching narrative: '{best_match.get('title')}' "
-                f"(similarity: {best_similarity:.3f})"
+                f"(similarity: {best_similarity:.3f}, threshold: {best_threshold})"
             )
             return best_match
         else:
-            if best_match:
-                logger.info(
-                    f"No matching narrative found - best candidate '{best_match.get('title')}' "
-                    f"below threshold (similarity: {best_similarity:.3f} < 0.6)"
-                )
-            else:
-                logger.info(
-                    f"No matching narrative found (best similarity: {best_similarity:.3f})"
-                )
+            logger.info(
+                f"No matching narrative found - best similarity: {best_similarity:.3f} "
+                f"(adaptive thresholds: 0.5 for recent, 0.6 for older)"
+            )
             return None
     
     except Exception as e:
@@ -638,6 +666,12 @@ async def detect_narratives(
                 # Compute fingerprint from cluster data
                 fingerprint = compute_narrative_fingerprint(cluster_data)
                 logger.debug(f"Computed fingerprint for cluster with nucleus_entity: {fingerprint.get('nucleus_entity')}")
+                
+                # Check if nucleus_entity is blacklisted (advertising/promotional content)
+                nucleus_entity = fingerprint.get('nucleus_entity', '')
+                if nucleus_entity in BLACKLIST_ENTITIES:
+                    logger.info(f"Skipping blacklisted nucleus_entity: {nucleus_entity}")
+                    continue
                 
                 # Calculate cluster velocity for adaptive grace period
                 cluster_article_count = len(cluster)
@@ -852,6 +886,11 @@ async def detect_narratives(
                             "days_active": 1,
                             "status": lifecycle_state  # Add status field for matching logic
                         }
+                        
+                        # Validate fingerprint before insertion
+                        if not fingerprint or not fingerprint.get('nucleus_entity'):
+                            logger.error(f"Cannot create narrative - invalid fingerprint: {fingerprint}")
+                            raise ValueError("Narrative fingerprint must have a valid nucleus_entity")
                         
                         result = await narratives_collection.insert_one(narrative_doc)
                         narrative_id = str(result.inserted_id)
