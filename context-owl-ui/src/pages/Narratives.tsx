@@ -612,7 +612,7 @@ export function Narratives() {
                                 </span>
                                 {narrative.resurrection_velocity && narrative.resurrection_velocity > 0 && (
                                   <span className="text-green-700 dark:text-green-400 font-medium">
-                                    +{formatNumber(narrative.resurrection_velocity)} resurrections/day
+                                    +{Math.round(narrative.resurrection_velocity)} resurrections/day
                                   </span>
                                 )}
                               </div>
@@ -635,11 +635,27 @@ export function Narratives() {
           const displayTitle = narrative.title || narrative.theme;
           const displaySummary = narrative.summary || narrative.story;
           const displayUpdated = narrative.last_updated || narrative.updated_at;
+          const isExpanded = expandedArticles.has(index);
+          
+          const toggleExpanded = () => {
+            const newExpanded = new Set(expandedArticles);
+            if (newExpanded.has(index)) {
+              newExpanded.delete(index);
+            } else {
+              newExpanded.add(index);
+            }
+            setExpandedArticles(newExpanded);
+          };
           
           return (
-          <Card key={`${narrative.theme}-${index}`} className={cn(
-            viewMode === 'archive' && 'border-2 border-purple-300 dark:border-purple-700 bg-purple-50/30 dark:bg-purple-900/10'
-          )}>
+          <Card 
+            key={`${narrative.theme}-${index}`} 
+            className={cn(
+              'cursor-pointer',
+              viewMode === 'archive' && 'border-2 border-purple-300 dark:border-purple-700 bg-purple-50/30 dark:bg-purple-900/10'
+            )}
+          >
+            <div onClick={toggleExpanded}>
             <CardHeader>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -663,15 +679,25 @@ export function Narratives() {
                     if (!config) return null;
                     
                     const Icon = config.icon;
+                    
+                    // Define gradient styles for each lifecycle state
+                    const gradientStyles: Record<string, string> = {
+                      emerging: 'text-white bg-gradient-to-r from-blue-500 to-indigo-500 dark:from-blue-600 dark:to-indigo-600 shadow-lg shadow-blue-500/50 dark:shadow-blue-600/50',
+                      rising: 'text-white bg-gradient-to-r from-green-500 to-emerald-500 dark:from-green-600 dark:to-emerald-600 shadow-lg shadow-green-500/50 dark:shadow-green-600/50',
+                      hot: 'text-white bg-gradient-to-r from-orange-500 to-red-500 dark:from-orange-600 dark:to-red-600 shadow-lg shadow-orange-500/50 dark:shadow-orange-600/50',
+                      heating: 'text-white bg-gradient-to-r from-red-500 to-pink-500 dark:from-red-600 dark:to-pink-600 shadow-lg shadow-red-500/50 dark:shadow-red-600/50',
+                      mature: 'text-white bg-gradient-to-r from-purple-500 to-violet-500 dark:from-purple-600 dark:to-violet-600 shadow-lg shadow-purple-500/50 dark:shadow-purple-600/50',
+                      cooling: 'text-white bg-gradient-to-r from-gray-500 to-slate-500 dark:from-gray-600 dark:to-slate-600 shadow-lg shadow-gray-500/50 dark:shadow-gray-600/50',
+                    };
+                    
+                    const gradientClass = gradientStyles[lifecycleValue as string] || `text-${config.color} bg-${config.color}/10 dark:bg-${config.color}/20`;
+                    
                     return (
                       <span className={cn(
                         'flex items-center gap-1.5 text-sm font-semibold px-3 py-1 rounded-full',
-                        `text-${config.color}`,
-                        `bg-${config.color}/10`,
-                        `dark:bg-${config.color}/20`,
-                        config.glow
+                        gradientClass
                       )}>
-                        <Icon className="w-4 h-4" />
+                        <Icon className="w-4 h-4 drop-shadow-[0_0_3px_rgba(255,255,255,0.8)]" />
                         {config.label}
                       </span>
                     );
@@ -683,7 +709,7 @@ export function Narratives() {
                   {/* Mention velocity badge */}
                   {narrative.mention_velocity && narrative.mention_velocity > 0 && (
                     <span className="text-sm font-semibold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-3 py-1 rounded-full">
-                      +{formatNumber(narrative.mention_velocity)} articles/day
+                      +{Math.round(narrative.mention_velocity)} articles/day
                     </span>
                   )}
                 </div>
@@ -708,22 +734,11 @@ export function Narratives() {
               {/* Articles section */}
               {narrative.articles && narrative.articles.length > 0 && (
                 <div className="mb-4 pt-4 border-t border-gray-200 dark:border-dark-border">
-                  <button
-                    onClick={() => {
-                      const newExpanded = new Set(expandedArticles);
-                      if (newExpanded.has(index)) {
-                        newExpanded.delete(index);
-                      } else {
-                        newExpanded.add(index);
-                      }
-                      setExpandedArticles(newExpanded);
-                    }}
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium flex items-center gap-1"
-                  >
-                    {expandedArticles.has(index) ? '▼' : '▶'} 📰 View {narrative.articles.length} articles
-                  </button>
+                  <div className="text-sm text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1">
+                    {isExpanded ? '▼' : '▶'} 📰 {narrative.articles.length} articles
+                  </div>
                   
-                  {expandedArticles.has(index) && (
+                  {isExpanded && (
                     <div className="mt-3 space-y-2">
                       {narrative.articles.map((article, articleIdx) => (
                         <div key={articleIdx} className="text-sm bg-gray-50 dark:bg-dark-hover p-3 rounded">
@@ -732,6 +747,7 @@ export function Narratives() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline font-medium block mb-1"
+                            onClick={(e) => e.stopPropagation()}
                           >
                             {article.title}
                           </a>
@@ -790,6 +806,7 @@ export function Narratives() {
                 </span>
               </div>
             </CardContent>
+            </div>
           </Card>
           );
         })}
