@@ -95,8 +95,8 @@ async def main():
     args = parser.parse_args()
     
     try:
-        # Connect to database
-        await mongo_manager.connect()
+        # Initialize database connection
+        await mongo_manager.initialize()
         
         # Find the Benzinga narrative
         print("🔍 Searching for Benzinga narrative...")
