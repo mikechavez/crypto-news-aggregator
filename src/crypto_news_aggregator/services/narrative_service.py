@@ -752,6 +752,7 @@ async def detect_narratives(
                         'lifecycle_state': lifecycle_state,
                         'lifecycle_history': lifecycle_history,
                         'needs_summary_update': True,
+                        'nucleus_entity': fingerprint.get('nucleus_entity', ''),
                         'fingerprint': fingerprint
                     }
                     
@@ -863,6 +864,7 @@ async def detect_narratives(
                             "theme": theme,
                             "title": narrative_data["title"],
                             "summary": narrative_data["summary"],
+                            "nucleus_entity": narrative_data.get("nucleus_entity", ""),
                             "entities": narrative_data.get("actors", [])[:10],
                             "article_ids": narrative_data["article_ids"],
                             "article_count": article_count,
