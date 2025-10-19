@@ -201,14 +201,19 @@ async def get_recent_articles_batch(entities: List[str], limit_per_entity: int =
     db = await mongo_manager.get_async_database()
     
     # Fetch all mentions for all entities in one query
+    # Limit to reasonable number to avoid scanning entire collection
     mentions_collection = db.entity_mentions
     cursor = mentions_collection.find(
         {"entity": {"$in": entities}}
-    ).sort("timestamp", -1)
+    ).sort("timestamp", -1).limit(len(entities) * limit_per_entity * 3)  # 3x buffer for duplicates
     
     # Group article IDs by entity
     entity_article_ids = {entity: [] for entity in entities}
     entity_seen_ids = {entity: set() for entity in entities}
+    
+    # Early exit counter to avoid processing too many documents
+    total_processed = 0
+    max_to_process = len(entities) * limit_per_entity * 2  # Stop early if we have enough
     
     async for mention in cursor:
         entity = mention.get("entity")
@@ -226,6 +231,13 @@ async def get_recent_articles_batch(entities: List[str], limit_per_entity: int =
                         entity_seen_ids[entity].add(article_id)
                     except Exception:
                         continue
+        
+        # Early exit if we have enough articles for all entities
+        total_processed += 1
+        if total_processed >= max_to_process:
+            # Check if all entities have enough articles
+            if all(len(ids) >= limit_per_entity for ids in entity_article_ids.values()):
+                break
     
     # Collect all unique article IDs
     all_article_ids = set()
