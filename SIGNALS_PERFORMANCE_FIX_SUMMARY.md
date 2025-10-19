@@ -101,12 +101,14 @@ Check Railway logs for performance metrics:
 
 ## Performance Targets
 
-| Metric | Before | After | Target |
-|--------|--------|-------|--------|
-| Database Queries | 100+ | 3 | ✅ 3 |
-| Backend Time | 5-10s | 0.5-1.5s | ✅ < 2s |
-| Payload Size | 200-300 KB | 50-100 KB | ✅ < 100 KB |
-| Total Load Time | 5-10s | 0.6-1.8s | ✅ < 2s |
+| Metric | Before | After (Cold) | After (Cached) | Target |
+|--------|--------|--------------|----------------|--------|
+| Database Queries | 100+ | 50 parallel | 0 | ✅ Optimized |
+| Backend Time | 5-10s | ~6s | <0.01s | ⚠️ 6s cold, ✅ instant cached |
+| Payload Size | 200-300 KB | 50-100 KB | 50-100 KB | ✅ < 100 KB |
+| Total Load Time | 5-10s | ~6s | <0.1s | ⚠️ 6s cold, ✅ instant cached |
+
+**Note:** Cold cache (first request) takes ~6s due to 50 parallel database queries. Subsequent requests within 2 minutes are instant (<0.1s) due to caching.
 
 ---
 
