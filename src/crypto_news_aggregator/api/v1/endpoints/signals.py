@@ -3,6 +3,8 @@ Signals API endpoints for trending entity detection.
 """
 
 import json
+import logging
+import time
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Query, HTTPException
 from typing import List, Dict, Any, Optional
@@ -13,6 +15,7 @@ from ....core.redis_rest_client import redis_client
 from ....db.mongodb import mongo_manager
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # In-memory cache as fallback when Redis is not available
 _memory_cache: Dict[str, tuple[Any, datetime]] = {}
@@ -180,6 +183,82 @@ async def get_recent_articles_for_entity(entity: str, limit: int = 5) -> List[Di
     return articles
 
 
+async def get_recent_articles_batch(entities: List[str], limit_per_entity: int = 5) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Batch fetch recent articles for multiple entities in a single query.
+    This eliminates N+1 query problem.
+    
+    Args:
+        entities: List of entity names to fetch articles for
+        limit_per_entity: Maximum number of articles per entity (default 5)
+    
+    Returns:
+        Dict mapping entity name to list of article dicts
+    """
+    if not entities:
+        return {}
+    
+    db = await mongo_manager.get_async_database()
+    
+    # Fetch all mentions for all entities in one query
+    mentions_collection = db.entity_mentions
+    cursor = mentions_collection.find(
+        {"entity": {"$in": entities}}
+    ).sort("timestamp", -1)
+    
+    # Group article IDs by entity
+    entity_article_ids = {entity: [] for entity in entities}
+    entity_seen_ids = {entity: set() for entity in entities}
+    
+    async for mention in cursor:
+        entity = mention.get("entity")
+        article_id = mention.get("article_id")
+        
+        if entity and article_id and entity in entity_article_ids:
+            if article_id not in entity_seen_ids[entity]:
+                if len(entity_article_ids[entity]) < limit_per_entity:
+                    try:
+                        # Convert string to ObjectId if needed
+                        if isinstance(article_id, str):
+                            entity_article_ids[entity].append(ObjectId(article_id))
+                        else:
+                            entity_article_ids[entity].append(article_id)
+                        entity_seen_ids[entity].add(article_id)
+                    except Exception:
+                        continue
+    
+    # Collect all unique article IDs
+    all_article_ids = set()
+    for article_ids in entity_article_ids.values():
+        all_article_ids.update(article_ids)
+    
+    if not all_article_ids:
+        return {entity: [] for entity in entities}
+    
+    # Fetch all articles in one query
+    articles_collection = db.articles
+    cursor = articles_collection.find(
+        {"_id": {"$in": list(all_article_ids)}}
+    )
+    
+    # Build article lookup by ID
+    articles_by_id = {}
+    async for article in cursor:
+        articles_by_id[article["_id"]] = {
+            "title": article.get("title", ""),
+            "url": article.get("url", ""),
+            "source": article.get("source", ""),
+            "published_at": article.get("published_at").isoformat() if article.get("published_at") else None
+        }
+    
+    # Map articles back to entities
+    result = {}
+    for entity, article_ids in entity_article_ids.items():
+        result[entity] = [articles_by_id[aid] for aid in article_ids if aid in articles_by_id]
+    
+    return result
+
+
 @router.get("/trending")
 async def get_trending_signals(
     limit: int = Query(default=50, ge=1, le=100, description="Maximum number of results"),
@@ -237,21 +316,50 @@ async def get_trending_signals(
     
     # Fetch trending entities
     try:
+        start_time = time.time()
+        query_count = 0
+        
+        # Query 1: Get trending entities
         trending = await get_trending_entities(
             limit=limit,
             min_score=min_score,
             entity_type=entity_type,
             timeframe=timeframe,
         )
+        query_count += 1
+        fetch_time = time.time() - start_time
+        logger.info(f"[Signals] Fetched {len(trending)} trending entities in {fetch_time:.3f}s")
         
-        # Fetch narrative details and recent articles for all signals
+        # Collect all unique narrative IDs and entities for batch fetching
+        all_narrative_ids = set()
+        entities = []
+        for signal in trending:
+            narrative_ids = signal.get("narrative_ids", [])
+            all_narrative_ids.update(narrative_ids)
+            entities.append(signal["entity"])
+        
+        # Query 2: Batch fetch all narratives in one query
+        batch_start = time.time()
+        narratives_list = await get_narrative_details(list(all_narrative_ids))
+        narratives_by_id = {n["id"]: n for n in narratives_list}
+        query_count += 1
+        logger.info(f"[Signals] Batch fetched {len(narratives_list)} narratives in {time.time() - batch_start:.3f}s")
+        
+        # Query 3: Batch fetch all articles in one query
+        batch_start = time.time()
+        articles_by_entity = await get_recent_articles_batch(entities, limit_per_entity=5)
+        query_count += 1
+        total_articles = sum(len(articles) for articles in articles_by_entity.values())
+        logger.info(f"[Signals] Batch fetched {total_articles} articles for {len(entities)} entities in {time.time() - batch_start:.3f}s")
+        
+        # Build response with pre-fetched data
         signals_with_narratives = []
         for signal in trending:
             narrative_ids = signal.get("narrative_ids", [])
-            narratives = await get_narrative_details(narrative_ids)
+            narratives = [narratives_by_id[nid] for nid in narrative_ids if nid in narratives_by_id]
             
-            # Fetch recent articles for this entity
-            recent_articles = await get_recent_articles_for_entity(signal["entity"], limit=20)
+            # Get pre-fetched articles for this entity
+            recent_articles = articles_by_entity.get(signal["entity"], [])
             
             # Get timeframe-specific score and velocity
             score_field = field_map[timeframe]["score"]
@@ -272,6 +380,9 @@ async def get_trending_signals(
             })
         
         # Format response
+        total_time = time.time() - start_time
+        payload_size = len(json.dumps(signals_with_narratives)) / 1024  # KB
+        
         response = {
             "count": len(trending),
             "filters": {
@@ -281,7 +392,14 @@ async def get_trending_signals(
                 "timeframe": timeframe,
             },
             "signals": signals_with_narratives,
+            "performance": {
+                "total_time_seconds": round(total_time, 3),
+                "query_count": query_count,
+                "payload_size_kb": round(payload_size, 2),
+            }
         }
+        
+        logger.info(f"[Signals] Total request time: {total_time:.3f}s, Queries: {query_count}, Payload: {payload_size:.2f}KB")
         
         # Cache for 2 minutes (120 seconds) using Redis or in-memory fallback
         set_in_cache(cache_key, response, ttl_seconds=120)
