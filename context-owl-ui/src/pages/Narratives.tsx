@@ -53,15 +53,28 @@ const parseNarrativeDate = (dateValue: any): string => {
 
 export function Narratives() {
   const [expandedArticles, setExpandedArticles] = useState<Set<number>>(new Set());
+  const [narrativeArticles, setNarrativeArticles] = useState<Map<string, any[]>>(new Map());
+  const [loadingArticles, setLoadingArticles] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'cards' | 'pulse' | 'archive'>('cards');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['narratives', viewMode],
-    queryFn: () => viewMode === 'archive' ? narrativesAPI.getArchivedNarratives(50, 30) : narrativesAPI.getNarratives(),
+    queryFn: async () => {
+      const result = viewMode === 'archive' ? await narrativesAPI.getArchivedNarratives(50, 30) : await narrativesAPI.getNarratives();
+      console.log(`[DEBUG] ${viewMode} API returned:`, result.length, 'narratives');
+      if (viewMode === 'archive') {
+        console.log('[DEBUG] Archive narratives lifecycle_state values:', result.map(n => n.lifecycle_state));
+        console.log('[DEBUG] Archive narratives data:', result);
+      }
+      return result;
+    },
     refetchInterval: 60000, // 60 seconds
   });
 
   const narratives = data || [];
+  
+  // Debug log for narratives after filtering
+  console.log('[DEBUG] Narratives after data assignment:', narratives.length, 'viewMode:', viewMode);
 
   // Calculate date range from narratives for the timeline scrubber
   const dateRange = useMemo(() => {
@@ -636,13 +649,41 @@ export function Narratives() {
           const displaySummary = narrative.summary || narrative.story;
           const displayUpdated = narrative.last_updated || narrative.updated_at;
           const isExpanded = expandedArticles.has(index);
+          const narrativeId = narrative._id || '';
+          const articles = narrativeArticles.get(narrativeId) || narrative.articles || [];
+          const isLoadingArticles = loadingArticles.has(narrativeId);
           
-          const toggleExpanded = () => {
+          const toggleExpanded = async () => {
+            console.log('[DEBUG] Card clicked - Narrative ID:', narrativeId, 'Title:', displayTitle);
             const newExpanded = new Set(expandedArticles);
             if (newExpanded.has(index)) {
+              console.log('[DEBUG] Collapsing card at index:', index);
               newExpanded.delete(index);
             } else {
+              console.log('[DEBUG] Expanding card at index:', index);
               newExpanded.add(index);
+              
+              // Fetch articles if not already loaded and not in archive mode
+              if (viewMode !== 'archive' && narrativeId && !narrativeArticles.has(narrativeId) && !loadingArticles.has(narrativeId)) {
+                console.log('[DEBUG] Fetching articles for narrative:', narrativeId);
+                setLoadingArticles(prev => new Set(prev).add(narrativeId));
+                try {
+                  const narrativeWithArticles = await narrativesAPI.getNarrativeById(narrativeId);
+                  console.log('[DEBUG] API Response:', narrativeWithArticles);
+                  console.log('[DEBUG] Articles in response:', narrativeWithArticles.articles?.length || 0);
+                  setNarrativeArticles(prev => new Map(prev).set(narrativeId, narrativeWithArticles.articles || []));
+                } catch (error) {
+                  console.error('[ERROR] Failed to fetch articles:', error);
+                } finally {
+                  setLoadingArticles(prev => {
+                    const next = new Set(prev);
+                    next.delete(narrativeId);
+                    return next;
+                  });
+                }
+              } else {
+                console.log('[DEBUG] Skipping article fetch - viewMode:', viewMode, 'narrativeId:', narrativeId, 'already has articles:', narrativeArticles.has(narrativeId));
+              }
             }
             setExpandedArticles(newExpanded);
           };
@@ -706,12 +747,6 @@ export function Narratives() {
                   <span className="text-sm font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-full">
                     {formatNumber(narrative.article_count)} articles
                   </span>
-                  {/* Mention velocity badge */}
-                  {narrative.mention_velocity && narrative.mention_velocity > 0 && (
-                    <span className="text-sm font-semibold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-3 py-1 rounded-full">
-                      +{Math.round(narrative.mention_velocity)} articles/day
-                    </span>
-                  )}
                 </div>
               </div>
             </CardHeader>
@@ -732,34 +767,50 @@ export function Narratives() {
               </div>
 
               {/* Articles section */}
-              {narrative.articles && narrative.articles.length > 0 && (
+              {(narrative.article_count > 0 || articles.length > 0) && (
                 <div className="mb-4 pt-4 border-t border-gray-200 dark:border-dark-border">
                   <div className="text-sm text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1">
-                    {isExpanded ? '▼' : '▶'} 📰 {narrative.articles.length} articles
+                    {isExpanded ? '▼' : '▶'} 📰 {articles.length > 0 ? articles.length : narrative.article_count} articles
                   </div>
                   
-                  {isExpanded && (
+                  {isExpanded && (() => {
+                    console.log('[DEBUG] Rendering expanded article section - isLoadingArticles:', isLoadingArticles, 'articles.length:', articles.length);
+                    return (
                     <div className="mt-3 space-y-2">
-                      {narrative.articles.map((article, articleIdx) => (
-                        <div key={articleIdx} className="text-sm bg-gray-50 dark:bg-dark-hover p-3 rounded">
-                          <a
-                            href={article.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline font-medium block mb-1"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {article.title}
-                          </a>
-                          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs">
-                            <span className="capitalize">{article.source}</span>
-                            <span>•</span>
-                            <span>{formatRelativeTime(article.published_at)}</span>
-                          </div>
+                      {isLoadingArticles ? (
+                        <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                          Loading articles...
                         </div>
-                      ))}
+                      ) : articles.length > 0 ? (
+                        articles.map((article, articleIdx) => {
+                          console.log('[DEBUG] Rendering article:', articleIdx, article.title);
+                          return (
+                          <div key={articleIdx} className="text-sm bg-gray-50 dark:bg-dark-hover p-3 rounded">
+                            <a
+                              href={article.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline font-medium block mb-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {article.title}
+                            </a>
+                            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs">
+                              <span className="capitalize">{article.source}</span>
+                              <span>•</span>
+                              <span>{formatRelativeTime(article.published_at)}</span>
+                            </div>
+                          </div>
+                          );
+                        })
+                      ) : (
+                        <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                          No articles available
+                        </div>
+                      )}
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               )}
 

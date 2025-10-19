@@ -6,7 +6,7 @@ export const narrativesAPI = {
     return apiClient.get<NarrativesResponse>('/api/v1/narratives/active');
   },
 
-  getNarrativeById: async (id: number): Promise<Narrative> => {
+  getNarrativeById: async (id: string | number): Promise<Narrative> => {
     return apiClient.get<Narrative>(`/api/v1/narratives/${id}`);
   },
 

@@ -1307,14 +1307,14 @@ class TestCalculateFingerprintSimilarity:
         }
     
     def test_identical_fingerprints(self, fingerprint_sec_binance):
-        """Test similarity of identical fingerprints returns 1.0."""
+        """Test similarity of identical fingerprints returns 1.0 + semantic boost."""
         similarity = calculate_fingerprint_similarity(
             fingerprint_sec_binance,
             fingerprint_sec_binance
         )
         
-        # Identical fingerprints should have similarity 1.0
-        assert similarity == 1.0
+        # Identical fingerprints should have similarity 1.0 + 0.1 semantic boost = 1.1
+        assert similarity == 1.1
     
     def test_same_nucleus_high_actor_overlap(self, fingerprint_sec_binance, fingerprint_sec_coinbase):
         """Test high similarity when nucleus matches and actors overlap significantly."""
@@ -1323,11 +1323,11 @@ class TestCalculateFingerprintSimilarity:
             fingerprint_sec_coinbase
         )
         
-        # Same nucleus (0.3) + high actor overlap (0.5 * 4/7) + some action overlap (0.2 * 1/5)
-        # Expected: 0.3 + 0.286 + 0.04 = ~0.626
+        # Same nucleus (0.45) + high actor overlap (0.35 * 4/7) + some action overlap (0.2 * 1/5) + semantic boost (0.1)
+        # Expected: 0.45 + 0.2 + 0.04 + 0.1 = ~0.79
         # Actual: actors overlap = {SEC, Coinbase, Kraken, Gemini} = 4, union = 7
         # Actions overlap = {filed lawsuit} = 1, union = 5
-        assert 0.60 <= similarity <= 0.70
+        assert 0.75 <= similarity <= 0.85
     
     def test_different_nucleus_different_actors(self, fingerprint_sec_binance, fingerprint_defi_growth):
         """Test low similarity when nucleus and actors are different."""
@@ -1355,9 +1355,9 @@ class TestCalculateFingerprintSimilarity:
         
         similarity = calculate_fingerprint_similarity(fp1, fp2)
         
-        # Same nucleus (0.3) + some actor overlap (Bitcoin) + no action overlap
-        # Expected: 0.3 + 0.5 * (1/5) = 0.3 + 0.1 = 0.4
-        assert 0.35 <= similarity <= 0.45
+        # Same nucleus (0.45) + some actor overlap (Bitcoin) (0.35 * 1/5) + no action overlap + semantic boost (0.1)
+        # Expected: 0.45 + 0.07 + 0.0 + 0.1 = 0.62
+        assert 0.58 <= similarity <= 0.66
     
     def test_different_nucleus_high_actor_overlap(self):
         """Test similarity when nucleus differs but actors overlap significantly."""
@@ -1375,8 +1375,8 @@ class TestCalculateFingerprintSimilarity:
         similarity = calculate_fingerprint_similarity(fp1, fp2)
         
         # Different nucleus (0.0) + high actor overlap (4/4 = 1.0) + no action overlap
-        # Expected: 0.0 + 0.5 * 1.0 + 0.0 = 0.5
-        assert 0.45 <= similarity <= 0.55
+        # Expected: 0.0 + 0.35 * 1.0 + 0.0 = 0.35
+        assert 0.30 <= similarity <= 0.40
     
     def test_empty_fingerprints(self):
         """Test similarity of empty fingerprints."""
@@ -1423,9 +1423,9 @@ class TestCalculateFingerprintSimilarity:
         
         similarity = calculate_fingerprint_similarity(fp1, fp2)
         
-        # Same nucleus (0.3) + no actors in fp1 (0.0) + no actions in fp1 (0.0)
-        # Expected: 0.3
-        assert 0.25 <= similarity <= 0.35
+        # Same nucleus (0.45) + no actors in fp1 (0.0) + no actions in fp1 (0.0) + semantic boost (0.1)
+        # Expected: 0.55
+        assert 0.50 <= similarity <= 0.60
     
     def test_action_overlap_contribution(self):
         """Test that action overlap contributes to similarity score."""
@@ -1442,9 +1442,9 @@ class TestCalculateFingerprintSimilarity:
         
         similarity = calculate_fingerprint_similarity(fp1, fp2)
         
-        # Same nucleus (0.3) + full actor overlap (0.5 * 1.0) + partial action overlap (0.2 * 0.5)
-        # Expected: 0.3 + 0.5 + 0.1 = 0.9
-        assert 0.85 <= similarity <= 0.95
+        # Same nucleus (0.45) + full actor overlap (0.35 * 1.0) + partial action overlap (0.2 * 2/4) + semantic boost (0.1)
+        # Expected: 0.45 + 0.35 + 0.1 + 0.1 = 1.0
+        assert 0.95 <= similarity <= 1.05
     
     def test_weighted_scoring(self):
         """Test that weights are applied correctly (actors > nucleus > actions)."""
@@ -1476,8 +1476,11 @@ class TestCalculateFingerprintSimilarity:
         
         similarity_nucleus = calculate_fingerprint_similarity(fp3, fp4)
         
-        # Actor overlap (weight 0.5) should contribute more than nucleus match (weight 0.3)
-        assert similarity_actors > similarity_nucleus
+        # Actor overlap (weight 0.35) + no boost vs nucleus match (weight 0.45) + boost (0.1)
+        # similarity_actors = 0.35 * 1.0 = 0.35
+        # similarity_nucleus = 0.45 + 0.1 = 0.55
+        # With semantic boost, nucleus match should now be higher
+        assert similarity_nucleus > similarity_actors
     
     def test_jaccard_similarity_calculation(self):
         """Test that Jaccard similarity is calculated correctly for actors."""
@@ -1494,14 +1497,15 @@ class TestCalculateFingerprintSimilarity:
         
         similarity = calculate_fingerprint_similarity(fp1, fp2)
         
-        # Nucleus match: 0.3
+        # Nucleus match: 0.45
         # Actor Jaccard: intersection={B,C}=2, union={A,B,C,D}=4, jaccard=2/4=0.5
-        # Actor score: 0.5 * 0.5 = 0.25
-        # Total: 0.3 + 0.25 = 0.55
-        assert 0.50 <= similarity <= 0.60
+        # Actor score: 0.35 * 0.5 = 0.175
+        # Semantic boost: 0.1
+        # Total: 0.45 + 0.175 + 0.1 = 0.725
+        assert 0.68 <= similarity <= 0.78
     
-    def test_case_sensitive_matching(self):
-        """Test that entity matching is case-sensitive."""
+    def test_case_insensitive_nucleus_matching(self):
+        """Test that nucleus entity matching is case-insensitive with semantic boost."""
         fp1 = {
             'nucleus_entity': 'SEC',
             'top_actors': ['SEC', 'Binance'],
@@ -1515,6 +1519,70 @@ class TestCalculateFingerprintSimilarity:
         
         similarity = calculate_fingerprint_similarity(fp1, fp2)
         
-        # Different nucleus (case mismatch), no actor overlap (case mismatch)
-        # Only action overlap: 0.2 * (1/1) = 0.2
-        assert 0.15 <= similarity <= 0.25
+        # Nucleus match (case-insensitive): 0.0 (exact match fails) but semantic boost applies: +0.1
+        # No actor overlap (actors are case-sensitive): 0.0
+        # Action overlap: 0.2 * (1/1) = 0.2
+        # Total: 0.0 + 0.0 + 0.2 + 0.1 = 0.3
+        assert 0.25 <= similarity <= 0.35
+    
+    def test_semantic_boost_applied(self):
+        """Test that semantic boost is applied when nucleus entities match (case-insensitive)."""
+        # Test 1: Exact case match
+        fp1 = {
+            'nucleus_entity': 'Bitcoin',
+            'top_actors': ['MicroStrategy'],
+            'key_actions': ['buying']
+        }
+        fp2 = {
+            'nucleus_entity': 'Bitcoin',
+            'top_actors': ['Tesla'],
+            'key_actions': ['selling']
+        }
+        
+        similarity_exact = calculate_fingerprint_similarity(fp1, fp2)
+        
+        # Nucleus match: 0.45 + semantic boost: 0.1 = 0.55
+        # No actor overlap: 0.0
+        # No action overlap: 0.0
+        # Total: 0.55
+        assert 0.50 <= similarity_exact <= 0.60
+        
+        # Test 2: Case-insensitive match
+        fp3 = {
+            'nucleus_entity': 'BITCOIN',
+            'top_actors': ['Grayscale'],
+            'key_actions': ['accumulating']
+        }
+        fp4 = {
+            'nucleus_entity': 'bitcoin',
+            'top_actors': ['BlackRock'],
+            'key_actions': ['launching ETF']
+        }
+        
+        similarity_case_insensitive = calculate_fingerprint_similarity(fp3, fp4)
+        
+        # Nucleus match fails (case mismatch): 0.0, but semantic boost applies: 0.1
+        # No actor overlap: 0.0
+        # No action overlap: 0.0
+        # Total: 0.1
+        assert 0.08 <= similarity_case_insensitive <= 0.12
+        
+        # Test 3: No nucleus match - no boost
+        fp5 = {
+            'nucleus_entity': 'Ethereum',
+            'top_actors': ['Vitalik'],
+            'key_actions': ['upgrade']
+        }
+        fp6 = {
+            'nucleus_entity': 'Bitcoin',
+            'top_actors': ['Satoshi'],
+            'key_actions': ['mining']
+        }
+        
+        similarity_no_match = calculate_fingerprint_similarity(fp5, fp6)
+        
+        # No nucleus match: 0.0, no semantic boost
+        # No actor overlap: 0.0
+        # No action overlap: 0.0
+        # Total: 0.0
+        assert similarity_no_match == 0.0

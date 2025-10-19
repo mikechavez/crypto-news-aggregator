@@ -137,8 +137,8 @@ def calculate_fingerprint_similarity(
     Calculate similarity between two narrative fingerprints.
     
     Uses weighted scoring to determine if two narratives should be merged:
-    - Actor overlap (Jaccard similarity of top_actors): weight 0.5
-    - Nucleus match (exact match of nucleus_entity): weight 0.3
+    - Nucleus match (exact match of nucleus_entity): weight 0.45
+    - Actor overlap (Jaccard similarity of top_actors): weight 0.35
     - Action overlap (Jaccard similarity of key_actions): weight 0.2
     
     Args:
@@ -193,14 +193,24 @@ def calculate_fingerprint_similarity(
     
     # Weighted sum of components
     similarity = (
-        nucleus_match_score * 0.3 +
-        actor_overlap_score * 0.5 +
+        nucleus_match_score * 0.45 +
+        actor_overlap_score * 0.35 +
         action_overlap_score * 0.2
     )
     
+    # Semantic boost: if both fingerprints have the exact same nucleus_entity (case-insensitive),
+    # add 0.1 bonus to help narratives about the same core entity merge even with minimal actor overlap
+    semantic_boost = 0.0
+    if nucleus1 and nucleus2 and nucleus1.lower() == nucleus2.lower():
+        semantic_boost = 0.1
+        similarity += semantic_boost
+        logger.info(
+            f"Applied semantic boost (+{semantic_boost:.1f}) for matching nucleus entity: '{nucleus1}' == '{nucleus2}'"
+        )
+    
     logger.debug(
         f"Fingerprint similarity: {similarity:.3f} "
-        f"(nucleus={nucleus_match_score:.1f}, actors={actor_overlap_score:.3f}, actions={action_overlap_score:.3f})"
+        f"(nucleus={nucleus_match_score:.1f}, actors={actor_overlap_score:.3f}, actions={action_overlap_score:.3f}, boost={semantic_boost:.1f})"
     )
     
     return similarity
