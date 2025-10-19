@@ -16,6 +16,10 @@ from ..services.entity_normalization import normalize_entity_name
 
 logger = logging.getLogger(__name__)
 
+# Blacklist of sources to exclude from processing
+# These sources contain advertising or low-quality content
+BLACKLIST_SOURCES = ['benzinga']
+
 _STOPWORDS = {
     "the",
     "and",
@@ -70,6 +74,28 @@ async def fetch_and_process_rss_feeds():
     """Fetches RSS feeds, processes articles, and stores them."""
     rss_service = RSSService()
     articles = await rss_service.fetch_all_feeds()
+    
+    # Filter out blacklisted sources with detailed logging
+    original_count = len(articles)
+    logger.info(f"Fetched {original_count} articles from RSS feeds")
+    
+    # Log sources before filtering
+    source_counts = {}
+    for article in articles:
+        source = article.source.lower()
+        source_counts[source] = source_counts.get(source, 0) + 1
+    logger.info(f"Articles by source before filtering: {source_counts}")
+    
+    # Apply blacklist filter
+    articles = [a for a in articles if a.source.lower() not in BLACKLIST_SOURCES]
+    filtered_count = original_count - len(articles)
+    
+    if filtered_count > 0:
+        logger.warning(f"🚫 Filtered out {filtered_count} articles from blacklisted sources: {BLACKLIST_SOURCES}")
+    else:
+        logger.info(f"✅ No blacklisted articles found (blacklist: {BLACKLIST_SOURCES})")
+    
+    logger.info(f"Processing {len(articles)} articles after blacklist filter")
     await create_or_update_articles(articles)
 
     # Run LLM analysis on the newly fetched articles

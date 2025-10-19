@@ -170,6 +170,8 @@ async def get_trending_entities(
     """
     Get trending entities sorted by signal score for a specific timeframe.
     
+    Filters out stale entities that have no current entity_mentions.
+    
     Args:
         limit: Maximum number of results (default 20)
         min_score: Minimum signal score threshold (default 0.0)
@@ -177,10 +179,11 @@ async def get_trending_entities(
         timeframe: Time window for scoring (24h, 7d, or 30d, default 7d)
     
     Returns:
-        List of signal score documents
+        List of signal score documents with active mentions
     """
     db = await mongo_manager.get_async_database()
     collection = db.signal_scores
+    entity_mentions = db.entity_mentions
     
     # Map timeframe to score field
     score_field_map = {
@@ -197,12 +200,26 @@ async def get_trending_entities(
         query["entity_type"] = entity_type
     
     # Get trending entities sorted by timeframe-specific score
-    cursor = collection.find(query).sort(score_field, -1).limit(limit)
+    # Fetch more than needed to account for filtering
+    cursor = collection.find(query).sort(score_field, -1).limit(limit * 2)
     
     results = []
     async for signal in cursor:
-        signal["_id"] = str(signal["_id"])
-        results.append(signal)
+        entity = signal.get("entity")
+        
+        # Verify entity has current mentions (filter out stale signals)
+        mention_count = await entity_mentions.count_documents(
+            {"entity": entity},
+            limit=1
+        )
+        
+        if mention_count > 0:
+            signal["_id"] = str(signal["_id"])
+            results.append(signal)
+            
+            # Stop once we have enough valid results
+            if len(results) >= limit:
+                break
     
     return results
 

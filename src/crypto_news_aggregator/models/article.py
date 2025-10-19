@@ -48,7 +48,7 @@ class ArticleBase(BaseModel):
         "bitcoinmagazine",
         "theblock",
         "cryptoslate",
-        "benzinga",
+        # "benzinga",  # Excluded - advertising content
         "messari",
         "bitcoin.com",
         "glassnode",
