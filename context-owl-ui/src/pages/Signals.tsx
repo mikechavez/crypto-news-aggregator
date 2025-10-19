@@ -88,7 +88,17 @@ export function Signals() {
   
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['signals', selectedTimeframe],
-    queryFn: () => signalsAPI.getSignals({ limit: 50, timeframe: selectedTimeframe }),
+    queryFn: async () => {
+      console.time(`[Signals] API Request (${selectedTimeframe})`);
+      const result = await signalsAPI.getSignals({ limit: 50, timeframe: selectedTimeframe });
+      console.timeEnd(`[Signals] API Request (${selectedTimeframe})`);
+      console.log(`[Signals] Response:`, {
+        signalCount: result.signals?.length || 0,
+        payloadSize: `${(JSON.stringify(result).length / 1024).toFixed(2)} KB`,
+        timeframe: selectedTimeframe
+      });
+      return result;
+    },
     refetchInterval: 30000, // 30 seconds
     staleTime: 0, // Always consider data stale
   });
