@@ -181,3 +181,41 @@ async def get_entity_stats(entity: str) -> Dict[str, Any]:
         "sentiment_distribution": sentiment_dist,
         "recent_mentions": recent_mentions,
     }
+
+
+async def delete_entity_mentions_for_article(article_id: str) -> int:
+    """
+    Delete all entity mentions associated with a specific article.
+    
+    This should be called when an article is deleted to prevent orphaned mentions.
+    
+    Args:
+        article_id: The ID of the article whose mentions should be deleted
+    
+    Returns:
+        Number of entity mentions deleted
+    """
+    db = await mongo_manager.get_async_database()
+    collection = db.entity_mentions
+    
+    result = await collection.delete_many({"article_id": article_id})
+    return result.deleted_count
+
+
+async def delete_entity_mentions_for_articles(article_ids: List[str]) -> int:
+    """
+    Delete all entity mentions associated with multiple articles.
+    
+    This should be called when articles are deleted in batch to prevent orphaned mentions.
+    
+    Args:
+        article_ids: List of article IDs whose mentions should be deleted
+    
+    Returns:
+        Number of entity mentions deleted
+    """
+    db = await mongo_manager.get_async_database()
+    collection = db.entity_mentions
+    
+    result = await collection.delete_many({"article_id": {"$in": article_ids}})
+    return result.deleted_count
