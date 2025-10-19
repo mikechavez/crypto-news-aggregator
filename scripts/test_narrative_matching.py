@@ -225,11 +225,14 @@ async def test_narrative_matching():
         narratives_collection = db.narratives
         
         cutoff_time = datetime.now(timezone.utc) - timedelta(days=14)
-        active_statuses = ['emerging', 'rising', 'hot', 'cooling', 'dormant']
+        active_statuses = ['emerging', 'rising', 'hot', 'cooling', 'dormant', 'echo', 'reactivated']
         
         cursor = narratives_collection.find({
             'last_updated': {'$gte': cutoff_time},
-            'status': {'$in': active_statuses}
+            '$or': [
+                {'status': {'$in': active_statuses}},
+                {'lifecycle_state': {'$in': active_statuses}}
+            ]
         }).limit(5)
         
         candidates = await cursor.to_list(length=5)

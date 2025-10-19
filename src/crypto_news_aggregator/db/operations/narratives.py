@@ -349,17 +349,38 @@ async def get_archived_narratives(
     Returns:
         List of dormant narrative documents
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     db = await mongo_manager.get_async_database()
     collection = db.narratives
     
     # Calculate cutoff date
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
     
+    # First, let's check what narratives exist in the database
+    total_count = await collection.count_documents({})
+    logger.info(f"[DEBUG] Total narratives in database: {total_count}")
+    
+    # Check how many have lifecycle_state field
+    with_lifecycle_state = await collection.count_documents({"lifecycle_state": {"$exists": True}})
+    logger.info(f"[DEBUG] Narratives with lifecycle_state field: {with_lifecycle_state}")
+    
+    # Check lifecycle_state distribution
+    pipeline = [{"$group": {"_id": "$lifecycle_state", "count": {"$sum": 1}}}]
+    lifecycle_distribution = []
+    async for doc in collection.aggregate(pipeline):
+        lifecycle_distribution.append(doc)
+    logger.info(f"[DEBUG] Lifecycle state distribution: {lifecycle_distribution}")
+    
     # Query for narratives with lifecycle_state = 'dormant' within lookback window
     query = {
         "lifecycle_state": "dormant",
         "last_updated": {"$gte": cutoff_date}
     }
+    
+    logger.info(f"[DEBUG] Query for archived narratives: {query}")
+    logger.info(f"[DEBUG] Cutoff date: {cutoff_date}")
     
     # Sort by last_updated descending (most recently dormant first)
     cursor = collection.find(query).sort("last_updated", -1).limit(limit)
@@ -368,6 +389,8 @@ async def get_archived_narratives(
     async for narrative in cursor:
         narrative["_id"] = str(narrative["_id"])
         narratives.append(narrative)
+    
+    logger.info(f"[DEBUG] Found {len(narratives)} archived narratives")
     
     return narratives
 

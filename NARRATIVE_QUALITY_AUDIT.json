@@ -1,0 +1,1376 @@
+{
+  "metadata": {
+    "total_narratives": 133,
+    "total_articles": 876,
+    "median_article_count": 4,
+    "avg_article_count": 6.586466165413534,
+    "median_age": 2,
+    "top_entities": [
+      [
+        "Unknown",
+        125
+      ],
+      [
+        "Jack Dorsey",
+        1
+      ],
+      [
+        "Pantera",
+        1
+      ],
+      [
+        "ETH",
+        1
+      ],
+      [
+        "Chainlink",
+        1
+      ]
+    ],
+    "complete_pct": 93.98496240601504
+  },
+  "issues": {
+    "generic": [
+      {
+        "id": "68eb11f2be9a5ddb08251198",
+        "title": "Defi Adoption Narrative",
+        "entity": "",
+        "articles": 10,
+        "double_penalty": false
+      },
+      {
+        "id": "68eb11febe9a5ddb082511a1",
+        "title": "Crypto News: Resilient ETH, Acquisitions, and Tax Probes",
+        "entity": "",
+        "articles": 12,
+        "double_penalty": false
+      },
+      {
+        "id": "68f17641adf726e41839e81b",
+        "title": "",
+        "entity": "Jack Dorsey",
+        "articles": 1,
+        "double_penalty": false
+      },
+      {
+        "id": "68f17647adf726e41839e81c",
+        "title": "",
+        "entity": "Pantera",
+        "articles": 1,
+        "double_penalty": false
+      },
+      {
+        "id": "68f17660adf726e41839e81d",
+        "title": "",
+        "entity": "ETH",
+        "articles": 1,
+        "double_penalty": false
+      },
+      {
+        "id": "68f17671adf726e41839e81f",
+        "title": "",
+        "entity": "Chainlink",
+        "articles": 1,
+        "double_penalty": false
+      },
+      {
+        "id": "68f17678adf726e41839e820",
+        "title": "",
+        "entity": "NASDAQ",
+        "articles": 1,
+        "double_penalty": false
+      },
+      {
+        "id": "68f17688adf726e41839e821",
+        "title": "",
+        "entity": "SharpLink Gaming",
+        "articles": 1,
+        "double_penalty": false
+      },
+      {
+        "id": "68f176d0adf726e41839e829",
+        "title": "",
+        "entity": "CRO",
+        "articles": 1,
+        "double_penalty": false
+      },
+      {
+        "id": "68f176dfadf726e41839e82b",
+        "title": "",
+        "entity": "TradingView",
+        "articles": 1,
+        "double_penalty": false
+      },
+      {
+        "id": "68f2f3697082f49df569569d",
+        "title": "Newsmax's Crypto Push: Blending Politics and Mainstream Adoption",
+        "entity": "",
+        "articles": 3,
+        "double_penalty": false
+      }
+    ],
+    "low_count": {
+      "emerging": [
+        {
+          "id": "68f17641adf726e41839e81b",
+          "title": "",
+          "articles": 1,
+          "age": 2
+        },
+        {
+          "id": "68f17647adf726e41839e81c",
+          "title": "",
+          "articles": 1,
+          "age": 2
+        },
+        {
+          "id": "68f17660adf726e41839e81d",
+          "title": "",
+          "articles": 1,
+          "age": 2
+        },
+        {
+          "id": "68f17671adf726e41839e81f",
+          "title": "",
+          "articles": 1,
+          "age": 2
+        },
+        {
+          "id": "68f17678adf726e41839e820",
+          "title": "",
+          "articles": 1,
+          "age": 2
+        },
+        {
+          "id": "68f17688adf726e41839e821",
+          "title": "",
+          "articles": 1,
+          "age": 2
+        },
+        {
+          "id": "68f176d0adf726e41839e829",
+          "title": "",
+          "articles": 1,
+          "age": 2
+        },
+        {
+          "id": "68f176dfadf726e41839e82b",
+          "title": "",
+          "articles": 1,
+          "age": 2
+        }
+      ],
+      "failed": [],
+      "stalled": []
+    },
+    "stale": {
+      "7-14d": [],
+      "14-30d": [],
+      "30d+": []
+    },
+    "mismatches": [],
+    "duplicates": {
+      "exact_count": 12,
+      "exact_narratives": 24
+    },
+    "missing": {
+      "title": 8,
+      "summary": 8,
+      "entities": 0,
+      "fingerprint": 0,
+      "zero_article_bug": 0
+    },
+    "old_schema": {
+      "nucleus_no_title": 8,
+      "actors_no_entities": 8,
+      "narrative_summary_no_summary": 8
+    }
+  },
+  "scores": [
+    {
+      "id": "68eb11f2be9a5ddb08251198",
+      "title": "Defi Adoption Narrative",
+      "score": 80,
+      "articles": 10,
+      "lifecycle": "cooling",
+      "issues": [
+        "generic"
+      ]
+    },
+    {
+      "id": "68eb11f6be9a5ddb0825119b",
+      "title": "Arbitrum Hires New Head, Sorare Moves to Solana L1",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "cooling",
+      "issues": []
+    },
+    {
+      "id": "68eb11f8be9a5ddb0825119d",
+      "title": "Crypto firms expand infrastructure and investment",
+      "score": 100,
+      "articles": 11,
+      "lifecycle": "cooling",
+      "issues": []
+    },
+    {
+      "id": "68eb11f9be9a5ddb0825119e",
+      "title": "NFT Gaming Platforms Migrate and Expand",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "cooling",
+      "issues": []
+    },
+    {
+      "id": "68eb11fabe9a5ddb0825119f",
+      "title": "Stablecoins Face Turbulence Amid Crypto Market Volatility",
+      "score": 100,
+      "articles": 7,
+      "lifecycle": "cooling",
+      "issues": []
+    },
+    {
+      "id": "68eb11febe9a5ddb082511a1",
+      "title": "Crypto News: Resilient ETH, Acquisitions, and Tax Probes",
+      "score": 80,
+      "articles": 12,
+      "lifecycle": "cooling",
+      "issues": [
+        "generic"
+      ]
+    },
+    {
+      "id": "68eb11febe9a5ddb082511a2",
+      "title": "Crypto Partnerships and Pardons: A Complex Narrative",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "cooling",
+      "issues": []
+    },
+    {
+      "id": "68ec0da42c74a4887b0b9d47",
+      "title": "Crypto Market Reckoning: Dark Leverage Boom Exposed",
+      "score": 100,
+      "articles": 6,
+      "lifecycle": "cooling",
+      "issues": []
+    },
+    {
+      "id": "68ec0da42c74a4887b0b9d48",
+      "title": "Binance's Expansion and Regulatory Challenges in Crypto",
+      "score": 80,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68ec0da42c74a4887b0b9d49",
+      "title": "XRP Volatility and Adoption Amid Regulatory Uncertainty",
+      "score": 80,
+      "articles": 7,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68ec0da42c74a4887b0b9d4a",
+      "title": "Crypto Market Reckoning: Maturity, Discipline, and Regulation",
+      "score": 100,
+      "articles": 5,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68ec5c4ed6a52d09a05dd0a0",
+      "title": "Crypto.com Navigates Regulation and Volatility",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "cooling",
+      "issues": []
+    },
+    {
+      "id": "68ed1fe52de8fecfad12ae17",
+      "title": "Gold Surges to $30T Milestone as Safe-Haven Asset",
+      "score": 80,
+      "articles": 8,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f03343bc9ab7390ca7af71",
+      "title": "SEC Navigates Balancing Crypto Regulation and Innovation",
+      "score": 110,
+      "articles": 10,
+      "lifecycle": "hot",
+      "issues": [
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f0334dbc9ab7390ca7af76",
+      "title": "French Bank ODDO BHF Launches Euro-Backed Stablecoin EUROD",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f0334fbc9ab7390ca7af77",
+      "title": "Erebor, a Thiel-backed Crypto Bank, Gains Federal Charter",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f03350bc9ab7390ca7af78",
+      "title": "Coinbase's Expansion, Innovation, and Regulatory Tensions",
+      "score": 80,
+      "articles": 5,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f03353bc9ab7390ca7af79",
+      "title": "BlackRock's Stablecoin Push: Bridging Traditional Finance and Crypto",
+      "score": 80,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f033bb485294084b609b2a",
+      "title": "Crypto Markets Face Volatility, Systemic Risk Concerns",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f0340cf52bc2698228a55c",
+      "title": "Trump's Trade Policies Rattle Global Markets and Crypto",
+      "score": 100,
+      "articles": 6,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f03419f52bc2698228a562",
+      "title": "Nvidia Earns Bullish Forecasts from Analysts on Tech Innovations",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f03422f52bc2698228a566",
+      "title": "Shiba Inu's Speculative Ride: Promises and Perils",
+      "score": 80,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f0342ff52bc2698228a56c",
+      "title": "US Expands Strategic Bitcoin Reserve via Seizures",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f03432f52bc2698228a56d",
+      "title": "Monad Readies for Launch with Aggressive Community Outreach",
+      "score": 100,
+      "articles": 6,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f03434f52bc2698228a56e",
+      "title": "Rethinking the Role of the US Dollar in a Shifting Global Finance Landscape",
+      "score": 100,
+      "articles": 5,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f03436f52bc2698228a56f",
+      "title": "Stablecoins at the Crossroads of Finance and Regulation",
+      "score": 80,
+      "articles": 6,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f0343df52bc2698228a571",
+      "title": "California Protects Unclaimed Crypto from Liquidation",
+      "score": 100,
+      "articles": 5,
+      "lifecycle": "rising",
+      "issues": []
+    },
+    {
+      "id": "68f03441f52bc2698228a573",
+      "title": "Circle's USDC Stablecoin Ascends as Crypto Infrastructure Giant",
+      "score": 100,
+      "articles": 6,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f03443f52bc2698228a574",
+      "title": "S&P Global Brings Stablecoin Risk Ratings to DeFi",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f03446f52bc2698228a575",
+      "title": "Metaplanet's Crypto Treasury Troubles Amid Market Volatility",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f037c26a64ae154ad352e7",
+      "title": "Amazon's Shifting Workforce: Growth, Cuts, and Policy Impact",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f037cb6a64ae154ad352e8",
+      "title": "Hyperliquid's Decentralized Perpetuals Spark Debate",
+      "score": 110,
+      "articles": 17,
+      "lifecycle": "hot",
+      "issues": [
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f037d86a64ae154ad352e9",
+      "title": "Polymarket's Crypto Prediction Markets Raise Transparency and Integrity Concerns",
+      "score": 110,
+      "articles": 10,
+      "lifecycle": "hot",
+      "issues": [
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f037e16a64ae154ad352ea",
+      "title": "Solana's Bid to Become a Liquidity Hub and Compete with Ethereum",
+      "score": 110,
+      "articles": 11,
+      "lifecycle": "hot",
+      "issues": [
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f037ed6a64ae154ad352ec",
+      "title": "Binance's BNB Navigates Crypto Market Volatility",
+      "score": 110,
+      "articles": 10,
+      "lifecycle": "hot",
+      "issues": [
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f037f26a64ae154ad352ed",
+      "title": "BNB Chain's Ascent: Tokenizing Tradition, Courting Memecoins",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f037f76a64ae154ad352ee",
+      "title": "Wall Street Banks Embrace Crypto with Citi Custody Plans",
+      "score": 100,
+      "articles": 5,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f037fd6a64ae154ad352ef",
+      "title": "Savvy Trader Profits from Crypto Volatility, Fueling Debate",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "cooling",
+      "issues": []
+    },
+    {
+      "id": "68f038036a64ae154ad352f0",
+      "title": "Crypto Market Volatility Tied to Geopolitics and Macroeconomics",
+      "score": 100,
+      "articles": 5,
+      "lifecycle": "cooling",
+      "issues": []
+    },
+    {
+      "id": "68f0380b6a64ae154ad352f2",
+      "title": "JPMorgan Deepens Crypto and National Security Ties",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f038126a64ae154ad352f4",
+      "title": "WazirX Overcomes $234M Hack, Secures Court Approval for Restructuring",
+      "score": 100,
+      "articles": 6,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f038166a64ae154ad352f5",
+      "title": "Strategy Bets Big on Bitcoin Amid Crypto Volatility",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "cooling",
+      "issues": []
+    },
+    {
+      "id": "68f03dd4a58523ef72254235",
+      "title": "Ripple Expands with $1B XRP Treasury, Stablecoin Push",
+      "score": 90,
+      "articles": 18,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate",
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f102b7f791cb6cf7118335",
+      "title": "Kenya Embraces Crypto Regulation: A New Era Dawns",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f102c1f791cb6cf7118337",
+      "title": "BlackRock's Blockchain Ambitions and Crypto Tensions",
+      "score": 100,
+      "articles": 5,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f102caf791cb6cf7118339",
+      "title": "Ethereum Ecosystem Attracts Talent and Institutional Investment",
+      "score": 90,
+      "articles": 14,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate",
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f102d2f791cb6cf711833b",
+      "title": "Crypto ETF Flows Reflect Shifting Market Sentiment",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f102d6f791cb6cf711833c",
+      "title": "Kraken Expands US Derivatives Offerings Through Acquisitions",
+      "score": 100,
+      "articles": 6,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f102daf791cb6cf711833d",
+      "title": "Standard Chartered and OKX Partner to Expand Crypto Custody in Europe",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "rising",
+      "issues": []
+    },
+    {
+      "id": "68f102dff791cb6cf711833e",
+      "title": "Bitfarms Navigates Crypto Downturn with AI Pivot and Financing",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "rising",
+      "issues": []
+    },
+    {
+      "id": "68f102f3f791cb6cf7118341",
+      "title": "Paxos' $300T Stablecoin Blunder Underscores Crypto Risks",
+      "score": 100,
+      "articles": 6,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f102f8f791cb6cf7118342",
+      "title": "Tether's Expansion, Regulation, and Ecosystem Support",
+      "score": 80,
+      "articles": 5,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f114fd478081d083626842",
+      "title": "Dogecoin's Volatility Amid Adoption Efforts",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f1150b478081d083626843",
+      "title": "Canaan Leads Crypto Mining Sustainability Push in Canada",
+      "score": 100,
+      "articles": 5,
+      "lifecycle": "rising",
+      "issues": []
+    },
+    {
+      "id": "68f11511478081d083626844",
+      "title": "Dogecoin's Resilience Amid Crypto Market Shifts",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1216571a35cf592dc2d1d",
+      "title": "The Rise of ChatGPT and Its Potential Disruptive Impact",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f12940fa840467d4eb05ec",
+      "title": "SharpLink Bets Big on Ether, Drawing Investor Interest",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "rising",
+      "issues": []
+    },
+    {
+      "id": "68f132216c15d3927e402264",
+      "title": "Microsoft's AI Ambitions: Boosting Profits or Hindering Progress?",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f132256c15d3927e402265",
+      "title": "Crypto's Volatile Path: Conflicting Signals and Emerging Threats",
+      "score": 90,
+      "articles": 65,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate",
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f132346c15d3927e402266",
+      "title": "HBAR Navigates Volatile Crypto Market Amid Global Pressures",
+      "score": 100,
+      "articles": 5,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f132396c15d3927e402267",
+      "title": "Crypto Market Faces Continued Bearish Pressure",
+      "score": 110,
+      "articles": 17,
+      "lifecycle": "hot",
+      "issues": [
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f1324e6c15d3927e402269",
+      "title": "Litecoin Emerges as Crypto Market Outperformer",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f132526c15d3927e40226a",
+      "title": "Visa's Bet on Programmable Money and the DeFi Future",
+      "score": 80,
+      "articles": 4,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f132596c15d3927e40226b",
+      "title": "Crypto Advocate Roger Ver Settles $50M Tax Case with US",
+      "score": 110,
+      "articles": 11,
+      "lifecycle": "hot",
+      "issues": [
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f1325e6c15d3927e40226c",
+      "title": "Steak 'n Shake Abandons Ethereum Amid Bitcoin Loyalists",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f132626c15d3927e40226d",
+      "title": "BRICS Challenges Dollar Dominance with Gold, Crypto",
+      "score": 100,
+      "articles": 5,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f132686c15d3927e40226e",
+      "title": "Zcash's Surprising Resilience Amidst Crypto Volatility",
+      "score": 100,
+      "articles": 9,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f1328e6c15d3927e40226f",
+      "title": "BitMine Capitalizes on Ethereum Dip, Amassing Millions of ETH",
+      "score": 100,
+      "articles": 5,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f132b46c15d3927e402270",
+      "title": "UK Embraces Crypto Innovation with FCA Regulatory Shift",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f132c06c15d3927e402271",
+      "title": "Crypto Miner IREN Expands into AI, Seeks Funding",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f132cb6c15d3927e402272",
+      "title": "Whales Accumulate Cardano Amidst ETF Uncertainty",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f132d26c15d3927e402273",
+      "title": "Galaxy Navigates Crypto Market Shifts, Expands Beyond Mining",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f132da6c15d3927e402274",
+      "title": "Morgan Stanley Embraces Crypto, Predicting Market Shifts",
+      "score": 100,
+      "articles": 8,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f132e76c15d3927e402275",
+      "title": "DeFi Faces Regulatory Pressure Amid Decentralization Debate",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f132f76c15d3927e402276",
+      "title": "Altcoin Cycles: Volatility, Recovery, and Bitcoin's Resilience",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f132fc6c15d3927e402277",
+      "title": "Kalshi's Rise as Dominant Crypto Prediction Market",
+      "score": 110,
+      "articles": 10,
+      "lifecycle": "hot",
+      "issues": [
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f133016c15d3927e402278",
+      "title": "Whale Trader's Bearish Crypto Bets Spark Manipulation Fears",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f133066c15d3927e402279",
+      "title": "BRICS Nations Reshape Trade with Yuan, Crypto Policies",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1330b6c15d3927e40227a",
+      "title": "The Fragile Power and Hidden Biases of AI Models",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "cooling",
+      "issues": []
+    },
+    {
+      "id": "68f17641adf726e41839e81b",
+      "title": "",
+      "score": 60,
+      "articles": 1,
+      "lifecycle": "emerging",
+      "issues": [
+        "generic",
+        "missing_data"
+      ]
+    },
+    {
+      "id": "68f17647adf726e41839e81c",
+      "title": "",
+      "score": 60,
+      "articles": 1,
+      "lifecycle": "emerging",
+      "issues": [
+        "generic",
+        "missing_data"
+      ]
+    },
+    {
+      "id": "68f17660adf726e41839e81d",
+      "title": "",
+      "score": 60,
+      "articles": 1,
+      "lifecycle": "emerging",
+      "issues": [
+        "generic",
+        "missing_data"
+      ]
+    },
+    {
+      "id": "68f17671adf726e41839e81f",
+      "title": "",
+      "score": 60,
+      "articles": 1,
+      "lifecycle": "emerging",
+      "issues": [
+        "generic",
+        "missing_data"
+      ]
+    },
+    {
+      "id": "68f17678adf726e41839e820",
+      "title": "",
+      "score": 60,
+      "articles": 1,
+      "lifecycle": "emerging",
+      "issues": [
+        "generic",
+        "missing_data"
+      ]
+    },
+    {
+      "id": "68f17688adf726e41839e821",
+      "title": "",
+      "score": 60,
+      "articles": 1,
+      "lifecycle": "emerging",
+      "issues": [
+        "generic",
+        "missing_data"
+      ]
+    },
+    {
+      "id": "68f176d0adf726e41839e829",
+      "title": "",
+      "score": 60,
+      "articles": 1,
+      "lifecycle": "emerging",
+      "issues": [
+        "generic",
+        "missing_data"
+      ]
+    },
+    {
+      "id": "68f176dfadf726e41839e82b",
+      "title": "",
+      "score": 60,
+      "articles": 1,
+      "lifecycle": "emerging",
+      "issues": [
+        "generic",
+        "missing_data"
+      ]
+    },
+    {
+      "id": "68f183df7366f3560d9e0f7c",
+      "title": "Nasdaq-Listed Firm Raises $230M Using Bitcoin and Crypto",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f1b9edfdcae8c027f50d15",
+      "title": "Japan Leads the Charge Against Crypto Insider Trading",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1ba0efdcae8c027f50d16",
+      "title": "Bitcoin Mining Stocks Ride Crypto's Volatile Waves",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1ba25fdcae8c027f50d18",
+      "title": "TSMC Leads Semiconductor Surge with AI Chip Dominance",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1ba31fdcae8c027f50d19",
+      "title": "Crypto Venture Daylight Raises $75M for Decentralized Energy Network",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1ba37fdcae8c027f50d1a",
+      "title": "A16z Bets Big on Solana's Decentralized Finance Future",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "rising",
+      "issues": []
+    },
+    {
+      "id": "68f1ba56fdcae8c027f50d1b",
+      "title": "Stellar Navigates Volatility Amid Institutional Adoption",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1ba6cfdcae8c027f50d1d",
+      "title": "Figment Expands Staking Services Through Rated Labs Acquisition",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1ba80fdcae8c027f50d1e",
+      "title": "CoinDesk 20 Index Performance and Internet Computer (ICP) Decline",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1baa9fdcae8c027f50d1f",
+      "title": "Feds Uncover Massive Crypto Fraud Linked to LuBian",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1bacdfdcae8c027f50d20",
+      "title": "Traditional Finance Integrates Crypto Capabilities",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1badcfdcae8c027f50d21",
+      "title": "CME's Expanding Crypto Futures Dominance",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1bae9fdcae8c027f50d22",
+      "title": "Sony Bank Seeks US Crypto Banking License",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1baeffdcae8c027f50d23",
+      "title": "Ethereum Treasury Firm ETHZilla Struggles with Valuation",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1bb06fdcae8c027f50d24",
+      "title": "Regulators Approve Crypto-Focused Erebor Bank Backed by Tech Titans",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1bb0cfdcae8c027f50d25",
+      "title": "Crypto Providers Push for Leveraged ETFs Despite Regulatory Concerns",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1bb13fdcae8c027f50d26",
+      "title": "OpenAI's High-Stakes Bet on the Future of AI",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1bb1ffdcae8c027f50d27",
+      "title": "Backpack Navigates Crypto Regulation with Tokenized Stocks",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1bb26fdcae8c027f50d28",
+      "title": "Cloudflare Collaborates with Payment Giants for AI-Powered Commerce",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1bb2dfdcae8c027f50d29",
+      "title": "Crypto's Resilience Amid Market Volatility: Bitwise Analysis",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1bb34fdcae8c027f50d2a",
+      "title": "SBF Blames Biden Admin for 25-Year Sentence, Alleges Political Targeting",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f1bb3bfdcae8c027f50d2b",
+      "title": "Taiwanese Stablecoin Firm OwlTing Debuts on Nasdaq",
+      "score": 100,
+      "articles": 2,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f22ded7082f49df5695541",
+      "title": "Uniswap Bridges Solana to Address DeFi Fragmentation",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f2785f7082f49df56955dc",
+      "title": "TRON Strengthens Global Crypto Infrastructure Role",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f28d1b7082f49df5695626",
+      "title": "Apex Trader Funding: Empowering Disciplined Traders",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f29bcf7082f49df5695650",
+      "title": "Ether on the Brink of a Supercycle as Institutional Demand Surges",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f29bd67082f49df5695651",
+      "title": "Ondo Finance Challenges Nasdaq's Tokenization Plans",
+      "score": 100,
+      "articles": 4,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f2f3697082f49df569569d",
+      "title": "Newsmax's Crypto Push: Blending Politics and Mainstream Adoption",
+      "score": 80,
+      "articles": 3,
+      "lifecycle": "emerging",
+      "issues": [
+        "generic"
+      ]
+    },
+    {
+      "id": "68f32d157082f49df56956c5",
+      "title": "Stablecoins at the Crossroads of Finance and Regulation",
+      "score": 80,
+      "articles": 6,
+      "lifecycle": "emerging",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f32d197082f49df56956c6",
+      "title": "Bitcoin Navigates Volatility Amid Market Tensions",
+      "score": 110,
+      "articles": 73,
+      "lifecycle": "hot",
+      "issues": [
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f32d207082f49df56956c7",
+      "title": "Ethereum Ecosystem Attracts Talent and Institutional Investment",
+      "score": 90,
+      "articles": 14,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate",
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f32d2c7082f49df56956c8",
+      "title": "Ripple Expands with $1B XRP Treasury, Stablecoin Push",
+      "score": 90,
+      "articles": 18,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate",
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f32d337082f49df56956c9",
+      "title": "Tether's Expansion, Regulation, and Ecosystem Support",
+      "score": 80,
+      "articles": 5,
+      "lifecycle": "emerging",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f32d377082f49df56956ca",
+      "title": "XRP Volatility and Adoption Amid Regulatory Uncertainty",
+      "score": 80,
+      "articles": 7,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f32d3b7082f49df56956cb",
+      "title": "Visa's Bet on Programmable Money and the DeFi Future",
+      "score": 80,
+      "articles": 4,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f32d467082f49df56956cd",
+      "title": "Gold Surges to $30T Milestone as Safe-Haven Asset",
+      "score": 80,
+      "articles": 8,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f32d4e7082f49df56956ce",
+      "title": "Binance's Acquisitions and Crypto Listing Debates",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": []
+    },
+    {
+      "id": "68f32d527082f49df56956cf",
+      "title": "Coinbase's Expansion, Innovation, and Regulatory Tensions",
+      "score": 80,
+      "articles": 5,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f32d597082f49df56956d0",
+      "title": "BlackRock's Stablecoin Push: Bridging Traditional Finance and Crypto",
+      "score": 80,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f353187082f49df56956df",
+      "title": "OpenSea Pivots to Crypto Trading Hub Amid NFT Slowdown",
+      "score": 100,
+      "articles": 6,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f3995d7082f49df5695720",
+      "title": "Bitcoin's Hashrate Surges Amidst Market Volatility",
+      "score": 110,
+      "articles": 65,
+      "lifecycle": "hot",
+      "issues": [
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f3b14a7082f49df5695742",
+      "title": "Binance's Expansion and Regulatory Challenges in Crypto",
+      "score": 80,
+      "articles": 3,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f3b68b7082f49df569574b",
+      "title": "Crypto's Volatile Path: Conflicting Signals and Emerging Threats",
+      "score": 90,
+      "articles": 65,
+      "lifecycle": "hot",
+      "issues": [
+        "duplicate",
+        "high_performer"
+      ]
+    },
+    {
+      "id": "68f3c6597082f49df5695763",
+      "title": "Arthur Hayes Launches $250M Crypto Private Equity Fund",
+      "score": 100,
+      "articles": 3,
+      "lifecycle": "emerging",
+      "issues": []
+    },
+    {
+      "id": "68f3db577082f49df569577d",
+      "title": "Shiba Inu's Speculative Ride: Promises and Perils",
+      "score": 80,
+      "articles": 3,
+      "lifecycle": "emerging",
+      "issues": [
+        "duplicate"
+      ]
+    },
+    {
+      "id": "68f3edcd7082f49df5695784",
+      "title": "Benzinga's Financial Insights: Collectibles, Stocks, and ETFs",
+      "score": 100,
+      "articles": 5,
+      "lifecycle": "hot",
+      "issues": []
+    }
+  ],
+  "recommendations": [
+    {
+      "category": "Generic",
+      "action": "DELETE",
+      "confidence": "HIGH",
+      "count": 11,
+      "articles": 33,
+      "priority": "MEDIUM"
+    },
+    {
+      "category": "Duplicates",
+      "action": "MERGE",
+      "confidence": "MEDIUM",
+      "count": 24,
+      "priority": "HIGH"
+    }
+  ]
+}

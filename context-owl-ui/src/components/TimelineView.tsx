@@ -4,6 +4,7 @@ import { format, differenceInDays, parseISO } from 'date-fns';
 import { motion } from 'framer-motion';
 import { Sparkles, TrendingUp, Flame, Zap, Star, Wind, X } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from './Card';
+import { narrativesAPI } from '../api';
 
 interface TimelineRowProps {
   narrative: Narrative;
@@ -196,9 +197,6 @@ const TimelineRow = ({ narrative, dateRange, onNarrativeClick, selectedDate }: T
                   <span className="text-amber-300"> (historical, now {lifecycleConfig[currentState as keyof typeof lifecycleConfig]?.label || currentState})</span>
                 )}
               </div>
-              {narrative.mention_velocity && (
-                <div>Velocity: {Math.round(narrative.mention_velocity)} per day</div>
-              )}
             </div>
           </div>
         </div>
@@ -209,6 +207,8 @@ const TimelineRow = ({ narrative, dateRange, onNarrativeClick, selectedDate }: T
 
 export const TimelineView = ({ narratives, selectedDate }: TimelineViewProps) => {
   const [expandedNarrative, setExpandedNarrative] = useState<Narrative | null>(null);
+  const [loadingArticles, setLoadingArticles] = useState(false);
+  const [articlesFetchError, setArticlesFetchError] = useState<string | null>(null);
 
   const dateRange = useMemo(() => {
     if (narratives.length === 0) {
@@ -227,6 +227,40 @@ export const TimelineView = ({ narratives, selectedDate }: TimelineViewProps) =>
     return { minDate, maxDate, totalDays };
   }, [narratives]);
 
+  const handleNarrativeClick = async (narrative: Narrative) => {
+    console.log('[DEBUG] Timeline narrative clicked - ID:', narrative._id, 'Title:', narrative.title);
+    setArticlesFetchError(null);
+    
+    // If narrative already has articles, just show it
+    if (narrative.articles && narrative.articles.length > 0) {
+      console.log('[DEBUG] Narrative already has articles:', narrative.articles.length);
+      setExpandedNarrative(narrative);
+      return;
+    }
+    
+    // Otherwise, fetch the full narrative with articles
+    if (narrative._id) {
+      console.log('[DEBUG] Fetching articles for narrative:', narrative._id);
+      setLoadingArticles(true);
+      try {
+        const narrativeWithArticles = await narrativesAPI.getNarrativeById(narrative._id);
+        console.log('[DEBUG] API Response:', narrativeWithArticles);
+        console.log('[DEBUG] Articles in response:', narrativeWithArticles.articles?.length || 0);
+        setExpandedNarrative(narrativeWithArticles);
+      } catch (error) {
+        console.error('[ERROR] Failed to fetch narrative articles:', error);
+        setArticlesFetchError('Failed to load articles. Please try again.');
+        // Still show the narrative even if article fetch fails
+        setExpandedNarrative(narrative);
+      } finally {
+        setLoadingArticles(false);
+      }
+    } else {
+      console.warn('[WARN] Narrative has no _id, cannot fetch articles');
+      setExpandedNarrative(narrative);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 px-4 border-b border-gray-200 dark:border-dark-border pb-2">
@@ -239,7 +273,7 @@ export const TimelineView = ({ narratives, selectedDate }: TimelineViewProps) =>
             key={narrative._id || `${narrative.theme}-${narrative.title}-${index}`}
             narrative={narrative}
             dateRange={dateRange}
-            onNarrativeClick={setExpandedNarrative}
+            onNarrativeClick={handleNarrativeClick}
             selectedDate={selectedDate}
           />
         ))}
@@ -313,11 +347,21 @@ export const TimelineView = ({ narratives, selectedDate }: TimelineViewProps) =>
                 </div>
               )}
 
-              {expandedNarrative.articles && expandedNarrative.articles.length > 0 && (
-                <div>
-                  <h3 className="font-semibold text-lg mb-2">Articles ({expandedNarrative.articles.length})</h3>
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Articles ({expandedNarrative.article_count || 0})</h3>
+                {loadingArticles ? (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    Loading articles...
+                  </div>
+                ) : articlesFetchError ? (
+                  <div className="text-center py-8 text-red-600 dark:text-red-400">
+                    {articlesFetchError}
+                  </div>
+                ) : expandedNarrative.articles && expandedNarrative.articles.length > 0 ? (
                   <div className="space-y-3">
-                    {expandedNarrative.articles.map((article, index) => (
+                    {expandedNarrative.articles.map((article, index) => {
+                      console.log('[DEBUG] Rendering article in modal:', index, article.title);
+                      return (
                       <div
                         key={index}
                         className="p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -336,10 +380,15 @@ export const TimelineView = ({ narratives, selectedDate }: TimelineViewProps) =>
                           <span>{format(parseISO(article.published_at), 'MMM d, yyyy h:mm a')}</span>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    No articles available
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
           </div>
