@@ -9,7 +9,7 @@
 ### 1️⃣ Rotate MongoDB Password (2 min)
 ```
 1. Go to: https://cloud.mongodb.com/
-2. Database Access → Database Users → observantowl → Edit
+2. Database Access → Database Users → [your user] → Edit
 3. Click "Autogenerate Secure Password" → Copy it
 4. Update User
 ```
@@ -18,10 +18,10 @@
 ```bash
 # Local
 nano .env
-# Update: MONGODB_URI="mongodb+srv://observantowl:<NEW_PASSWORD>@cluster0..."
+# Update: MONGODB_URI="mongodb+srv://<username>:<password>@<cluster>..."
 
 # Railway
-railway variables set MONGODB_URI="mongodb+srv://observantowl:<NEW_PASSWORD>@..."
+railway variables set MONGODB_URI="mongodb+srv://<username>:<password>@..."
 ```
 
 ### 3️⃣ Commit Security Fixes (1 min)
@@ -40,7 +40,7 @@ brew install bfg
 cd /tmp
 git clone --mirror git@github.com:mikechavez/crypto-news-aggregator.git
 cd crypto-news-aggregator.git
-bfg --replace-text <(echo 'Jy8ZM_2nf.y2<4VDVD<X==>***REMOVED***')
+bfg --replace-text <(echo '[EXPOSED_PASSWORD]==>***REMOVED***')
 git reflog expire --expire=now --all && git gc --prune=now --aggressive
 ```
 
@@ -54,7 +54,7 @@ git push --force --tags
 ### 6️⃣ Verify (30 sec)
 ```bash
 # Should return nothing:
-git log --all -S "Jy8ZM_2nf.y2<4VDVD<X"
+git log --all -S "[EXPOSED_PASSWORD]"
 ```
 
 ---
@@ -63,8 +63,8 @@ git log --all -S "Jy8ZM_2nf.y2<4VDVD<X"
 
 - **File:** `ARCHIVE_TAB_FIX_SUMMARY.md` line 107
 - **Commit:** `d304639`
-- **Password:** `Jy8ZM_2nf.y2<4VDVD<X`
-- **Cluster:** cluster0.fkronaj.mongodb.net
+- **Password:** [REDACTED]
+- **Cluster:** [REDACTED]
 
 ---
 

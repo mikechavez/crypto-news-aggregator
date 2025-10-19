@@ -22,7 +22,7 @@
 ### Option A: Change Password (Faster)
 1. Go to https://cloud.mongodb.com/
 2. Navigate to: **Database Access** → **Database Users**
-3. Find user: `observantowl`
+3. Find user: [your compromised username]
 4. Click **Edit** → **Edit Password**
 5. Click **Autogenerate Secure Password** (or create a strong one)
 6. Copy the new password
@@ -32,12 +32,12 @@
 1. Go to https://cloud.mongodb.com/
 2. Navigate to: **Database Access** → **Database Users**
 3. Click **Add New Database User**
-4. Username: `observantowl_v2` (or your choice)
+4. Username: [new_username] (different from exposed one)
 5. Click **Autogenerate Secure Password**
 6. Copy the password
 7. Set privileges: **Read and write to any database** (or specific to `crypto_news`)
 8. Click **Add User**
-9. **Delete the old user** `observantowl`
+9. **Delete the old compromised user**
 
 ### Update Environment Variables
 
@@ -47,13 +47,13 @@
 nano .env
 
 # Update the MONGODB_URI line:
-MONGODB_URI="mongodb+srv://observantowl:<NEW_PASSWORD>@cluster0.fkronaj.mongodb.net/?retryWrites=true&w=majority&appName=cluster0"
+MONGODB_URI="mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority&appName=<appname>"
 ```
 
 #### Railway Production
 ```bash
 # Option 1: Using Railway CLI
-railway variables set MONGODB_URI="mongodb+srv://observantowl:<NEW_PASSWORD>@cluster0.fkronaj.mongodb.net/?retryWrites=true&w=majority&appName=cluster0"
+railway variables set MONGODB_URI="mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority&appName=<appname>"
 
 # Option 2: Using Railway Dashboard
 # 1. Go to https://railway.app/
@@ -124,7 +124,7 @@ git clone --mirror git@github.com:mikechavez/crypto-news-aggregator.git
 
 # Remove the exposed password from ALL commits
 cd crypto-news-aggregator.git
-bfg --replace-text <(echo 'Jy8ZM_2nf.y2<4VDVD<X==>***REMOVED***')
+bfg --replace-text <(echo '[EXPOSED_PASSWORD]==>***REMOVED***')
 
 # Alternative: Remove the entire file from history
 # bfg --delete-files ARCHIVE_TAB_FIX_SUMMARY.md
@@ -156,7 +156,7 @@ cd crypto-news-aggregator
 git filter-repo --path ARCHIVE_TAB_FIX_SUMMARY.md --invert-paths
 
 # Or replace the content
-git filter-repo --replace-text <(echo 'Jy8ZM_2nf.y2<4VDVD<X==>***REMOVED***')
+git filter-repo --replace-text <(echo '[EXPOSED_PASSWORD]==>***REMOVED***')
 
 # Verify
 git log --all -S "Jy8ZM_2nf.y2<4VDVD<X"

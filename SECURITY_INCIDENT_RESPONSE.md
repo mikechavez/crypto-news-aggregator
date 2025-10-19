@@ -16,10 +16,10 @@ MongoDB Atlas production credentials were accidentally committed to the git repo
 
 ### Credentials
 - **Service:** MongoDB Atlas
-- **Cluster:** cluster0.fkronaj.mongodb.net
+- **Cluster:** [REDACTED]
 - **Database:** crypto_news
-- **Username:** observantowl
-- **Password:** `Jy8ZM_2nf.y2<4VDVD<X` (EXPOSED)
+- **Username:** [REDACTED]
+- **Password:** [REDACTED] (EXPOSED)
 - **Connection String:** Full `mongodb+srv://` URI with credentials
 
 ### Exposure Details
@@ -52,7 +52,7 @@ git clone --mirror git@github.com:mikechavez/crypto-news-aggregator.git
 
 # Remove the exposed password from all commits
 cd crypto-news-aggregator.git
-bfg --replace-text <(echo 'Jy8ZM_2nf.y2<4VDVD<X==>***REMOVED***')
+bfg --replace-text <(echo '[EXPOSED_PASSWORD]==>***REMOVED***')
 
 # Clean up and repack
 git reflog expire --expire=now --all
@@ -93,13 +93,13 @@ git push origin --force --tags
 #### Step-by-Step MongoDB Atlas Rotation:
 1. **Log into MongoDB Atlas:** https://cloud.mongodb.com/
 2. **Navigate to:** Database Access → Database Users
-3. **Find user:** `observantowl`
+3. **Find user:** [Your compromised username]
 4. **Delete the compromised user** or **Edit Password** to generate a new one
 5. **Update your environment variables:**
    - Update `.env` file locally (already gitignored)
    - Update Railway environment variables:
      ```bash
-     railway variables set MONGODB_URI="mongodb+srv://observantowl:<NEW_PASSWORD>@cluster0.fkronaj.mongodb.net/?retryWrites=true&w=majority&appName=cluster0"
+     railway variables set MONGODB_URI="mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority&appName=<appname>"
      ```
    - Update any other deployment environments (Vercel, etc.)
 6. **Restart all services** to pick up the new credentials
@@ -107,7 +107,7 @@ git push origin --force --tags
 #### Alternative: Create New User
 ```bash
 # In MongoDB Atlas, create a new user with a strong password
-# Username: observantowl_v2 (or similar)
+# Username: <new_username> (different from exposed one)
 # Password: Use MongoDB's password generator (32+ characters)
 # Privileges: readWrite on crypto_news database
 ```
@@ -119,11 +119,11 @@ git push origin --force --tags
 ### 1. Check Git History is Clean
 ```bash
 # Search for any remaining traces of the password
-git log --all --full-history -S "Jy8ZM_2nf.y2<4VDVD<X"
+git log --all --full-history -S "[EXPOSED_PASSWORD]"
 # Should return: nothing
 
 # Search for the connection string pattern
-git log --all --full-history -S "mongodb+srv://observantowl"
+git log --all --full-history -S "mongodb+srv://"
 # Should return: nothing or only references without credentials
 ```
 
@@ -151,7 +151,7 @@ git add .env
 ```bash
 # Search GitHub for your credentials (after history rewrite)
 # Go to: https://github.com/mikechavez/crypto-news-aggregator
-# Use GitHub search: "Jy8ZM_2nf.y2<4VDVD<X"
+# Use GitHub search: "[your exposed password]"
 # Should return: 0 results
 ```
 

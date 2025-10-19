@@ -27,7 +27,7 @@ MongoDB Atlas production credentials were accidentally committed to `ARCHIVE_TAB
 - **Exposed:** Full MongoDB connection string with username and password
 
 ```
-mongodb+srv://observantowl:Jy8ZM_2nf.y2<4VDVD<X@cluster0.fkronaj.mongodb.net/
+mongodb+srv://[REDACTED]:[REDACTED]@[REDACTED].mongodb.net/
 ```
 
 ### Git History Search Results
@@ -76,14 +76,13 @@ config.ini    → .gitignore:95
 ### STEP 1: Rotate MongoDB Credentials 🔐
 **⚠️ DO THIS FIRST - BEFORE REWRITING GIT HISTORY**
 
-1. Go to https://cloud.mongodb.com/
-2. Navigate to: **Database Access** → **Database Users**
-3. Find user: `observantowl`
-4. **Edit Password** → **Autogenerate Secure Password**
-5. Copy the new password
+1. Go to: https://cloud.mongodb.com/
+2. Database Access → Database Users → [your user] → Edit
+3. Click "Autogenerate Secure Password" → Copy it
+4. Update User password
 6. Update environment variables:
    - Local: Edit `.env` file
-   - Railway: `railway variables set MONGODB_URI="..."`
+   - Railway: `railway variables set MONGODB_URI="mongodb+srv://<username>:<password>@<cluster>.mongodb.net/..."` 
    - Vercel: Update in dashboard or CLI
 
 **See `SECURITY_REMEDIATION_STEPS.md` for detailed instructions**
@@ -113,23 +112,23 @@ Refs: Security incident on 2025-10-18"
 
 #### Option A: BFG Repo-Cleaner (Recommended - Fastest)
 ```bash
+# Install BFG (if needed)
 brew install bfg
+
+# Clean history
 cd /tmp
 git clone --mirror git@github.com:mikechavez/crypto-news-aggregator.git
 cd crypto-news-aggregator.git
-bfg --replace-text <(echo 'Jy8ZM_2nf.y2<4VDVD<X==>***REMOVED***')
-git reflog expire --expire=now --all
-git gc --prune=now --aggressive
+bfg --replace-text <(echo '[EXPOSED_PASSWORD]==>***REMOVED***')
+git reflog expire --expire=now --all && git gc --prune=now --aggressive
 ```
 
 #### Option B: git filter-repo (Alternative)
 ```bash
 brew install git-filter-repo
 cd /Users/mc/dev-projects/crypto-news-aggregator
-git filter-repo --replace-text <(echo 'Jy8ZM_2nf.y2<4VDVD<X==>***REMOVED***')
+git filter-repo --replace-text <(echo '[EXPOSED_PASSWORD]==>***REMOVED***')
 ```
-
-**See `SECURITY_REMEDIATION_STEPS.md` for complete instructions**
 
 ### STEP 4: Force Push to GitHub 🚀
 **⚠️ Notify team before doing this!**
@@ -149,13 +148,12 @@ git push origin --force --tags
 ### STEP 5: Verify Cleanup ✅
 ```bash
 # Should return nothing:
-git log --all -S "Jy8ZM_2nf.y2<4VDVD<X"
-
+git log --all -S "[EXPOSED_PASSWORD]"
+```
 # Check GitHub search:
 # https://github.com/mikechavez/crypto-news-aggregator
-# Search: "Jy8ZM_2nf.y2<4VDVD<X"
+# Search: "[EXPOSED_PASSWORD]"
 # Expected: 0 results
-```
 
 ### STEP 6: Monitor MongoDB Access 📊
 1. Check MongoDB Atlas **Activity Feed**
