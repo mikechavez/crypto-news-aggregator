@@ -185,8 +185,8 @@ async def get_recent_articles_for_entity(entity: str, limit: int = 5) -> List[Di
 
 async def get_recent_articles_batch(entities: List[str], limit_per_entity: int = 5) -> Dict[str, List[Dict[str, Any]]]:
     """
-    Batch fetch recent articles for multiple entities in a single query.
-    This eliminates N+1 query problem.
+    Batch fetch recent articles for multiple entities using parallel queries.
+    Uses the existing indexed get_recent_articles_for_entity function in parallel.
     
     Args:
         entities: List of entity names to fetch articles for
@@ -198,77 +198,15 @@ async def get_recent_articles_batch(entities: List[str], limit_per_entity: int =
     if not entities:
         return {}
     
-    db = await mongo_manager.get_async_database()
+    import asyncio
     
-    # Fetch all mentions for all entities in one query
-    # Limit to reasonable number to avoid scanning entire collection
-    mentions_collection = db.entity_mentions
-    cursor = mentions_collection.find(
-        {"entity": {"$in": entities}}
-    ).sort("timestamp", -1).limit(len(entities) * limit_per_entity * 3)  # 3x buffer for duplicates
+    # Fetch articles for all entities in parallel using existing optimized function
+    # This uses the entity+timestamp compound index efficiently
+    tasks = [get_recent_articles_for_entity(entity, limit=limit_per_entity) for entity in entities]
+    results = await asyncio.gather(*tasks)
     
-    # Group article IDs by entity
-    entity_article_ids = {entity: [] for entity in entities}
-    entity_seen_ids = {entity: set() for entity in entities}
-    
-    # Early exit counter to avoid processing too many documents
-    total_processed = 0
-    max_to_process = len(entities) * limit_per_entity * 2  # Stop early if we have enough
-    
-    async for mention in cursor:
-        entity = mention.get("entity")
-        article_id = mention.get("article_id")
-        
-        if entity and article_id and entity in entity_article_ids:
-            if article_id not in entity_seen_ids[entity]:
-                if len(entity_article_ids[entity]) < limit_per_entity:
-                    try:
-                        # Convert string to ObjectId if needed
-                        if isinstance(article_id, str):
-                            entity_article_ids[entity].append(ObjectId(article_id))
-                        else:
-                            entity_article_ids[entity].append(article_id)
-                        entity_seen_ids[entity].add(article_id)
-                    except Exception:
-                        continue
-        
-        # Early exit if we have enough articles for all entities
-        total_processed += 1
-        if total_processed >= max_to_process:
-            # Check if all entities have enough articles
-            if all(len(ids) >= limit_per_entity for ids in entity_article_ids.values()):
-                break
-    
-    # Collect all unique article IDs
-    all_article_ids = set()
-    for article_ids in entity_article_ids.values():
-        all_article_ids.update(article_ids)
-    
-    if not all_article_ids:
-        return {entity: [] for entity in entities}
-    
-    # Fetch all articles in one query
-    articles_collection = db.articles
-    cursor = articles_collection.find(
-        {"_id": {"$in": list(all_article_ids)}}
-    )
-    
-    # Build article lookup by ID
-    articles_by_id = {}
-    async for article in cursor:
-        articles_by_id[article["_id"]] = {
-            "title": article.get("title", ""),
-            "url": article.get("url", ""),
-            "source": article.get("source", ""),
-            "published_at": article.get("published_at").isoformat() if article.get("published_at") else None
-        }
-    
-    # Map articles back to entities
-    result = {}
-    for entity, article_ids in entity_article_ids.items():
-        result[entity] = [articles_by_id[aid] for aid in article_ids if aid in articles_by_id]
-    
-    return result
+    # Map results back to entities
+    return {entity: articles for entity, articles in zip(entities, results)}
 
 
 @router.get("/trending")
