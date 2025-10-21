@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, ArrowUp, Activity, Minus, TrendingDown, Flame, Star } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { TrendingUp, ArrowUp, Activity, Minus, TrendingDown } from 'lucide-react';
 import { signalsAPI } from '../api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Loading } from '../components/Loading';
@@ -67,38 +66,14 @@ const getVelocityIndicator = (velocity: number): { icon: any; label: string; col
   }
 };
 
-type Timeframe = '24h' | '7d' | '30d';
-
-interface TabConfig {
-  id: Timeframe;
-  label: string;
-  description: string;
-}
-
-const TABS: TabConfig[] = [
-  { id: '24h', label: 'Hot', description: 'Breaking news and sudden spikes' },
-  { id: '7d', label: 'Trending', description: 'Gaining momentum this week' },
-  { id: '30d', label: 'Top', description: 'Major ongoing narratives' },
-];
 
 export function Signals() {
   const navigate = useNavigate();
   const [expandedArticles, setExpandedArticles] = useState<Set<number>>(new Set());
-  const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>('7d');
   
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
-    queryKey: ['signals', selectedTimeframe],
-    queryFn: async () => {
-      console.time(`[Signals] API Request (${selectedTimeframe})`);
-      const result = await signalsAPI.getSignals({ limit: 50, timeframe: selectedTimeframe });
-      console.timeEnd(`[Signals] API Request (${selectedTimeframe})`);
-      console.log(`[Signals] Response:`, {
-        signalCount: result.signals?.length || 0,
-        payloadSize: `${(JSON.stringify(result).length / 1024).toFixed(2)} KB`,
-        timeframe: selectedTimeframe
-      });
-      return result;
-    },
+    queryKey: ['signals'],
+    queryFn: () => signalsAPI.getSignals({ limit: 50 }),
     refetchInterval: 30000, // 30 seconds
     staleTime: 0, // Always consider data stale
   });
@@ -113,14 +88,13 @@ export function Signals() {
     console.log('Recent articles count:', data.signals[0].recent_articles?.length);
   }
 
-  const currentTab = TABS.find(tab => tab.id === selectedTimeframe) || TABS[1];
 
   return (
     <div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Market Signals</h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Real-time detection of unusual market activity and emerging trends
+          Top entities showing unusual activity in the last 24 hours
         </p>
         {dataUpdatedAt && (
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
@@ -129,41 +103,7 @@ export function Signals() {
         )}
       </div>
 
-      {/* Tab Navigation */}
-      <div className="mb-6">
-        <div className="flex gap-2 border-b border-gray-200 dark:border-dark-border">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setSelectedTimeframe(tab.id)}
-              className={cn(
-                'px-4 py-3 font-medium text-sm transition-colors relative flex items-center gap-2',
-                selectedTimeframe === tab.id
-                  ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-              )}
-            >
-              {tab.id === '24h' && <Flame className="w-4 h-4" />}
-              {tab.id === '7d' && <TrendingUp className="w-4 h-4" />}
-              {tab.id === '30d' && <Star className="w-4 h-4" />}
-              {tab.label} ({tab.id})
-            </button>
-          ))}
-        </div>
-        <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
-          {currentTab.description}
-        </p>
-      </div>
-
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={selectedTimeframe}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          transition={{ duration: 0.2 }}
-          className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
-        >
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {data?.signals.map((signal, index) => {
           const ticker = signal.entity.match(/\$[A-Z]+/)?.[0];
           const entityName = signal.entity.replace(/\$[A-Z]+/g, '').trim();
@@ -284,8 +224,7 @@ export function Signals() {
           </Card>
           );
         })}
-        </motion.div>
-      </AnimatePresence>
+      </div>
 
       {data?.signals.length === 0 && (
         <div className="text-center py-12">
