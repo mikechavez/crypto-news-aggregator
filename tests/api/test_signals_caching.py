@@ -76,8 +76,10 @@ async def test_signal_data(mongo_db):
 def clear_cache():
     """Clear the in-memory cache before each test."""
     signals._memory_cache.clear()
+    signals._signals_cache.clear()
     yield
     signals._memory_cache.clear()
+    signals._signals_cache.clear()
 
 
 # ============================================================================
@@ -467,3 +469,232 @@ async def test_cache_performance_improvement(test_signal_data):
     # In production, cached should be much faster
     # In tests, we just verify it doesn't get slower
     assert time2 <= time1 * 1.5  # Allow some variance in test environment
+
+
+# ============================================================================
+# Tests for GET /api/v1/signals endpoint caching (5 min TTL)
+# ============================================================================
+
+def test_signals_cache_empty():
+    """Test that signals cache is initially empty."""
+    assert len(signals._signals_cache) == 0
+
+
+def test_signals_cache_stores_data():
+    """Test that GET /signals endpoint stores data in dedicated cache."""
+    cache_key = "signals:top20"
+    test_data = {"count": 3, "signals": [{"entity": "$BTC"}]}
+    
+    # Manually set cache
+    signals._signals_cache[cache_key] = (test_data, datetime.now())
+    
+    # Verify it's stored
+    assert cache_key in signals._signals_cache
+    cached_data, cached_time = signals._signals_cache[cache_key]
+    assert cached_data == test_data
+
+
+def test_signals_cache_expiration():
+    """Test that signals cache expires after 5 minutes."""
+    cache_key = "signals:top20"
+    test_data = {"count": 1, "signals": []}
+    
+    # Set cache with expired timestamp (6 minutes ago)
+    expired_time = datetime.now() - timedelta(minutes=6)
+    signals._signals_cache[cache_key] = (test_data, expired_time)
+    
+    # Check if expired
+    cached_data, cached_time = signals._signals_cache[cache_key]
+    time_diff = datetime.now() - cached_time
+    
+    # Should be expired (> 5 minutes)
+    assert time_diff > signals._signals_cache_ttl
+
+
+def test_signals_cache_not_expired():
+    """Test that signals cache is valid within 5 minutes."""
+    cache_key = "signals:top20"
+    test_data = {"count": 1, "signals": []}
+    
+    # Set cache with recent timestamp (2 minutes ago)
+    recent_time = datetime.now() - timedelta(minutes=2)
+    signals._signals_cache[cache_key] = (test_data, recent_time)
+    
+    # Check if still valid
+    cached_data, cached_time = signals._signals_cache[cache_key]
+    time_diff = datetime.now() - cached_time
+    
+    # Should not be expired (< 5 minutes)
+    assert time_diff < signals._signals_cache_ttl
+
+
+@pytest.mark.asyncio
+async def test_get_signals_endpoint_caching(test_signal_data):
+    """Test that GET /signals endpoint uses cache."""
+    settings = get_settings()
+    
+    async with get_test_client() as client:
+        # First request (cache miss)
+        response1 = await client.get(
+            f"{settings.API_V1_STR}/signals",
+            headers={"X-API-Key": settings.API_KEY}
+        )
+        
+        # Second request (cache hit)
+        response2 = await client.get(
+            f"{settings.API_V1_STR}/signals",
+            headers={"X-API-Key": settings.API_KEY}
+        )
+    
+    assert response1.status_code == 200
+    assert response2.status_code == 200
+    
+    data1 = response1.json()
+    data2 = response2.json()
+    
+    # Results should be identical (from cache)
+    assert data1["signals"] == data2["signals"]
+    assert data1["cached_at"] == data2["cached_at"]
+    
+    # Cache should contain the key
+    assert "signals:top20" in signals._signals_cache
+
+
+@pytest.mark.asyncio
+async def test_get_signals_cache_ttl_5_minutes(test_signal_data):
+    """Test that GET /signals cache has 5-minute TTL."""
+    settings = get_settings()
+    
+    async with get_test_client() as client:
+        # Make initial request to populate cache
+        response = await client.get(
+            f"{settings.API_V1_STR}/signals",
+            headers={"X-API-Key": settings.API_KEY}
+        )
+    
+    assert response.status_code == 200
+    
+    # Verify cache entry exists
+    cache_key = "signals:top20"
+    assert cache_key in signals._signals_cache
+    
+    # Check TTL is set correctly
+    cached_data, cached_time = signals._signals_cache[cache_key]
+    time_since_cached = datetime.now() - cached_time
+    
+    # Should be very recent (just cached)
+    assert time_since_cached < timedelta(seconds=5)
+
+
+@pytest.mark.asyncio
+async def test_get_signals_cache_invalidation(test_signal_data):
+    """Test that expired cache is invalidated and refreshed."""
+    settings = get_settings()
+    cache_key = "signals:top20"
+    
+    # Pre-populate cache with expired data
+    old_data = {"count": 0, "signals": [], "cached_at": "2020-01-01T00:00:00"}
+    expired_time = datetime.now() - timedelta(minutes=6)
+    signals._signals_cache[cache_key] = (old_data, expired_time)
+    
+    async with get_test_client() as client:
+        # Request should invalidate expired cache and fetch fresh data
+        response = await client.get(
+            f"{settings.API_V1_STR}/signals",
+            headers={"X-API-Key": settings.API_KEY}
+        )
+    
+    assert response.status_code == 200
+    data = response.json()
+    
+    # Should have fresh data (not the old cached data)
+    assert data["count"] > 0  # Should have test signals
+    assert data["cached_at"] != "2020-01-01T00:00:00"
+    
+    # Cache should be updated with fresh timestamp
+    cached_data, cached_time = signals._signals_cache[cache_key]
+    time_since_cached = datetime.now() - cached_time
+    assert time_since_cached < timedelta(seconds=5)
+
+
+@pytest.mark.asyncio
+async def test_get_signals_limit_20_enforced(test_signal_data):
+    """Test that GET /signals always returns max 20 results."""
+    settings = get_settings()
+    
+    # Create 30 test signals
+    db = await mongo_manager.get_async_database()
+    collection = db.signal_scores
+    
+    test_entities = []
+    for i in range(30):
+        entity = f"CACHE_TEST_{i}"
+        test_entities.append(entity)
+        await upsert_signal_score(
+            entity=entity,
+            entity_type="ticker",
+            score=float(100 - i),  # Descending scores
+            velocity=1.0,
+            source_count=1,
+            sentiment={"avg": 0.5, "min": 0.0, "max": 1.0, "divergence": 0.1},
+            first_seen=datetime.now(timezone.utc),
+        )
+    
+    try:
+        async with get_test_client() as client:
+            response = await client.get(
+                f"{settings.API_V1_STR}/signals",
+                headers={"X-API-Key": settings.API_KEY}
+            )
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should return exactly 20 results
+        assert len(data["signals"]) == 20
+        assert data["count"] == 20
+        
+        # Should be top 20 by score
+        assert data["signals"][0]["entity"] == "CACHE_TEST_0"  # Highest score
+        assert data["signals"][19]["entity"] == "CACHE_TEST_19"  # 20th highest
+        
+    finally:
+        # Clean up
+        await collection.delete_many({"entity": {"$in": test_entities}})
+        signals._signals_cache.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_signals_performance_with_cache(test_signal_data):
+    """Test that caching improves performance for GET /signals."""
+    settings = get_settings()
+    
+    async with get_test_client() as client:
+        # Clear cache
+        signals._signals_cache.clear()
+        
+        # First request (uncached)
+        start1 = time.time()
+        response1 = await client.get(
+            f"{settings.API_V1_STR}/signals",
+            headers={"X-API-Key": settings.API_KEY}
+        )
+        time1 = time.time() - start1
+        
+        # Second request (cached)
+        start2 = time.time()
+        response2 = await client.get(
+            f"{settings.API_V1_STR}/signals",
+            headers={"X-API-Key": settings.API_KEY}
+        )
+        time2 = time.time() - start2
+    
+    assert response1.status_code == 200
+    assert response2.status_code == 200
+    
+    print(f"\nGET /signals performance:")
+    print(f"  Uncached: {time1:.3f}s")
+    print(f"  Cached:   {time2:.3f}s")
+    
+    # Cached request should not be slower
+    assert time2 <= time1 * 1.5
