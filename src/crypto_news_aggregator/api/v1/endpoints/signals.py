@@ -2,6 +2,7 @@
 Signals API endpoints for trending entity detection.
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -20,6 +21,10 @@ logger = logging.getLogger(__name__)
 # In-memory cache as fallback when Redis is not available
 _memory_cache: Dict[str, tuple[Any, datetime]] = {}
 _cache_duration = timedelta(seconds=60)  # Cache for 60 seconds
+
+# In-memory cache for pre-computed signal data
+_signals_cache: Dict[str, tuple[Any, datetime]] = {}
+_signals_cache_ttl = timedelta(minutes=5)  # 5 minute TTL
 
 
 def get_from_cache(cache_key: str) -> Optional[Any]:
@@ -181,6 +186,100 @@ async def get_recent_articles_for_entity(entity: str, limit: int = 5) -> List[Di
         })
     
     return articles
+
+
+@router.get("")
+async def get_signals() -> Dict[str, Any]:
+    """
+    Get top 20 trending signals sorted by score descending.
+    
+    Results are cached in-memory for 5 minutes to reduce database load.
+    
+    Returns:
+        List of top 20 signals with entity, score, and metadata
+    """
+    cache_key = "signals:top20"
+    
+    # Check in-memory cache
+    if cache_key in _signals_cache:
+        cached_data, cached_time = _signals_cache[cache_key]
+        if datetime.now() - cached_time < _signals_cache_ttl:
+            return cached_data
+        else:
+            # Remove expired entry
+            del _signals_cache[cache_key]
+    
+    # Cache miss - fetch from database
+    try:
+        db = await mongo_manager.get_async_database()
+        collection = db.signal_scores
+        
+        # Define async function to fetch signals
+        async def fetch_signals():
+            cursor = collection.find({}).sort("score", -1).limit(20)
+            signals = []
+            async for signal in cursor:
+                signals.append({
+                    "entity": signal.get("entity", ""),
+                    "entity_type": signal.get("entity_type", ""),
+                    "score": signal.get("score", 0.0),
+                    "velocity": signal.get("velocity", 0.0),
+                    "source_count": signal.get("source_count", 0),
+                    "sentiment": signal.get("sentiment", {}),
+                    "is_emerging": signal.get("is_emerging", False),
+                    "narrative_ids": signal.get("narrative_ids", []),
+                    "first_seen": signal.get("first_seen").isoformat() if signal.get("first_seen") else None,
+                    "last_updated": signal.get("last_updated").isoformat() if signal.get("last_updated") else None,
+                })
+            return signals
+        
+        # Define async function to count narratives for entities
+        async def fetch_narrative_counts(entity_list):
+            narrative_counts = await db.narratives.aggregate([
+                {"$match": {"entities": {"$in": entity_list}}},
+                {"$unwind": "$entities"},
+                {"$match": {"entities": {"$in": entity_list}}},
+                {"$group": {"_id": "$entities", "count": {"$sum": 1}}}
+            ]).to_list(length=None)
+            
+            counts = {}
+            for doc in narrative_counts:
+                counts[doc["_id"]] = doc["count"]
+            return counts
+        
+        # First, get entity list from top 20 signals (lightweight query)
+        cursor = collection.find({}, {"entity": 1}).sort("score", -1).limit(20)
+        entity_list = []
+        async for doc in cursor:
+            entity_list.append(doc.get("entity", ""))
+        
+        # Fetch signals and narrative counts in parallel using asyncio.gather
+        signals, narrative_counts = await asyncio.gather(
+            fetch_signals(),
+            fetch_narrative_counts(entity_list)
+        )
+        
+        # Merge narrative_count into each signal
+        for signal in signals:
+            entity = signal["entity"]
+            signal["narrative_count"] = narrative_counts.get(entity, 0)
+        
+        response = {
+            "count": len(signals),
+            "signals": signals,
+            "cached_at": datetime.now().isoformat(),
+        }
+        
+        # Store in cache with current timestamp
+        _signals_cache[cache_key] = (response, datetime.now())
+        
+        return response
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch signals: {str(e)}"
+        )
 
 
 async def get_recent_articles_batch(entities: List[str], limit_per_entity: int = 5) -> Dict[str, List[Dict[str, Any]]]:

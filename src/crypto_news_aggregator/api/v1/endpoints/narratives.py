@@ -6,6 +6,7 @@ Provides access to detected narrative clusters from co-occurring entities.
 
 import json
 import logging
+from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel, Field
@@ -18,6 +19,10 @@ from ....db.mongodb import mongo_manager
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# In-memory cache for narratives with 1-minute TTL
+_narratives_cache: Dict[str, tuple[Any, datetime]] = {}
+_narratives_cache_ttl = timedelta(minutes=1)
 
 
 async def get_articles_for_narrative(article_ids: List[str], limit: int = 20) -> List[Dict[str, Any]]:
@@ -143,44 +148,82 @@ class NarrativeResponse(BaseModel):
 
 @router.get("/active", response_model=List[NarrativeResponse])
 async def get_active_narratives_endpoint(
-    limit: int = Query(50, ge=1, le=200, description="Maximum number of narratives to return")
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of narratives to return"),
+    lifecycle_state: Optional[str] = Query(None, description="Filter by lifecycle_state (emerging, hot, mature)")
 ):
     """
-    Get active narrative clusters.
+    Get active narrative clusters using optimized aggregation pipeline.
     
     Returns the most recently updated narratives, representing groups of
     co-occurring crypto entities with AI-generated thematic summaries.
     
-    Results are cached for 10 minutes to reduce database load.
+    Results are cached in-memory for 1 minute to reduce database load.
     
     Args:
         limit: Maximum number of narratives (1-200, default 50)
+        lifecycle_state: Optional filter by lifecycle_state
     
     Returns:
         List of narrative objects with theme, entities, story, and metadata
     """
-    # Try to get from cache
-    cache_key = f"narratives:active:{limit}"
+    # Check in-memory cache
+    cache_key = f"narratives:active:{limit}:{lifecycle_state or 'all'}"
     
-    try:
-        if redis_client.enabled:
-            cached = redis_client.get(cache_key)
-            if cached:
-                logger.debug(f"Cache hit for {cache_key}")
-                # Parse cached JSON
-                try:
-                    narratives_data = json.loads(cached) if isinstance(cached, str) else cached
-                    return [NarrativeResponse(**n) for n in narratives_data]
-                except (json.JSONDecodeError, TypeError) as e:
-                    logger.warning(f"Failed to parse cached narratives: {e}")
-                    # Continue to fetch from database
-    except Exception as e:
-        logger.warning(f"Redis cache read error: {e}")
-        # Continue without cache
+    if cache_key in _narratives_cache:
+        cached_data, cached_time = _narratives_cache[cache_key]
+        if datetime.now() - cached_time < _narratives_cache_ttl:
+            return cached_data
+        else:
+            # Remove expired entry
+            del _narratives_cache[cache_key]
     
-    # Fetch from database
+    # Cache miss - fetch from database using optimized aggregation pipeline
     try:
-        narratives = await get_active_narratives(limit=limit)
+        db = await mongo_manager.get_async_database()
+        narratives_collection = db.narratives
+        
+        # Build match filter for active states
+        active_states = ['emerging', 'rising', 'hot', 'cooling', 'reactivated']
+        match_stage = {
+            '$or': [
+                {'lifecycle_state': {'$in': active_states}},
+                {'lifecycle_state': {'$exists': False}}
+            ]
+        }
+        if lifecycle_state:
+            match_stage = {'lifecycle_state': lifecycle_state}
+        
+        # Single aggregation pipeline (use inclusion-only projection)
+        pipeline = [
+            {'$match': match_stage},
+            {'$sort': {'last_updated': -1}},
+            {'$limit': limit},
+            {'$project': {
+                '_id': 1,
+                'theme': 1,
+                'title': 1,
+                'summary': 1,
+                'entities': 1,
+                'article_count': 1,
+                'mention_velocity': 1,
+                'lifecycle': 1,
+                'lifecycle_state': 1,
+                'momentum': 1,
+                'recency_score': 1,
+                'entity_relationships': 1,
+                'first_seen': 1,
+                'last_updated': 1,
+                'days_active': 1,
+                'peak_activity': 1,
+                'reawakening_count': 1,
+                'reawakened_from': 1,
+                'resurrection_velocity': 1
+                # Exclude heavy fields by not including them: fingerprint, lifecycle_history, timeline_data
+            }}
+        ]
+        
+        cursor = narratives_collection.aggregate(pipeline)
+        narratives = await cursor.to_list(length=None)
         
         if not narratives:
             return []
@@ -194,7 +237,7 @@ async def get_active_narratives_endpoint(
                 last_updated_str = last_updated.isoformat() if hasattr(last_updated, 'isoformat') else str(last_updated)
             else:
                 # Fallback to current time if no timestamp
-                from datetime import datetime, timezone as tz
+                from datetime import timezone as tz
                 last_updated_str = datetime.now(tz.utc).isoformat()
             
             first_seen = narrative.get("first_seen") or narrative.get("created_at")
@@ -215,42 +258,8 @@ async def get_active_narratives_endpoint(
             # This prevents N+1 query problem and speeds up initial page load from 2 minutes to <1 second
             articles = []
             
-            # Get new lifecycle fields and normalize them
+            # Lifecycle fields (heavy fields excluded in projection)
             lifecycle_state = narrative.get("lifecycle_state")
-            
-            # Normalize lifecycle_history: convert timestamps and rename mention_velocity to velocity
-            lifecycle_history_raw = narrative.get("lifecycle_history")
-            lifecycle_history = None
-            if lifecycle_history_raw:
-                lifecycle_history = []
-                for entry in lifecycle_history_raw:
-                    # Convert timestamp to ISO string if it's a datetime
-                    timestamp = entry.get("timestamp")
-                    if hasattr(timestamp, 'isoformat'):
-                        timestamp_str = timestamp.isoformat()
-                    else:
-                        timestamp_str = str(timestamp)
-                    
-                    # Use 'velocity' if present, otherwise use 'mention_velocity'
-                    velocity = entry.get("velocity", entry.get("mention_velocity", 0.0))
-                    
-                    lifecycle_history.append({
-                        "state": entry.get("state", ""),
-                        "timestamp": timestamp_str,
-                        "article_count": entry.get("article_count", 0),
-                        "velocity": velocity
-                    })
-            
-            # Normalize fingerprint: extract vector if it's a dict with 'vector' field
-            fingerprint_raw = narrative.get("fingerprint")
-            fingerprint = None
-            if fingerprint_raw:
-                if isinstance(fingerprint_raw, dict):
-                    # Old format: {'vector': [...], 'nucleus_entity': '...', ...}
-                    fingerprint = fingerprint_raw.get("vector")
-                elif isinstance(fingerprint_raw, list):
-                    # New format: already a list
-                    fingerprint = fingerprint_raw
             
             # Handle reawakened_from timestamp
             reawakened_from = narrative.get("reawakened_from")
@@ -270,8 +279,8 @@ async def get_active_narratives_endpoint(
                 "mention_velocity": narrative.get("mention_velocity", 0.0),
                 "lifecycle": narrative.get("lifecycle", "emerging"),
                 "lifecycle_state": lifecycle_state,
-                "lifecycle_history": lifecycle_history,
-                "fingerprint": fingerprint,
+                "lifecycle_history": None,  # Excluded for performance
+                "fingerprint": None,  # Excluded for performance
                 "momentum": narrative.get("momentum", "unknown"),
                 "recency_score": narrative.get("recency_score", 0.0),
                 "entity_relationships": narrative.get("entity_relationships", []),
@@ -288,17 +297,13 @@ async def get_active_narratives_endpoint(
                 "story": summary
             })
         
-        # Cache the results for 10 minutes (600 seconds)
-        try:
-            if redis_client.enabled:
-                cache_value = json.dumps(response_data)
-                redis_client.set(cache_key, cache_value, ex=600)
-                logger.debug(f"Cached {len(response_data)} narratives for {cache_key}")
-        except Exception as e:
-            logger.warning(f"Redis cache write error: {e}")
-            # Continue without caching
+        # Convert to response models
+        response = [NarrativeResponse(**n) for n in response_data]
         
-        return [NarrativeResponse(**n) for n in response_data]
+        # Store in cache with current timestamp (1-minute TTL)
+        _narratives_cache[cache_key] = (response, datetime.now())
+        
+        return response
     
     except Exception as e:
         logger.exception(f"Error fetching active narratives: {e}")
