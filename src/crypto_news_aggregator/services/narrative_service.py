@@ -870,46 +870,28 @@ async def detect_narratives(
                     narrative_data["recency_score"] = round(recency_score, 3)
                     
                     try:
-                        # Save new narrative to database with fingerprint
-                        db = await mongo_manager.get_async_database()
-                        narratives_collection = db.narratives
-                        
-                        narrative_doc = {
-                            "theme": theme,
-                            "title": narrative_data["title"],
-                            "summary": narrative_data["summary"],
-                            "nucleus_entity": narrative_data.get("nucleus_entity", ""),
-                            "entities": narrative_data.get("actors", [])[:10],
-                            "article_ids": narrative_data["article_ids"],
-                            "article_count": article_count,
-                            "mention_velocity": round(mention_velocity, 2),
-                            "lifecycle": lifecycle,
-                            "lifecycle_state": lifecycle_state,
-                            "lifecycle_history": lifecycle_history,
-                            "momentum": momentum,
-                            "recency_score": round(recency_score, 3),
-                            "entity_relationships": narrative_data.get("entity_relationships", []),
-                            "fingerprint": fingerprint,
-                            "needs_summary_update": False,
-                            "first_seen": first_seen,
-                            "last_updated": last_updated,
-                            "timeline_data": [],
-                            "peak_activity": {
-                                "date": datetime.now(timezone.utc).date().isoformat(),
-                                "article_count": article_count,
-                                "velocity": round(mention_velocity, 2)
-                            },
-                            "days_active": 1,
-                            "status": lifecycle_state  # Add status field for matching logic
-                        }
-                        
-                        # Validate fingerprint before insertion
+                        # Validate fingerprint before creation
                         if not fingerprint or not fingerprint.get('nucleus_entity'):
                             logger.error(f"Cannot create narrative - invalid fingerprint: {fingerprint}")
                             raise ValueError("Narrative fingerprint must have a valid nucleus_entity")
                         
-                        result = await narratives_collection.insert_one(narrative_doc)
-                        narrative_id = str(result.inserted_id)
+                        # Use upsert_narrative to ensure timestamp validation
+                        narrative_id = await upsert_narrative(
+                            theme=theme,
+                            title=narrative_data["title"],
+                            summary=narrative_data["summary"],
+                            entities=narrative_data.get("actors", [])[:10],
+                            article_ids=narrative_data["article_ids"],
+                            article_count=article_count,
+                            mention_velocity=round(mention_velocity, 2),
+                            lifecycle=lifecycle,
+                            momentum=momentum,
+                            recency_score=round(recency_score, 3),
+                            entity_relationships=narrative_data.get("entity_relationships", []),
+                            first_seen=first_seen,
+                            lifecycle_state=lifecycle_state,
+                            lifecycle_history=lifecycle_history
+                        )
                         
                         logger.info(f"Created new narrative {narrative_id}: {narrative_data['title']}")
                         saved_narratives.append(narrative_data)

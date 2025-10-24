@@ -151,6 +151,18 @@ async def upsert_narrative(
         if existing_first_seen.tzinfo is None:
             existing_first_seen = existing_first_seen.replace(tzinfo=timezone.utc)
         
+        # Check if existing first_seen is already corrupted (in the future)
+        if existing_first_seen > now:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"[NARRATIVE VALIDATION] Detected corrupted first_seen for theme '{theme}': "
+                f"first_seen ({existing_first_seen}) is in the future (now: {now}). "
+                f"Resetting first_seen to now to fix data corruption."
+            )
+            # Fix corrupted first_seen by using current time
+            existing_first_seen = now
+        
         # Validate existing first_seen vs new last_updated
         # If last_updated would be before first_seen, keep the existing first_seen
         if last_updated_date < existing_first_seen:
