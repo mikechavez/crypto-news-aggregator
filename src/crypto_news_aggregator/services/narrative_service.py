@@ -827,14 +827,20 @@ async def detect_narratives(
                     # Get articles for this narrative to extract dates
                     article_ids = narrative_data.get("article_ids", [])
                     article_dates = []
+                    articles_found = 0
                     for article in articles:
                         if str(article.get("_id")) in article_ids:
+                            articles_found += 1
                             pub_date = article.get("published_at")
                             if pub_date:
                                 # Ensure timezone-aware
                                 if pub_date.tzinfo is None:
                                     pub_date = pub_date.replace(tzinfo=timezone.utc)
                                 article_dates.append(pub_date)
+                    
+                    # DEBUG: Log if we're missing articles
+                    if articles_found != len(article_ids):
+                        logger.warning(f"[CREATE NARRATIVE] Only found {articles_found}/{len(article_ids)} articles in articles list!")
                     
                     # Use recent velocity calculation (last 7 days) for more accurate current activity
                     mention_velocity = calculate_recent_velocity(article_dates, lookback_days=7)
@@ -864,10 +870,12 @@ async def detect_narratives(
                     if article_dates:
                         first_seen = min(article_dates)
                         last_updated = max(article_dates)
+                        logger.info(f"[CREATE NARRATIVE] Using article dates: first_seen={first_seen}, last_updated={last_updated}, article_count={len(article_dates)}")
                     else:
                         # Fallback to now() if no article dates available
                         first_seen = datetime.now(timezone.utc)
                         last_updated = datetime.now(timezone.utc)
+                        logger.warning(f"[CREATE NARRATIVE] NO ARTICLE DATES! Using now(): first_seen={first_seen}, last_updated={last_updated}")
                     # No previous state for new narratives
                     lifecycle_state = determine_lifecycle_state(
                         article_count, mention_velocity, first_seen, last_updated, previous_state=None
