@@ -740,39 +740,53 @@ async def detect_narratives(
                         mention_velocity
                     )
                     
-                    # Update the narrative in database
-                    db = await mongo_manager.get_async_database()
-                    narratives_collection = db.narratives
+                    # Use upsert_narrative to ensure timestamp validation
+                    # Get theme from existing narrative or fingerprint
+                    theme = matching_narrative.get('theme') or fingerprint.get('nucleus_entity', 'unknown')
+                    title = matching_narrative.get('title', 'Unknown')
+                    summary = matching_narrative.get('summary', '')
                     
-                    update_data = {
-                        'article_ids': combined_article_ids,
-                        'article_count': updated_article_count,
-                        'last_updated': last_updated,
-                        'mention_velocity': round(mention_velocity, 2),
-                        'lifecycle_state': lifecycle_state,
-                        'lifecycle_history': lifecycle_history,
-                        'needs_summary_update': True,
-                        'nucleus_entity': fingerprint.get('nucleus_entity', ''),
-                        'fingerprint': fingerprint
-                    }
-                    
-                    # Add resurrection tracking fields if present
-                    if resurrection_fields:
-                        update_data.update(resurrection_fields)
-                    
-                    await narratives_collection.update_one(
-                        {'_id': matching_narrative['_id']},
-                        {'$set': update_data}
-                    )
-                    
-                    logger.info(
-                        f"Merged {len(new_article_ids)} new articles into existing narrative: "
-                        f"'{matching_narrative.get('title')}' (ID: {narrative_id})"
-                    )
-                    
-                    # Add to saved narratives for return value
-                    matching_narrative.update(update_data)
-                    saved_narratives.append(matching_narrative)
+                    try:
+                        narrative_id = await upsert_narrative(
+                            theme=theme,
+                            title=title,
+                            summary=summary,
+                            entities=matching_narrative.get('entities', []),
+                            article_ids=combined_article_ids,
+                            article_count=updated_article_count,
+                            mention_velocity=round(mention_velocity, 2),
+                            lifecycle=matching_narrative.get('lifecycle', 'unknown'),
+                            momentum=matching_narrative.get('momentum', 'unknown'),
+                            recency_score=matching_narrative.get('recency_score', 0.0),
+                            entity_relationships=matching_narrative.get('entity_relationships', []),
+                            first_seen=first_seen,
+                            lifecycle_state=lifecycle_state,
+                            lifecycle_history=lifecycle_history,
+                            reawakening_count=resurrection_fields.get('reawakening_count') if resurrection_fields else None,
+                            reawakened_from=resurrection_fields.get('reawakened_from') if resurrection_fields else None,
+                            resurrection_velocity=resurrection_fields.get('resurrection_velocity') if resurrection_fields else None
+                        )
+                        
+                        logger.info(
+                            f"Merged {len(new_article_ids)} new articles into existing narrative: "
+                            f"'{title}' (ID: {narrative_id})"
+                        )
+                        
+                        # Fetch updated narrative for return value
+                        db = await mongo_manager.get_async_database()
+                        updated_narrative = await db.narratives.find_one({'_id': matching_narrative['_id']})
+                        if updated_narrative:
+                            saved_narratives.append(updated_narrative)
+                    except Exception as e:
+                        logger.exception(f"Failed to update narrative '{theme}': {e}")
+                        # Still add to saved narratives with local data
+                        matching_narrative['article_ids'] = combined_article_ids
+                        matching_narrative['article_count'] = updated_article_count
+                        matching_narrative['last_updated'] = last_updated
+                        matching_narrative['mention_velocity'] = round(mention_velocity, 2)
+                        matching_narrative['lifecycle_state'] = lifecycle_state
+                        matching_narrative['lifecycle_history'] = lifecycle_history
+                        saved_narratives.append(matching_narrative)
                     
                 else:
                     # No match found - create new narrative
