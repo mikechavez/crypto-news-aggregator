@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Sparkles, TrendingUp, Flame, Zap, Star, Wind, ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { Sparkles, TrendingUp, Flame, Zap, Star, Wind } from 'lucide-react';
 import { narrativesAPI } from '../api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Loading } from '../components/Loading';
@@ -73,14 +73,11 @@ const formatShortRelativeTime = (dateValue: any): string => {
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    const diffWeeks = Math.floor(diffMs / 604800000);
     
     if (diffMins < 1) return 'just now';
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    if (diffWeeks < 4) return `${diffWeeks}w ago`;
+    // After 24 hours, show date format instead of relative time
     return formatDate(dateValue);
   } catch {
     return 'Unknown';
@@ -88,18 +85,21 @@ const formatShortRelativeTime = (dateValue: any): string => {
 };
 
 /**
- * Get momentum indicator icon and color
+ * Format full timestamp for tooltip display
  */
-const getMomentumDisplay = (momentum: string) => {
-  switch (momentum) {
-    case 'growing':
-      return { icon: ArrowUp, color: 'text-green-600 dark:text-green-400', label: 'Growing' };
-    case 'declining':
-      return { icon: ArrowDown, color: 'text-red-600 dark:text-red-400', label: 'Declining' };
-    case 'stable':
-      return { icon: Minus, color: 'text-gray-600 dark:text-gray-400', label: 'Stable' };
-    default:
-      return null;
+const formatFullTimestamp = (dateValue: any): string => {
+  try {
+    const date = new Date(parseNarrativeDate(dateValue));
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch {
+    return 'Unknown';
   }
 };
 
@@ -179,6 +179,7 @@ interface TimelineBarProps {
   latest: Date;
   lifecycle_state?: string;
   timeline_data?: TimelineDataPoint[];
+  tooltipText?: string;
 }
 
 const TimelineBar: React.FC<TimelineBarProps> = ({ 
@@ -187,19 +188,67 @@ const TimelineBar: React.FC<TimelineBarProps> = ({
   earliest, 
   latest, 
   lifecycle_state,
-  timeline_data
+  timeline_data,
+  tooltipText
 }) => {
+  // DEBUG: Log input values
+  console.log('[TimelineBar] Input values:', {
+    first_seen,
+    last_updated,
+    earliest,
+    latest,
+    lifecycle_state
+  });
+
+  // Check for null/undefined dates
+  if (!first_seen || !last_updated) {
+    console.warn('[TimelineBar] Missing date values - first_seen:', first_seen, 'last_updated:', last_updated);
+    // Render placeholder bar for missing dates
+    return (
+      <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full opacity-40" title="Missing date data" />
+    );
+  }
+
   // Parse dates safely
   const firstSeenDate = new Date(parseNarrativeDate(first_seen));
   const lastUpdatedDate = new Date(parseNarrativeDate(last_updated));
   
+  // DEBUG: Log parsed dates
+  console.log('[TimelineBar] Parsed dates:', {
+    firstSeenDate,
+    lastSeenTime: firstSeenDate.getTime(),
+    firstSeenIsNaN: isNaN(firstSeenDate.getTime()),
+    lastUpdatedDate,
+    lastUpdatedTime: lastUpdatedDate.getTime(),
+    lastUpdatedIsNaN: isNaN(lastUpdatedDate.getTime())
+  });
+
+  // Check if dates are valid
+  if (isNaN(firstSeenDate.getTime()) || isNaN(lastUpdatedDate.getTime())) {
+    console.error('[TimelineBar] Invalid date values after parsing', {
+      firstSeenDate,
+      lastUpdatedDate
+    });
+    // Render placeholder bar for invalid dates
+    return (
+      <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full opacity-40" title="Invalid date format" />
+    );
+  }
+  
   // Calculate total timeline duration in milliseconds
   const totalDuration = latest.getTime() - earliest.getTime();
   
+  console.log('[TimelineBar] Timeline bounds:', {
+    totalDuration,
+    earliestTime: earliest.getTime(),
+    latestTime: latest.getTime()
+  });
+  
   // Avoid division by zero
   if (totalDuration === 0) {
+    console.warn('[TimelineBar] Total duration is zero, rendering placeholder');
     return (
-      <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full" />
+      <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full" title={tooltipText} />
     );
   }
   
@@ -207,12 +256,48 @@ const TimelineBar: React.FC<TimelineBarProps> = ({
   const startPosition = ((firstSeenDate.getTime() - earliest.getTime()) / totalDuration) * 100;
   const endPosition = ((lastUpdatedDate.getTime() - earliest.getTime()) / totalDuration) * 100;
   
+  // DEBUG: Log position calculations
+  console.log('[TimelineBar] Position calculations:', {
+    startPosition,
+    startPositionIsNaN: isNaN(startPosition),
+    startPositionIsNegative: startPosition < 0,
+    endPosition,
+    endPositionIsNaN: isNaN(endPosition),
+    endPositionIsNegative: endPosition < 0,
+    startGreaterThanEnd: startPosition > endPosition
+  });
+  
   // Clamp values between 0 and 100
   const clampedStart = Math.max(0, Math.min(100, startPosition));
   const clampedEnd = Math.max(0, Math.min(100, endPosition));
   
   // Calculate width of the filled section
   const width = clampedEnd - clampedStart;
+  
+  // DEBUG: Log final bar dimensions with detailed info
+  console.log('[TimelineBar] Final bar dimensions:', {
+    clampedStart,
+    clampedEnd,
+    width,
+    widthIsNaN: isNaN(width),
+    widthIsZero: width === 0,
+    widthIsNegative: width < 0,
+    clampedEndLessThanStart: clampedEnd < clampedStart,
+    firstSeenTime: firstSeenDate.getTime(),
+    lastUpdatedTime: lastUpdatedDate.getTime(),
+    firstSeenAfterLastUpdated: firstSeenDate.getTime() > lastUpdatedDate.getTime()
+  });
+
+  // Check if width is invalid for rendering
+  if (isNaN(width) || width <= 0) {
+    console.warn('[TimelineBar] Invalid bar width, rendering placeholder', { 
+      width,
+      reason: width < 0 ? 'Negative width (last_updated before first_seen?)' : 'Zero or NaN width'
+    });
+    return (
+      <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full opacity-40" title="Invalid bar width" />
+    );
+  }
   
   // Determine color based on lifecycle state
   const getColorClass = (state?: string): string => {
@@ -247,16 +332,27 @@ const TimelineBar: React.FC<TimelineBarProps> = ({
   
   // If timeline_data is provided, render segments with activity density shading
   if (timeline_data && timeline_data.length > 0) {
+    console.log('[TimelineBar] Timeline data provided, rendering segments:', {
+      timelineDataLength: timeline_data.length,
+      timelineData: timeline_data
+    });
+
     // Filter timeline data to only include points within the narrative's active period
     const activeTimelineData = timeline_data.filter(point => {
       const pointDate = new Date(point.date);
       return pointDate >= firstSeenDate && pointDate <= lastUpdatedDate;
     });
     
+    console.log('[TimelineBar] Filtered active timeline data:', {
+      activeDataLength: activeTimelineData.length,
+      activeData: activeTimelineData
+    });
+    
     if (activeTimelineData.length === 0) {
       // Fallback to solid bar if no data points in range
+      console.warn('[TimelineBar] No active timeline data points in range, rendering solid bar');
       return (
-        <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full relative overflow-hidden">
+        <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full relative overflow-hidden" title={tooltipText}>
           <div 
             className={`absolute h-full ${colorClass} opacity-60 rounded-full transition-all duration-300`}
             style={{
@@ -270,6 +366,7 @@ const TimelineBar: React.FC<TimelineBarProps> = ({
     
     // Find max article count for normalization
     const maxArticleCount = Math.max(...activeTimelineData.map(d => d.article_count));
+    console.log('[TimelineBar] Max article count for normalization:', maxArticleCount);
     
     // Create segments based on timeline data points
     const segments = activeTimelineData.map((point, index) => {
@@ -289,6 +386,15 @@ const TimelineBar: React.FC<TimelineBarProps> = ({
       
       const opacityClass = getOpacityClass(point.article_count, maxArticleCount);
       
+      console.log(`[TimelineBar] Segment ${index}:`, {
+        pointPosition,
+        segmentWidth,
+        segmentWidthIsNaN: isNaN(segmentWidth),
+        segmentWidthIsNegative: segmentWidth < 0,
+        opacityClass,
+        articleCount: point.article_count
+      });
+      
       return {
         left: pointPosition,
         width: segmentWidth,
@@ -297,8 +403,10 @@ const TimelineBar: React.FC<TimelineBarProps> = ({
       };
     });
     
+    console.log('[TimelineBar] Rendering segments:', segments);
+
     return (
-      <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full relative overflow-hidden">
+      <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full relative overflow-hidden" title={tooltipText}>
         {/* Render each segment with its own opacity */}
         {segments.map((segment, index) => (
           <div
@@ -316,7 +424,7 @@ const TimelineBar: React.FC<TimelineBarProps> = ({
   
   // Fallback: render solid bar without activity density shading
   return (
-    <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full relative overflow-hidden">
+    <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full relative overflow-hidden" title={tooltipText}>
       {/* Filled section representing narrative timeline */}
       <div 
         className={`absolute h-full ${colorClass} rounded-full transition-all duration-300`}
@@ -425,7 +533,12 @@ export function Narratives() {
           // Handle both old and new field names for backward compatibility
           const displayTitle = narrative.title || narrative.theme;
           const displaySummary = narrative.summary || narrative.story;
-          const displayUpdated = narrative.last_updated || narrative.updated_at;
+          
+          // IMPORTANT: Use last_article_at as primary timestamp for "Updated X ago"
+          // - last_article_at = when the most recent article was published (meaningful for users)
+          // - last_updated = when background worker last processed narrative (not meaningful - all show "just now")
+          // - updated_at = legacy field, fallback for backward compatibility
+          const displayUpdated = narrative.last_article_at || narrative.last_updated || narrative.updated_at;
           const isExpanded = expandedArticles.has(index);
           const narrativeId = narrative._id || '';
           const articles = narrativeArticles.get(narrativeId) || narrative.articles || [];
@@ -468,64 +581,44 @@ export function Narratives() {
           
           return (
           <Card 
-            key={`${narrative.theme}-${index}`} 
-            className="cursor-pointer"
+            key={`${narrative.theme}-${index}`}
           >
             <div onClick={toggleExpanded}>
             <CardHeader>
-              <div className="flex flex-col gap-3">
-                {/* Title */}
-                <div>
-                  <CardTitle>{displayTitle}</CardTitle>
-                </div>
+              {/* Title and Lifecycle badge in same row */}
+              <div className="flex items-start justify-between gap-3">
+                <CardTitle>{displayTitle}</CardTitle>
                 
-                {/* Lifecycle and momentum badges */}
-                <div className="flex items-center gap-3 flex-wrap">
-                  {/* Lifecycle badge */}
-                  {(() => {
-                    const lifecycleValue = narrative.lifecycle_state || narrative.lifecycle;
-                    const config = lifecycleValue && lifecycleConfig[lifecycleValue as keyof typeof lifecycleConfig];
-                    if (!config) return null;
-                    
-                    const Icon = config.icon;
-                    
-                    // Define gradient styles for each lifecycle state
-                    const gradientStyles: Record<string, string> = {
-                      emerging: 'text-white bg-gradient-to-r from-blue-500 to-indigo-500 dark:from-blue-600 dark:to-indigo-600 shadow-sm',
-                      rising: 'text-white bg-gradient-to-r from-green-500 to-emerald-500 dark:from-green-600 dark:to-emerald-600 shadow-sm',
-                      hot: 'text-white bg-gradient-to-r from-orange-500 to-red-500 dark:from-orange-600 dark:to-red-600 shadow-sm',
-                      heating: 'text-white bg-gradient-to-r from-red-500 to-pink-500 dark:from-red-600 dark:to-pink-600 shadow-sm',
-                      mature: 'text-white bg-gradient-to-r from-purple-500 to-violet-500 dark:from-purple-600 dark:to-violet-600 shadow-sm',
-                      cooling: 'text-white bg-gradient-to-r from-gray-500 to-slate-500 dark:from-gray-600 dark:to-slate-600 shadow-sm',
-                    };
-                    
-                    const gradientClass = gradientStyles[lifecycleValue as string] || `text-${config.color} bg-${config.color}/10 dark:bg-${config.color}/20`;
-                    
-                    return (
-                      <span className={cn(
-                        'flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-full',
-                        gradientClass
-                      )}>
-                        <Icon className="w-3 h-3" />
-                        {config.label}
-                      </span>
-                    );
-                  })()}
+                {/* Lifecycle badge */}
+                {(() => {
+                  const lifecycleValue = narrative.lifecycle_state || narrative.lifecycle;
+                  const config = lifecycleValue && lifecycleConfig[lifecycleValue as keyof typeof lifecycleConfig];
+                  if (!config) return null;
                   
-                  {/* Momentum indicator */}
-                  {(() => {
-                    const momentumDisplay = getMomentumDisplay(narrative.momentum || 'unknown');
-                    if (!momentumDisplay) return null;
-                    
-                    const MomentumIcon = momentumDisplay.icon;
-                    return (
-                      <span className={cn('flex items-center gap-1', momentumDisplay.color)}>
-                        <MomentumIcon className="w-3 h-3" />
-                        <span className="text-xs font-medium">{momentumDisplay.label}</span>
-                      </span>
-                    );
-                  })()}
-                </div>
+                  const Icon = config.icon;
+                  
+                  // Define gradient styles for each lifecycle state
+                  const gradientStyles: Record<string, string> = {
+                    emerging: 'text-white bg-gradient-to-r from-blue-500 to-indigo-500 dark:from-blue-600 dark:to-indigo-600 shadow-sm',
+                    rising: 'text-white bg-gradient-to-r from-green-500 to-emerald-500 dark:from-green-600 dark:to-emerald-600 shadow-sm',
+                    hot: 'text-white bg-gradient-to-r from-orange-500 to-red-500 dark:from-orange-600 dark:to-red-600 shadow-sm',
+                    heating: 'text-white bg-gradient-to-r from-red-500 to-pink-500 dark:from-red-600 dark:to-pink-600 shadow-sm',
+                    mature: 'text-white bg-gradient-to-r from-purple-500 to-violet-500 dark:from-purple-600 dark:to-violet-600 shadow-sm',
+                    cooling: 'text-white bg-gradient-to-r from-gray-500 to-slate-500 dark:from-gray-600 dark:to-slate-600 shadow-sm',
+                  };
+                  
+                  const gradientClass = gradientStyles[lifecycleValue as string] || `text-${config.color} bg-${config.color}/10 dark:bg-${config.color}/20`;
+                  
+                  return (
+                    <span className={cn(
+                      'flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap',
+                      gradientClass
+                    )}>
+                      <Icon className="w-3 h-3" />
+                      {config.label}
+                    </span>
+                  );
+                })()}
               </div>
             </CardHeader>
             <CardContent>
@@ -553,12 +646,11 @@ export function Narratives() {
                   latest={timelineBounds.latest}
                   lifecycle_state={narrative.lifecycle_state || narrative.lifecycle}
                   timeline_data={narrative.timeline_data}
+                  tooltipText={`Started: ${formatFullTimestamp(narrative.first_seen)} • Updated: ${formatFullTimestamp(displayUpdated)}`}
                 />
-                
-                {/* Timeline dates */}
-                <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mt-2">
-                  <span>Started {formatDate(narrative.first_seen)}</span>
-                  <span>Updated {formatShortRelativeTime(displayUpdated)}</span>
+                {/* Combined date label */}
+                <div className="text-xs text-gray-600 dark:text-gray-400 mt-2 text-center">
+                  {formatDate(narrative.first_seen)} → {formatShortRelativeTime(displayUpdated)}
                 </div>
               </div>
 
