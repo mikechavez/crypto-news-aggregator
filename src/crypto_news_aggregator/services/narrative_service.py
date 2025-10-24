@@ -746,6 +746,25 @@ async def detect_narratives(
                     title = matching_narrative.get('title', 'Unknown')
                     summary = matching_narrative.get('summary', '')
                     
+                    # DEBUG: Log all article dates and timestamp calculation
+                    logger.info(f"[MERGE NARRATIVE DEBUG] ========== MERGE UPSERT START ==========")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Theme: {theme}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Title: {title}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Combined article IDs: {combined_article_ids}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Article dates collected: {len(article_dates)}")
+                    if article_dates:
+                        logger.info(f"[MERGE NARRATIVE DEBUG] Article dates (sorted):")
+                        for i, date in enumerate(sorted(article_dates)):
+                            logger.info(f"[MERGE NARRATIVE DEBUG]   [{i+1}] {date}")
+                        logger.info(f"[MERGE NARRATIVE DEBUG] Earliest article: {min(article_dates)}")
+                        logger.info(f"[MERGE NARRATIVE DEBUG] Latest article: {max(article_dates)}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Existing narrative first_seen: {matching_narrative.get('first_seen')}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Calculated first_seen (from existing or now): {first_seen}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Calculated last_updated (now): {last_updated}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Is first_seen > last_updated? {first_seen > last_updated}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Timestamp sources: first_seen from existing narrative, last_updated from now()")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] ========== MERGE UPSERT END ==========")
+                    
                     try:
                         narrative_id = await upsert_narrative(
                             theme=theme,
@@ -868,6 +887,27 @@ async def detect_narratives(
                     narrative_data["lifecycle_history"] = lifecycle_history
                     narrative_data["momentum"] = momentum
                     narrative_data["recency_score"] = round(recency_score, 3)
+                    
+                    # DEBUG: Log all article dates and timestamp calculation for new narrative
+                    logger.info(f"[CREATE NARRATIVE DEBUG] ========== CREATE UPSERT START ==========")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Theme: {theme}")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Title: {narrative_data.get('title')}")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Article IDs: {narrative_data['article_ids']}")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Article dates collected: {len(article_dates)}")
+                    if article_dates:
+                        logger.info(f"[CREATE NARRATIVE DEBUG] Article dates (sorted):")
+                        for i, date in enumerate(sorted(article_dates)):
+                            logger.info(f"[CREATE NARRATIVE DEBUG]   [{i+1}] {date}")
+                        logger.info(f"[CREATE NARRATIVE DEBUG] Earliest article: {min(article_dates)}")
+                        logger.info(f"[CREATE NARRATIVE DEBUG] Latest article: {max(article_dates)}")
+                    else:
+                        logger.warning(f"[CREATE NARRATIVE DEBUG] NO ARTICLE DATES FOUND!")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Calculated first_seen (now): {first_seen}")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Calculated last_updated (now): {last_updated}")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Is first_seen > last_updated? {first_seen > last_updated}")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Timestamp sources: BOTH from now() - THIS IS THE BUG!")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Should use: first_seen = min(article_dates), last_updated = max(article_dates)")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] ========== CREATE UPSERT END ==========")
                     
                     try:
                         # Validate fingerprint before creation
