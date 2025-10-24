@@ -860,8 +860,14 @@ async def detect_narratives(
                     lifecycle = determine_lifecycle_stage(article_count, mention_velocity, momentum)
                     
                     # Determine lifecycle state (new approach)
-                    first_seen = datetime.now(timezone.utc)
-                    last_updated = datetime.now(timezone.utc)
+                    # Use article dates for first_seen and last_updated, not now()
+                    if article_dates:
+                        first_seen = min(article_dates)
+                        last_updated = max(article_dates)
+                    else:
+                        # Fallback to now() if no article dates available
+                        first_seen = datetime.now(timezone.utc)
+                        last_updated = datetime.now(timezone.utc)
                     # No previous state for new narratives
                     lifecycle_state = determine_lifecycle_state(
                         article_count, mention_velocity, first_seen, last_updated, previous_state=None
