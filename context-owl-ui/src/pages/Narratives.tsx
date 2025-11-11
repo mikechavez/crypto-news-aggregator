@@ -1,12 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Sparkles, TrendingUp, Flame, Zap, Star, Wind, LayoutGrid, Activity, Archive, RotateCcw, FileText, Users } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Sparkles, TrendingUp, Flame, Zap, Star, Wind } from 'lucide-react';
 import { narrativesAPI } from '../api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { TimelineView } from '../components/TimelineView';
 import { formatRelativeTime, formatNumber } from '../lib/formatters';
 import { cn } from '../lib/cn';
 
@@ -51,21 +49,453 @@ const parseNarrativeDate = (dateValue: any): string => {
   }
 };
 
+/**
+ * Format date as "MMM DD" (e.g., "Oct 18")
+ * This is the canonical date formatter for timeline components
+ */
+const formatDate = (dateValue: any): string => {
+  try {
+    const date = new Date(parseNarrativeDate(dateValue));
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return 'Unknown';
+  }
+};
+
+/**
+ * Format relative time in short format (e.g., "2h ago", "3d ago", "1w ago")
+ * This is the canonical relative time formatter for timeline components
+ */
+const formatShortRelativeTime = (dateValue: any): string => {
+  try {
+    const date = new Date(parseNarrativeDate(dateValue));
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    // After 24 hours, show date format instead of relative time
+    return formatDate(dateValue);
+  } catch {
+    return 'Unknown';
+  }
+};
+
+/**
+ * Format full timestamp for tooltip display
+ */
+const formatFullTimestamp = (dateValue: any): string => {
+  try {
+    const date = new Date(parseNarrativeDate(dateValue));
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch {
+    return 'Unknown';
+  }
+};
+
+/**
+ * Timeline Header Component
+ * Displays the overall date range with a visual reference line
+ */
+interface TimelineHeaderProps {
+  earliest: Date;
+  latest: Date;
+}
+
+const TimelineHeader: React.FC<TimelineHeaderProps> = ({ earliest, latest }) => {
+  // Calculate evenly spaced tick marks between earliest and latest
+  const calculateTickMarks = (start: Date, end: Date, count: number = 5) => {
+    const ticks: { date: Date; position: number }[] = [];
+    const totalDuration = end.getTime() - start.getTime();
+    
+    // Generate tick marks at evenly spaced intervals
+    for (let i = 0; i < count; i++) {
+      const position = (i / (count - 1)) * 100; // Position as percentage
+      const timestamp = start.getTime() + (totalDuration * i / (count - 1));
+      ticks.push({
+        date: new Date(timestamp),
+        position: position
+      });
+    }
+    
+    return ticks;
+  };
+  
+  const tickMarks = calculateTickMarks(earliest, latest, 5);
+  
+  return (
+    <div className="mb-6 px-4">
+      {/* Timeline bar with tick marks */}
+      <div className="relative">
+        {/* Main timeline bar */}
+        <div className="h-0.5 bg-gray-300 dark:bg-gray-600 rounded-full" />
+        
+        {/* Tick marks */}
+        <div className="relative h-6">
+          {tickMarks.map((tick, index) => (
+            <div
+              key={index}
+              className="absolute"
+              style={{ left: `${tick.position}%`, transform: 'translateX(-50%)' }}
+            >
+              {/* Vertical tick line */}
+              <div className="w-px h-2 bg-gray-400 dark:bg-gray-500 mx-auto" />
+              {/* Date label */}
+              <div className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap mt-1 text-center">
+                {formatDate(tick.date)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Timeline Bar Component
+ * Displays a visual bar showing when a narrative started and was last updated
+ * relative to the global timeline, with optional activity density shading
+ */
+interface TimelineDataPoint {
+  date: string;
+  article_count: number;
+}
+
+interface TimelineBarProps {
+  first_seen: any;
+  last_updated: any;
+  earliest: Date;
+  latest: Date;
+  lifecycle_state?: string;
+  timeline_data?: TimelineDataPoint[];
+  tooltipText?: string;
+}
+
+const TimelineBar: React.FC<TimelineBarProps> = ({ 
+  first_seen, 
+  last_updated, 
+  earliest, 
+  latest, 
+  lifecycle_state,
+  timeline_data,
+  tooltipText
+}) => {
+  // DEBUG: Log input values
+  console.log('[TimelineBar] Input values:', {
+    first_seen,
+    last_updated,
+    earliest,
+    latest,
+    lifecycle_state
+  });
+
+  // Check for null/undefined dates
+  if (!first_seen || !last_updated) {
+    console.warn('[TimelineBar] Missing date values - first_seen:', first_seen, 'last_updated:', last_updated);
+    // Render placeholder bar for missing dates
+    return (
+      <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full opacity-40" title="Missing date data" />
+    );
+  }
+
+  // Parse dates safely
+  const firstSeenDate = new Date(parseNarrativeDate(first_seen));
+  const lastUpdatedDate = new Date(parseNarrativeDate(last_updated));
+  
+  // DEBUG: Log parsed dates
+  console.log('[TimelineBar] Parsed dates:', {
+    firstSeenDate,
+    lastSeenTime: firstSeenDate.getTime(),
+    firstSeenIsNaN: isNaN(firstSeenDate.getTime()),
+    lastUpdatedDate,
+    lastUpdatedTime: lastUpdatedDate.getTime(),
+    lastUpdatedIsNaN: isNaN(lastUpdatedDate.getTime())
+  });
+
+  // Check if dates are valid
+  if (isNaN(firstSeenDate.getTime()) || isNaN(lastUpdatedDate.getTime())) {
+    console.error('[TimelineBar] Invalid date values after parsing', {
+      firstSeenDate,
+      lastUpdatedDate
+    });
+    // Render placeholder bar for invalid dates
+    return (
+      <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full opacity-40" title="Invalid date format" />
+    );
+  }
+  
+  // Calculate total timeline duration in milliseconds
+  const totalDuration = latest.getTime() - earliest.getTime();
+  
+  console.log('[TimelineBar] Timeline bounds:', {
+    totalDuration,
+    earliestTime: earliest.getTime(),
+    latestTime: latest.getTime()
+  });
+  
+  // Avoid division by zero
+  if (totalDuration === 0) {
+    console.warn('[TimelineBar] Total duration is zero, rendering placeholder');
+    return (
+      <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full" title={tooltipText} />
+    );
+  }
+  
+  // Calculate start and end positions as percentages
+  const startPosition = ((firstSeenDate.getTime() - earliest.getTime()) / totalDuration) * 100;
+  const endPosition = ((lastUpdatedDate.getTime() - earliest.getTime()) / totalDuration) * 100;
+  
+  // DEBUG: Log position calculations
+  console.log('[TimelineBar] Position calculations:', {
+    startPosition,
+    startPositionIsNaN: isNaN(startPosition),
+    startPositionIsNegative: startPosition < 0,
+    endPosition,
+    endPositionIsNaN: isNaN(endPosition),
+    endPositionIsNegative: endPosition < 0,
+    startGreaterThanEnd: startPosition > endPosition
+  });
+  
+  // Clamp values between 0 and 100
+  const clampedStart = Math.max(0, Math.min(100, startPosition));
+  const clampedEnd = Math.max(0, Math.min(100, endPosition));
+  
+  // Calculate width of the filled section
+  const width = clampedEnd - clampedStart;
+  
+  // DEBUG: Log final bar dimensions with detailed info
+  console.log('[TimelineBar] Final bar dimensions:', {
+    clampedStart,
+    clampedEnd,
+    width,
+    widthIsNaN: isNaN(width),
+    widthIsZero: width === 0,
+    widthIsNegative: width < 0,
+    clampedEndLessThanStart: clampedEnd < clampedStart,
+    firstSeenTime: firstSeenDate.getTime(),
+    lastUpdatedTime: lastUpdatedDate.getTime(),
+    firstSeenAfterLastUpdated: firstSeenDate.getTime() > lastUpdatedDate.getTime()
+  });
+
+  // Check if width is invalid for rendering
+  if (isNaN(width) || width <= 0) {
+    console.warn('[TimelineBar] Invalid bar width, rendering placeholder', { 
+      width,
+      reason: width < 0 ? 'Negative width (last_updated before first_seen?)' : 'Zero or NaN width'
+    });
+    return (
+      <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full opacity-40" title="Invalid bar width" />
+    );
+  }
+  
+  // Determine color based on lifecycle state
+  const getColorClass = (state?: string): string => {
+    switch (state) {
+      case 'emerging':
+      case 'rising':
+        return 'bg-green-500';
+      case 'hot':
+      case 'heating':
+        return 'bg-red-500';
+      case 'mature':
+        return 'bg-blue-500';
+      case 'cooling':
+        return 'bg-gray-400';
+      default:
+        return 'bg-blue-500';
+    }
+  };
+  
+  // Determine opacity based on article count (activity density)
+  const getOpacityClass = (articleCount: number, maxCount: number): string => {
+    if (maxCount === 0) return 'opacity-60';
+    
+    const ratio = articleCount / maxCount;
+    
+    if (ratio >= 0.7) return 'opacity-100'; // High activity
+    if (ratio >= 0.3) return 'opacity-60';  // Medium activity
+    return 'opacity-30';                     // Low activity
+  };
+  
+  const colorClass = getColorClass(lifecycle_state);
+  
+  // If timeline_data is provided, render segments with activity density shading
+  if (timeline_data && timeline_data.length > 0) {
+    console.log('[TimelineBar] Timeline data provided, rendering segments:', {
+      timelineDataLength: timeline_data.length,
+      timelineData: timeline_data
+    });
+
+    // Filter timeline data to only include points within the narrative's active period
+    const activeTimelineData = timeline_data.filter(point => {
+      const pointDate = new Date(point.date);
+      return pointDate >= firstSeenDate && pointDate <= lastUpdatedDate;
+    });
+    
+    console.log('[TimelineBar] Filtered active timeline data:', {
+      activeDataLength: activeTimelineData.length,
+      activeData: activeTimelineData
+    });
+    
+    if (activeTimelineData.length === 0) {
+      // Fallback to solid bar if no data points in range
+      console.warn('[TimelineBar] No active timeline data points in range, rendering solid bar');
+      return (
+        <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full relative overflow-hidden" title={tooltipText}>
+          <div 
+            className={`absolute h-full ${colorClass} opacity-60 rounded-full transition-all duration-300`}
+            style={{
+              left: `${clampedStart}%`,
+              width: `${width}%`
+            }}
+          />
+        </div>
+      );
+    }
+    
+    // Find max article count for normalization
+    const maxArticleCount = Math.max(...activeTimelineData.map(d => d.article_count));
+    console.log('[TimelineBar] Max article count for normalization:', maxArticleCount);
+    
+    // Create segments based on timeline data points
+    const segments = activeTimelineData.map((point, index) => {
+      const pointDate = new Date(point.date);
+      const pointPosition = ((pointDate.getTime() - earliest.getTime()) / totalDuration) * 100;
+      
+      // Calculate segment width (distance to next point or end of narrative)
+      let segmentWidth: number;
+      if (index < activeTimelineData.length - 1) {
+        const nextPointDate = new Date(activeTimelineData[index + 1].date);
+        const nextPosition = ((nextPointDate.getTime() - earliest.getTime()) / totalDuration) * 100;
+        segmentWidth = nextPosition - pointPosition;
+      } else {
+        // Last segment extends to the end of the narrative
+        segmentWidth = clampedEnd - pointPosition;
+      }
+      
+      const opacityClass = getOpacityClass(point.article_count, maxArticleCount);
+      
+      console.log(`[TimelineBar] Segment ${index}:`, {
+        pointPosition,
+        segmentWidth,
+        segmentWidthIsNaN: isNaN(segmentWidth),
+        segmentWidthIsNegative: segmentWidth < 0,
+        opacityClass,
+        articleCount: point.article_count
+      });
+      
+      return {
+        left: pointPosition,
+        width: segmentWidth,
+        opacity: opacityClass,
+        articleCount: point.article_count
+      };
+    });
+    
+    console.log('[TimelineBar] Rendering segments:', segments);
+
+    return (
+      <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full relative overflow-hidden" title={tooltipText}>
+        {/* Render each segment with its own opacity */}
+        {segments.map((segment, index) => (
+          <div
+            key={index}
+            className={`absolute h-full ${colorClass} ${segment.opacity} transition-all duration-300`}
+            style={{
+              left: `${segment.left}%`,
+              width: `${segment.width}%`
+            }}
+          />
+        ))}
+      </div>
+    );
+  }
+  
+  // Fallback: render solid bar without activity density shading
+  return (
+    <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full relative overflow-hidden" title={tooltipText}>
+      {/* Filled section representing narrative timeline */}
+      <div 
+        className={`absolute h-full ${colorClass} rounded-full transition-all duration-300`}
+        style={{
+          left: `${clampedStart}%`,
+          width: `${width}%`
+        }}
+      />
+    </div>
+  );
+};
+
+/**
+ * Calculate timeline bounds from narratives array
+ * Returns the earliest first_seen date and the latest date (current time or max last_updated)
+ */
+const calculateTimelineBounds = (narratives: any[]): { earliest: Date; latest: Date } => {
+  if (!narratives || narratives.length === 0) {
+    const now = new Date();
+    return { earliest: now, latest: now };
+  }
+
+  let earliest = new Date();
+  let latest = new Date();
+
+  narratives.forEach((narrative) => {
+    // Get first_seen date
+    if (narrative.first_seen) {
+      try {
+        const firstSeenDate = new Date(parseNarrativeDate(narrative.first_seen));
+        if (!isNaN(firstSeenDate.getTime()) && firstSeenDate < earliest) {
+          earliest = firstSeenDate;
+        }
+      } catch {
+        // Skip invalid dates
+      }
+    }
+
+    // Get last_updated date
+    const lastUpdated = narrative.last_updated || narrative.updated_at;
+    if (lastUpdated) {
+      try {
+        const lastUpdatedDate = new Date(parseNarrativeDate(lastUpdated));
+        if (!isNaN(lastUpdatedDate.getTime()) && lastUpdatedDate > latest) {
+          latest = lastUpdatedDate;
+        }
+      } catch {
+        // Skip invalid dates
+      }
+    }
+  });
+
+  // Ensure latest is at least the current time
+  const now = new Date();
+  if (latest < now) {
+    latest = now;
+  }
+
+  return { earliest, latest };
+};
+
 export function Narratives() {
   const [expandedArticles, setExpandedArticles] = useState<Set<number>>(new Set());
   const [narrativeArticles, setNarrativeArticles] = useState<Map<string, any[]>>(new Map());
   const [loadingArticles, setLoadingArticles] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<'cards' | 'pulse' | 'archive'>('cards');
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
-    queryKey: ['narratives', viewMode],
+    queryKey: ['narratives'],
     queryFn: async () => {
-      const result = viewMode === 'archive' ? await narrativesAPI.getArchivedNarratives(50, 30) : await narrativesAPI.getNarratives();
-      console.log(`[DEBUG] ${viewMode} API returned:`, result.length, 'narratives');
-      if (viewMode === 'archive') {
-        console.log('[DEBUG] Archive narratives lifecycle_state values:', result.map(n => n.lifecycle_state));
-        console.log('[DEBUG] Archive narratives data:', result);
-      }
+      const result = await narrativesAPI.getNarratives();
+      console.log('[DEBUG] API returned:', result.length, 'narratives');
       return result;
     },
     refetchInterval: 60000, // 60 seconds
@@ -73,142 +503,8 @@ export function Narratives() {
 
   const narratives = data || [];
   
-  // Debug log for narratives after filtering
-  console.log('[DEBUG] Narratives after data assignment:', narratives.length, 'viewMode:', viewMode);
-
-  // Calculate date range from narratives for the timeline scrubber
-  const dateRange = useMemo(() => {
-    if (narratives.length === 0) {
-      return { minDate: new Date(), maxDate: new Date(), totalDays: 0 };
-    }
-
-    const dates = narratives.flatMap(narrative => {
-      const firstSeen = narrative.first_seen ? new Date(narrative.first_seen) : new Date();
-      const lastUpdated = narrative.last_updated ? new Date(narrative.last_updated) : new Date();
-      return [firstSeen, lastUpdated];
-    });
-
-    const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
-    const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
-    const totalDays = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24));
-
-    return { minDate, maxDate, totalDays };
-  }, [narratives]);
-
-  // Calculate activity by day for heatmap
-  const activityByDay = useMemo(() => {
-    if (narratives.length === 0 || dateRange.totalDays === 0) {
-      return [];
-    }
-
-    const activityMap = new Map<string, number>();
-    
-    // For each day in the range, count how many narratives were active
-    for (let i = 0; i <= dateRange.totalDays; i++) {
-      const currentDate = new Date(dateRange.minDate.getTime() + i * 24 * 60 * 60 * 1000);
-      const dateKey = currentDate.toISOString().split('T')[0];
-      
-      const count = narratives.filter(narrative => {
-        const firstSeen = narrative.first_seen ? new Date(narrative.first_seen) : null;
-        const lastUpdated = narrative.last_updated ? new Date(narrative.last_updated) : null;
-        
-        if (!firstSeen || !lastUpdated) return false;
-        
-        // Check if currentDate is between first_seen and last_updated
-        return currentDate >= firstSeen && currentDate <= lastUpdated;
-      }).length;
-      
-      activityMap.set(dateKey, count);
-    }
-    
-    // Convert to array with date and count
-    return Array.from(activityMap.entries()).map(([dateKey, count]) => ({
-      date: new Date(dateKey),
-      count
-    }));
-  }, [narratives, dateRange]);
-
-  // Calculate max activity for color scaling
-  const maxActivity = useMemo(() => {
-    return Math.max(...activityByDay.map(d => d.count), 1);
-  }, [activityByDay]);
-
-  // Filter narratives based on selected date
-  const filteredNarratives = useMemo(() => {
-    if (!selectedDate || viewMode !== 'pulse') {
-      return narratives;
-    }
-
-    return narratives.filter(narrative => {
-      const firstSeen = narrative.first_seen ? new Date(narrative.first_seen) : null;
-      const lastUpdated = narrative.last_updated ? new Date(narrative.last_updated) : null;
-      
-      if (!firstSeen || !lastUpdated) return false;
-      
-      // Check if selectedDate is between first_seen and last_updated
-      return selectedDate >= firstSeen && selectedDate <= lastUpdated;
-    });
-  }, [narratives, selectedDate, viewMode]);
-
-  // Calculate dynamic stats for the selected date
-  const dateStats = useMemo(() => {
-    const activeNarratives = viewMode === 'pulse' ? filteredNarratives : narratives;
-    
-    // Total narratives
-    const total = activeNarratives.length;
-    
-    // Breakdown by lifecycle state
-    const lifecycleBreakdown = activeNarratives.reduce((acc, narrative) => {
-      const state = narrative.lifecycle_state || narrative.lifecycle || 'unknown';
-      acc[state] = (acc[state] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    
-    // Most active entity (entity appearing in most narratives)
-    const entityCounts = new Map<string, number>();
-    activeNarratives.forEach(narrative => {
-      narrative.entities.forEach(entity => {
-        entityCounts.set(entity, (entityCounts.get(entity) || 0) + 1);
-      });
-    });
-    
-    let mostActiveEntity = 'None';
-    let maxCount = 0;
-    entityCounts.forEach((count, entity) => {
-      if (count > maxCount) {
-        maxCount = count;
-        mostActiveEntity = entity;
-      }
-    });
-    
-    // Average article count per narrative
-    const totalArticles = activeNarratives.reduce((sum, n) => sum + (n.article_count || 0), 0);
-    const avgArticles = total > 0 ? (totalArticles / total).toFixed(1) : '0';
-    
-    return {
-      total,
-      lifecycleBreakdown,
-      mostActiveEntity,
-      avgArticles
-    };
-  }, [filteredNarratives, narratives, viewMode]);
-
-  // Format date for display
-  const formatDateForDisplay = (date: Date) => {
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
-  // Get color for activity level (gradient from gray to red/orange)
-  const getActivityColor = (count: number, max: number) => {
-    if (count === 0) return 'bg-gray-200 dark:bg-gray-700';
-    
-    const intensity = count / max;
-    
-    if (intensity < 0.25) return 'bg-orange-200 dark:bg-orange-900/40';
-    if (intensity < 0.5) return 'bg-orange-300 dark:bg-orange-800/60';
-    if (intensity < 0.75) return 'bg-orange-400 dark:bg-orange-700/80';
-    return 'bg-red-500 dark:bg-red-600';
-  };
+  // Calculate timeline bounds for visual timeline
+  const timelineBounds = calculateTimelineBounds(narratives);
 
   if (isLoading) return <Loading />;
   if (error) return <ErrorMessage message={error.message} onRetry={() => refetch()} />;
@@ -217,13 +513,10 @@ export function Narratives() {
     <div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-          {viewMode === 'archive' ? 'Archived Narratives' : 'Emerging Narratives'}
+          Active Narratives
         </h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
-          {viewMode === 'archive' 
-            ? 'Dormant narratives that have gone quiet (no new articles for 7+ days)'
-            : 'Clustered stories and trending topics in the crypto space'
-          }
+          Clustered stories and trending topics in the crypto space
         </p>
         {dataUpdatedAt && (
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
@@ -232,422 +525,20 @@ export function Narratives() {
         )}
       </div>
 
-      {/* View mode toggle */}
-      <div className="flex gap-2 mb-6">
-        <button
-          onClick={() => setViewMode('cards')}
-          className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors',
-            viewMode === 'cards'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 dark:bg-dark-card text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover'
-          )}
-        >
-          <LayoutGrid className="w-4 h-4" />
-          Cards
-        </button>
-        <button
-          onClick={() => setViewMode('pulse')}
-          className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors',
-            viewMode === 'pulse'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 dark:bg-dark-card text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover'
-          )}
-        >
-          <Activity className="w-4 h-4" />
-          Pulse
-        </button>
-        <button
-          onClick={() => setViewMode('archive')}
-          className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors',
-            viewMode === 'archive'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 dark:bg-dark-card text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover'
-          )}
-        >
-          <Archive className="w-4 h-4" />
-          Archive
-        </button>
-      </div>
-
-      {viewMode === 'pulse' ? (
-        <>
-          {/* Timeline Scrubber */}
-          <div className="mb-8 p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                  Timeline Filter
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {selectedDate 
-                    ? `Showing narratives active on ${formatDateForDisplay(selectedDate)}`
-                    : 'Showing all current narratives'
-                  }
-                </p>
-              </div>
-              {selectedDate && (
-                <button
-                  onClick={() => setSelectedDate(null)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  Reset to Current
-                </button>
-              )}
-            </div>
-
-            {/* Activity Heatmap */}
-            {activityByDay.length > 0 && (
-              <div className="mb-6">
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Activity by Day
-                </h4>
-                <div className="flex items-end h-16 gap-0.5">
-                  {activityByDay.map((day, index) => {
-                    const heightPercent = (day.count / maxActivity) * 100;
-                    const isSelected = selectedDate && 
-                      day.date.toDateString() === selectedDate.toDateString();
-                    
-                    return (
-                      <button
-                        key={index}
-                        onClick={() => setSelectedDate(day.date)}
-                        className={cn(
-                          'flex-1 transition-all duration-200 rounded-t hover:opacity-80 relative group',
-                          getActivityColor(day.count, maxActivity),
-                          isSelected && 'ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-gray-900'
-                        )}
-                        style={{ height: `${Math.max(heightPercent, 5)}%` }}
-                        title={`${formatDateForDisplay(day.date)}: ${day.count} narratives`}
-                      >
-                        {/* Tooltip on hover */}
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                          {formatDateForDisplay(day.date)}: {day.count}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {dateRange.totalDays > 0 && (
-              <div className="relative">
-                {/* Date labels */}
-                <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 mb-2">
-                  <span>{formatDateForDisplay(dateRange.minDate)}</span>
-                  <span>{formatDateForDisplay(dateRange.maxDate)}</span>
-                </div>
-
-                {/* Slider container */}
-                <div className="relative h-12 flex items-center">
-                  {/* Gradient track */}
-                  <div className="absolute inset-x-0 h-2 bg-gradient-to-r from-blue-300 via-indigo-400 to-purple-500 dark:from-blue-600 dark:via-indigo-700 dark:to-purple-800 rounded-full" />
-                  
-                  {/* Range input */}
-                  <input
-                    type="range"
-                    min="0"
-                    max={activityByDay.length - 1}
-                    step="1"
-                    value={selectedDate 
-                      ? activityByDay.findIndex(day => day.date.toDateString() === selectedDate.toDateString())
-                      : activityByDay.length - 1
-                    }
-                    onChange={(e) => {
-                      const index = parseInt(e.target.value);
-                      if (index >= 0 && index < activityByDay.length) {
-                        setSelectedDate(activityByDay[index].date);
-                      }
-                    }}
-                    className="absolute inset-x-0 w-full h-12 opacity-0 cursor-pointer z-10"
-                    style={{ margin: 0 }}
-                  />
-
-                  {/* Custom thumb */}
-                  <div 
-                    className="absolute w-6 h-6 bg-white dark:bg-gray-800 border-4 border-blue-600 dark:border-blue-400 rounded-full shadow-lg pointer-events-none transition-all duration-200"
-                    style={{
-                      left: (() => {
-                        const index = selectedDate 
-                          ? activityByDay.findIndex(day => day.date.toDateString() === selectedDate.toDateString())
-                          : activityByDay.length - 1;
-                        const totalBars = activityByDay.length;
-                        // Calculate position to center on each bar
-                        const barWidth = 100 / totalBars;
-                        const centerOffset = barWidth / 2;
-                        const position = (index * barWidth) + centerOffset;
-                        return `calc(${position}% - 12px)`;
-                      })()
-                    }}
-                  />
-                </div>
-
-                {/* Selected date display */}
-                {selectedDate && (
-                  <div 
-                    className="absolute -bottom-8 bg-blue-600 dark:bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg"
-                    style={{
-                      left: (() => {
-                        const index = activityByDay.findIndex(day => day.date.toDateString() === selectedDate.toDateString());
-                        const totalBars = activityByDay.length;
-                        const barWidth = 100 / totalBars;
-                        const centerOffset = barWidth / 2;
-                        const position = (index * barWidth) + centerOffset;
-                        return `calc(${position}% - 40px)`;
-                      })()
-                    }}
-                  >
-                    {formatDateForDisplay(selectedDate)}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Results count */}
-            <div className="mt-10 text-sm text-gray-600 dark:text-gray-400">
-              {selectedDate 
-                ? `${filteredNarratives.length} of ${narratives.length} narratives active on this date`
-                : `${narratives.length} total narratives`
-              }
-            </div>
-          </div>
-
-          {/* Dynamic Stats Panel */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                {selectedDate ? `Stats for ${formatDateForDisplay(selectedDate)}` : 'Right Now'}
-              </h3>
-            </div>
-            
-            <AnimatePresence mode="wait">
-              <motion.div 
-                key={selectedDate ? selectedDate.toISOString() : 'current'}
-                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
-              >
-                {/* Total Narratives */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3, delay: 0 }}
-                >
-                  <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
-                    <CardContent className="pt-6">
-                      <div className="flex items-center gap-3">
-                        <div className="p-3 bg-blue-600 dark:bg-blue-500 rounded-lg">
-                          <TrendingUp className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                          <div className="text-3xl font-bold text-blue-900 dark:text-blue-100">
-                            {dateStats.total}
-                          </div>
-                          <div className="text-sm text-blue-700 dark:text-blue-300 font-medium">
-                            Total Narratives
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-
-                {/* Lifecycle Breakdown */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3, delay: 0.1 }}
-                >
-                  <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
-                    <CardContent className="pt-6">
-                      <div className="flex items-center gap-3">
-                        <div className="p-3 bg-indigo-600 dark:bg-indigo-500 rounded-lg">
-                          <Activity className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-sm text-indigo-700 dark:text-indigo-300 font-medium mb-2">
-                            Lifecycle States
-                          </div>
-                          <div className="space-y-1">
-                            {Object.entries(dateStats.lifecycleBreakdown)
-                              .sort(([, a], [, b]) => b - a)
-                              .slice(0, 3)
-                              .map(([state, count]) => (
-                                <div key={state} className="flex items-center justify-between text-xs">
-                                  <span className="text-indigo-800 dark:text-indigo-200 capitalize">
-                                    {state}
-                                  </span>
-                                  <span className="font-bold text-indigo-900 dark:text-indigo-100">
-                                    {count}
-                                  </span>
-                                </div>
-                              ))}
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-
-                {/* Most Active Entity */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3, delay: 0.2 }}
-                >
-                  <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
-                    <CardContent className="pt-6">
-                      <div className="flex items-center gap-3">
-                        <div className="p-3 bg-purple-600 dark:bg-purple-500 rounded-lg">
-                          <Users className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm text-purple-700 dark:text-purple-300 font-medium mb-1">
-                            Most Active Entity
-                          </div>
-                          <div className="text-lg font-bold text-purple-900 dark:text-purple-100 truncate">
-                            {dateStats.mostActiveEntity}
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-
-                {/* Average Article Count */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3, delay: 0.3 }}
-                >
-                  <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
-                    <CardContent className="pt-6">
-                      <div className="flex items-center gap-3">
-                        <div className="p-3 bg-green-600 dark:bg-green-500 rounded-lg">
-                          <FileText className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                          <div className="text-3xl font-bold text-green-900 dark:text-green-100">
-                            {dateStats.avgArticles}
-                          </div>
-                          <div className="text-sm text-green-700 dark:text-green-300 font-medium">
-                            Avg Articles/Narrative
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </motion.div>
-            </AnimatePresence>
-          </div>
-
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={selectedDate ? selectedDate.toISOString() : 'current'}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <TimelineView narratives={filteredNarratives || []} selectedDate={selectedDate} />
-            </motion.div>
-          </AnimatePresence>
-        </>
-      ) : (
-        <>
-      {/* Resurrection Summary Card - only shown in archive view when there are resurrected narratives */}
-      {viewMode === 'archive' && narratives.length > 0 && (() => {
-        const resurrectedNarratives = narratives.filter(n => n.reawakening_count && n.reawakening_count > 0);
-        if (resurrectedNarratives.length === 0) return null;
-        
-        return (
-        <Card className="mb-6 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-2 border-amber-300 dark:border-amber-700">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-500 dark:bg-amber-600 rounded-lg">
-                <Zap className="w-6 h-6 text-white" />
-              </div>
-              <CardTitle className="text-amber-900 dark:text-amber-100">
-                Resurrection Summary
-              </CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {/* Total count */}
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold text-amber-900 dark:text-amber-100">
-                  {resurrectedNarratives.length}
-                </span>
-                <span className="text-gray-700 dark:text-gray-300">
-                  {resurrectedNarratives.length === 1 ? 'narrative has' : 'narratives have'} been resurrected in the past 7 days
-                </span>
-              </div>
-
-              {/* Top Resurrections */}
-              {narratives.length > 0 && (
-                <div className="pt-4 border-t border-amber-200 dark:border-amber-800">
-                  <h3 className="text-lg font-semibold text-amber-900 dark:text-amber-100 mb-3">
-                    ⚡ Top Resurrections
-                  </h3>
-                  <div className="space-y-3">
-                    {narratives
-                      .filter(n => n.reawakening_count && n.reawakening_count > 0)
-                      .sort((a, b) => (b.reawakening_count || 0) - (a.reawakening_count || 0))
-                      .slice(0, 3)
-                      .map((narrative, idx) => {
-                        const displayTitle = narrative.title || narrative.theme;
-                        return (
-                          <div 
-                            key={idx}
-                            className="flex items-start justify-between gap-4 p-3 bg-white/50 dark:bg-gray-900/30 rounded-lg"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-lg font-bold text-amber-700 dark:text-amber-400">
-                                  #{idx + 1}
-                                </span>
-                                <h4 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
-                                  {displayTitle}
-                                </h4>
-                              </div>
-                              <div className="flex flex-wrap gap-3 text-sm">
-                                <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400 font-medium">
-                                  <Zap className="w-3.5 h-3.5" />
-                                  {narrative.reawakening_count}x reawakened
-                                </span>
-                                {narrative.resurrection_velocity && narrative.resurrection_velocity > 0 && (
-                                  <span className="text-green-700 dark:text-green-400 font-medium">
-                                    +{Math.round(narrative.resurrection_velocity)} resurrections/day
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-        );
-      })()}
+      {/* Timeline Header */}
+      <TimelineHeader earliest={timelineBounds.earliest} latest={timelineBounds.latest} />
 
       <div className="space-y-6">
         {narratives.map((narrative, index) => {
           // Handle both old and new field names for backward compatibility
           const displayTitle = narrative.title || narrative.theme;
           const displaySummary = narrative.summary || narrative.story;
-          const displayUpdated = narrative.last_updated || narrative.updated_at;
+          
+          // IMPORTANT: Use last_article_at as primary timestamp for "Updated X ago"
+          // - last_article_at = when the most recent article was published (meaningful for users)
+          // - last_updated = when background worker last processed narrative (not meaningful - all show "just now")
+          // - updated_at = legacy field, fallback for backward compatibility
+          const displayUpdated = narrative.last_article_at || narrative.last_updated || narrative.updated_at;
           const isExpanded = expandedArticles.has(index);
           const narrativeId = narrative._id || '';
           const articles = narrativeArticles.get(narrativeId) || narrative.articles || [];
@@ -663,8 +554,8 @@ export function Narratives() {
               console.log('[DEBUG] Expanding card at index:', index);
               newExpanded.add(index);
               
-              // Fetch articles if not already loaded and not in archive mode
-              if (viewMode !== 'archive' && narrativeId && !narrativeArticles.has(narrativeId) && !loadingArticles.has(narrativeId)) {
+              // Fetch articles if not already loaded
+              if (narrativeId && !narrativeArticles.has(narrativeId) && !loadingArticles.has(narrativeId)) {
                 console.log('[DEBUG] Fetching articles for narrative:', narrativeId);
                 setLoadingArticles(prev => new Set(prev).add(narrativeId));
                 try {
@@ -682,7 +573,7 @@ export function Narratives() {
                   });
                 }
               } else {
-                console.log('[DEBUG] Skipping article fetch - viewMode:', viewMode, 'narrativeId:', narrativeId, 'already has articles:', narrativeArticles.has(narrativeId));
+                console.log('[DEBUG] Skipping article fetch - narrativeId:', narrativeId, 'already has articles:', narrativeArticles.has(narrativeId));
               }
             }
             setExpandedArticles(newExpanded);
@@ -690,64 +581,44 @@ export function Narratives() {
           
           return (
           <Card 
-            key={`${narrative.theme}-${index}`} 
-            className={cn(
-              'cursor-pointer',
-              viewMode === 'archive' && 'border-2 border-purple-300 dark:border-purple-700 bg-purple-50/30 dark:bg-purple-900/10'
-            )}
+            key={`${narrative.theme}-${index}`}
           >
             <div onClick={toggleExpanded}>
             <CardHeader>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {viewMode === 'archive' && (
-                    <Archive className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
-                  )}
-                  <CardTitle>{displayTitle}</CardTitle>
-                  {/* Reawakened badge */}
-                  {viewMode === 'archive' && narrative.reawakening_count && narrative.reawakening_count > 0 && (
-                    <span className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">
-                      <Zap className="w-4 h-4" />
-                      Reawakened{narrative.reawakening_count > 1 ? ` ${narrative.reawakening_count}x` : ''}
+              {/* Title and Lifecycle badge in same row */}
+              <div className="flex items-start justify-between gap-3">
+                <CardTitle>{displayTitle}</CardTitle>
+                
+                {/* Lifecycle badge */}
+                {(() => {
+                  const lifecycleValue = narrative.lifecycle_state || narrative.lifecycle;
+                  const config = lifecycleValue && lifecycleConfig[lifecycleValue as keyof typeof lifecycleConfig];
+                  if (!config) return null;
+                  
+                  const Icon = config.icon;
+                  
+                  // Define gradient styles for each lifecycle state
+                  const gradientStyles: Record<string, string> = {
+                    emerging: 'text-white bg-gradient-to-r from-blue-500 to-indigo-500 dark:from-blue-600 dark:to-indigo-600 shadow-sm',
+                    rising: 'text-white bg-gradient-to-r from-green-500 to-emerald-500 dark:from-green-600 dark:to-emerald-600 shadow-sm',
+                    hot: 'text-white bg-gradient-to-r from-orange-500 to-red-500 dark:from-orange-600 dark:to-red-600 shadow-sm',
+                    heating: 'text-white bg-gradient-to-r from-red-500 to-pink-500 dark:from-red-600 dark:to-pink-600 shadow-sm',
+                    mature: 'text-white bg-gradient-to-r from-purple-500 to-violet-500 dark:from-purple-600 dark:to-violet-600 shadow-sm',
+                    cooling: 'text-white bg-gradient-to-r from-gray-500 to-slate-500 dark:from-gray-600 dark:to-slate-600 shadow-sm',
+                  };
+                  
+                  const gradientClass = gradientStyles[lifecycleValue as string] || `text-${config.color} bg-${config.color}/10 dark:bg-${config.color}/20`;
+                  
+                  return (
+                    <span className={cn(
+                      'flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap',
+                      gradientClass
+                    )}>
+                      <Icon className="w-3 h-3" />
+                      {config.label}
                     </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {/* Lifecycle badge */}
-                  {(() => {
-                    const lifecycleValue = narrative.lifecycle_state || narrative.lifecycle;
-                    const config = lifecycleValue && lifecycleConfig[lifecycleValue as keyof typeof lifecycleConfig];
-                    if (!config) return null;
-                    
-                    const Icon = config.icon;
-                    
-                    // Define gradient styles for each lifecycle state
-                    const gradientStyles: Record<string, string> = {
-                      emerging: 'text-white bg-gradient-to-r from-blue-500 to-indigo-500 dark:from-blue-600 dark:to-indigo-600 shadow-lg shadow-blue-500/50 dark:shadow-blue-600/50',
-                      rising: 'text-white bg-gradient-to-r from-green-500 to-emerald-500 dark:from-green-600 dark:to-emerald-600 shadow-lg shadow-green-500/50 dark:shadow-green-600/50',
-                      hot: 'text-white bg-gradient-to-r from-orange-500 to-red-500 dark:from-orange-600 dark:to-red-600 shadow-lg shadow-orange-500/50 dark:shadow-orange-600/50',
-                      heating: 'text-white bg-gradient-to-r from-red-500 to-pink-500 dark:from-red-600 dark:to-pink-600 shadow-lg shadow-red-500/50 dark:shadow-red-600/50',
-                      mature: 'text-white bg-gradient-to-r from-purple-500 to-violet-500 dark:from-purple-600 dark:to-violet-600 shadow-lg shadow-purple-500/50 dark:shadow-purple-600/50',
-                      cooling: 'text-white bg-gradient-to-r from-gray-500 to-slate-500 dark:from-gray-600 dark:to-slate-600 shadow-lg shadow-gray-500/50 dark:shadow-gray-600/50',
-                    };
-                    
-                    const gradientClass = gradientStyles[lifecycleValue as string] || `text-${config.color} bg-${config.color}/10 dark:bg-${config.color}/20`;
-                    
-                    return (
-                      <span className={cn(
-                        'flex items-center gap-1.5 text-sm font-semibold px-3 py-1 rounded-full',
-                        gradientClass
-                      )}>
-                        <Icon className="w-4 h-4 drop-shadow-[0_0_3px_rgba(255,255,255,0.8)]" />
-                        {config.label}
-                      </span>
-                    );
-                  })()}
-                  {/* Article count badge */}
-                  <span className="text-sm font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-full">
-                    {formatNumber(narrative.article_count)} articles
-                  </span>
-                </div>
+                  );
+                })()}
               </div>
             </CardHeader>
             <CardContent>
@@ -766,11 +637,28 @@ export function Narratives() {
                 ))}
               </div>
 
+              {/* Timeline Bar */}
+              <div className="mb-4">
+                <TimelineBar
+                  first_seen={narrative.first_seen}
+                  last_updated={displayUpdated}
+                  earliest={timelineBounds.earliest}
+                  latest={timelineBounds.latest}
+                  lifecycle_state={narrative.lifecycle_state || narrative.lifecycle}
+                  timeline_data={narrative.timeline_data}
+                  tooltipText={`Started: ${formatFullTimestamp(narrative.first_seen)} • Updated: ${formatFullTimestamp(displayUpdated)}`}
+                />
+                {/* Combined date label */}
+                <div className="text-xs text-gray-600 dark:text-gray-400 mt-2 text-center">
+                  {formatDate(narrative.first_seen)} → {formatShortRelativeTime(displayUpdated)}
+                </div>
+              </div>
+
               {/* Articles section */}
               {(narrative.article_count > 0 || articles.length > 0) && (
-                <div className="mb-4 pt-4 border-t border-gray-200 dark:border-dark-border">
+                <div className="pt-4 border-t border-gray-200 dark:border-dark-border">
                   <div className="text-sm text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1">
-                    {isExpanded ? '▼' : '▶'} 📰 {articles.length > 0 ? articles.length : narrative.article_count} articles
+                    {isExpanded ? '▼' : '▶'} {formatNumber(narrative.article_count)} Articles
                   </div>
                   
                   {isExpanded && (() => {
@@ -813,49 +701,6 @@ export function Narratives() {
                   })()}
                 </div>
               )}
-
-              <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 pt-4 border-t border-gray-200 dark:border-dark-border">
-                {viewMode === 'archive' && (() => {
-                  const lifecycleState = narrative.lifecycle_state || narrative.lifecycle;
-                  
-                  // For reactivated narratives, show "Reawakened on [last_updated]"
-                  if (lifecycleState === 'reactivated') {
-                    return (
-                      <span className="text-amber-700 dark:text-amber-400 font-medium">
-                        Reawakened on {formatRelativeTime(parseNarrativeDate(displayUpdated))}
-                      </span>
-                    );
-                  }
-                  
-                  // For truly dormant narratives, find the last dormant transition in lifecycle_history
-                  if (narrative.lifecycle_history && narrative.lifecycle_history.length > 0) {
-                    // Find the most recent dormant state transition
-                    const dormantTransitions = narrative.lifecycle_history.filter(entry => entry.state === 'dormant');
-                    if (dormantTransitions.length > 0) {
-                      const lastDormantTransition = dormantTransitions[dormantTransitions.length - 1];
-                      return (
-                        <span className="text-purple-700 dark:text-purple-400 font-medium">
-                          Dormant since {formatRelativeTime(parseNarrativeDate(lastDormantTransition.timestamp))}
-                        </span>
-                      );
-                    }
-                  }
-                  
-                  // Fallback: use reawakened_from if available
-                  if (narrative.reawakened_from) {
-                    return (
-                      <span className="text-purple-700 dark:text-purple-400 font-medium">
-                        Dormant since {formatRelativeTime(parseNarrativeDate(narrative.reawakened_from))}
-                      </span>
-                    );
-                  }
-                  
-                  return null;
-                })()}
-                <span className={cn(viewMode === 'archive' ? '' : 'ml-auto')}>
-                  Updated {formatRelativeTime(parseNarrativeDate(displayUpdated))}
-                </span>
-              </div>
             </CardContent>
             </div>
           </Card>
@@ -867,8 +712,6 @@ export function Narratives() {
         <div className="text-center py-12">
           <p className="text-gray-500 dark:text-gray-400">No narratives detected yet</p>
         </div>
-      )}
-        </>
       )}
     </div>
   );

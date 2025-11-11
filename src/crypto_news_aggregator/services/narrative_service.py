@@ -740,39 +740,72 @@ async def detect_narratives(
                         mention_velocity
                     )
                     
-                    # Update the narrative in database
-                    db = await mongo_manager.get_async_database()
-                    narratives_collection = db.narratives
+                    # Use upsert_narrative to ensure timestamp validation
+                    # Get theme from existing narrative or fingerprint
+                    theme = matching_narrative.get('theme') or fingerprint.get('nucleus_entity', 'unknown')
+                    title = matching_narrative.get('title', 'Unknown')
+                    summary = matching_narrative.get('summary', '')
                     
-                    update_data = {
-                        'article_ids': combined_article_ids,
-                        'article_count': updated_article_count,
-                        'last_updated': last_updated,
-                        'mention_velocity': round(mention_velocity, 2),
-                        'lifecycle_state': lifecycle_state,
-                        'lifecycle_history': lifecycle_history,
-                        'needs_summary_update': True,
-                        'nucleus_entity': fingerprint.get('nucleus_entity', ''),
-                        'fingerprint': fingerprint
-                    }
+                    # DEBUG: Log all article dates and timestamp calculation
+                    logger.info(f"[MERGE NARRATIVE DEBUG] ========== MERGE UPSERT START ==========")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Theme: {theme}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Title: {title}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Combined article IDs: {combined_article_ids}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Article dates collected: {len(article_dates)}")
+                    if article_dates:
+                        logger.info(f"[MERGE NARRATIVE DEBUG] Article dates (sorted):")
+                        for i, date in enumerate(sorted(article_dates)):
+                            logger.info(f"[MERGE NARRATIVE DEBUG]   [{i+1}] {date}")
+                        logger.info(f"[MERGE NARRATIVE DEBUG] Earliest article: {min(article_dates)}")
+                        logger.info(f"[MERGE NARRATIVE DEBUG] Latest article: {max(article_dates)}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Existing narrative first_seen: {matching_narrative.get('first_seen')}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Calculated first_seen (from existing or now): {first_seen}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Calculated last_updated (now): {last_updated}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Is first_seen > last_updated? {first_seen > last_updated}")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] Timestamp sources: first_seen from existing narrative, last_updated from now()")
+                    logger.info(f"[MERGE NARRATIVE DEBUG] ========== MERGE UPSERT END ==========")
                     
-                    # Add resurrection tracking fields if present
-                    if resurrection_fields:
-                        update_data.update(resurrection_fields)
-                    
-                    await narratives_collection.update_one(
-                        {'_id': matching_narrative['_id']},
-                        {'$set': update_data}
-                    )
-                    
-                    logger.info(
-                        f"Merged {len(new_article_ids)} new articles into existing narrative: "
-                        f"'{matching_narrative.get('title')}' (ID: {narrative_id})"
-                    )
-                    
-                    # Add to saved narratives for return value
-                    matching_narrative.update(update_data)
-                    saved_narratives.append(matching_narrative)
+                    try:
+                        narrative_id = await upsert_narrative(
+                            theme=theme,
+                            title=title,
+                            summary=summary,
+                            entities=matching_narrative.get('entities', []),
+                            article_ids=combined_article_ids,
+                            article_count=updated_article_count,
+                            mention_velocity=round(mention_velocity, 2),
+                            lifecycle=matching_narrative.get('lifecycle', 'unknown'),
+                            momentum=matching_narrative.get('momentum', 'unknown'),
+                            recency_score=matching_narrative.get('recency_score', 0.0),
+                            entity_relationships=matching_narrative.get('entity_relationships', []),
+                            first_seen=first_seen,
+                            lifecycle_state=lifecycle_state,
+                            lifecycle_history=lifecycle_history,
+                            reawakening_count=resurrection_fields.get('reawakening_count') if resurrection_fields else None,
+                            reawakened_from=resurrection_fields.get('reawakened_from') if resurrection_fields else None,
+                            resurrection_velocity=resurrection_fields.get('resurrection_velocity') if resurrection_fields else None
+                        )
+                        
+                        logger.info(
+                            f"Merged {len(new_article_ids)} new articles into existing narrative: "
+                            f"'{title}' (ID: {narrative_id})"
+                        )
+                        
+                        # Fetch updated narrative for return value
+                        db = await mongo_manager.get_async_database()
+                        updated_narrative = await db.narratives.find_one({'_id': matching_narrative['_id']})
+                        if updated_narrative:
+                            saved_narratives.append(updated_narrative)
+                    except Exception as e:
+                        logger.exception(f"Failed to update narrative '{theme}': {e}")
+                        # Still add to saved narratives with local data
+                        matching_narrative['article_ids'] = combined_article_ids
+                        matching_narrative['article_count'] = updated_article_count
+                        matching_narrative['last_updated'] = last_updated
+                        matching_narrative['mention_velocity'] = round(mention_velocity, 2)
+                        matching_narrative['lifecycle_state'] = lifecycle_state
+                        matching_narrative['lifecycle_history'] = lifecycle_history
+                        saved_narratives.append(matching_narrative)
                     
                 else:
                     # No match found - create new narrative
@@ -794,14 +827,20 @@ async def detect_narratives(
                     # Get articles for this narrative to extract dates
                     article_ids = narrative_data.get("article_ids", [])
                     article_dates = []
+                    articles_found = 0
                     for article in articles:
                         if str(article.get("_id")) in article_ids:
+                            articles_found += 1
                             pub_date = article.get("published_at")
                             if pub_date:
                                 # Ensure timezone-aware
                                 if pub_date.tzinfo is None:
                                     pub_date = pub_date.replace(tzinfo=timezone.utc)
                                 article_dates.append(pub_date)
+                    
+                    # DEBUG: Log if we're missing articles
+                    if articles_found != len(article_ids):
+                        logger.warning(f"[CREATE NARRATIVE] Only found {articles_found}/{len(article_ids)} articles in articles list!")
                     
                     # Use recent velocity calculation (last 7 days) for more accurate current activity
                     mention_velocity = calculate_recent_velocity(article_dates, lookback_days=7)
@@ -827,8 +866,16 @@ async def detect_narratives(
                     lifecycle = determine_lifecycle_stage(article_count, mention_velocity, momentum)
                     
                     # Determine lifecycle state (new approach)
-                    first_seen = datetime.now(timezone.utc)
-                    last_updated = datetime.now(timezone.utc)
+                    # Use article dates for first_seen and last_updated, not now()
+                    if article_dates:
+                        first_seen = min(article_dates)
+                        last_updated = max(article_dates)
+                        logger.info(f"[CREATE NARRATIVE] Using article dates: first_seen={first_seen}, last_updated={last_updated}, article_count={len(article_dates)}")
+                    else:
+                        # Fallback to now() if no article dates available
+                        first_seen = datetime.now(timezone.utc)
+                        last_updated = datetime.now(timezone.utc)
+                        logger.warning(f"[CREATE NARRATIVE] NO ARTICLE DATES! Using now(): first_seen={first_seen}, last_updated={last_updated}")
                     # No previous state for new narratives
                     lifecycle_state = determine_lifecycle_state(
                         article_count, mention_velocity, first_seen, last_updated, previous_state=None
@@ -855,47 +902,50 @@ async def detect_narratives(
                     narrative_data["momentum"] = momentum
                     narrative_data["recency_score"] = round(recency_score, 3)
                     
+                    # DEBUG: Log all article dates and timestamp calculation for new narrative
+                    logger.info(f"[CREATE NARRATIVE DEBUG] ========== CREATE UPSERT START ==========")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Theme: {theme}")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Title: {narrative_data.get('title')}")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Article IDs: {narrative_data['article_ids']}")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Article dates collected: {len(article_dates)}")
+                    if article_dates:
+                        logger.info(f"[CREATE NARRATIVE DEBUG] Article dates (sorted):")
+                        for i, date in enumerate(sorted(article_dates)):
+                            logger.info(f"[CREATE NARRATIVE DEBUG]   [{i+1}] {date}")
+                        logger.info(f"[CREATE NARRATIVE DEBUG] Earliest article: {min(article_dates)}")
+                        logger.info(f"[CREATE NARRATIVE DEBUG] Latest article: {max(article_dates)}")
+                    else:
+                        logger.warning(f"[CREATE NARRATIVE DEBUG] NO ARTICLE DATES FOUND!")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Calculated first_seen (now): {first_seen}")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Calculated last_updated (now): {last_updated}")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Is first_seen > last_updated? {first_seen > last_updated}")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Timestamp sources: BOTH from now() - THIS IS THE BUG!")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] Should use: first_seen = min(article_dates), last_updated = max(article_dates)")
+                    logger.info(f"[CREATE NARRATIVE DEBUG] ========== CREATE UPSERT END ==========")
+                    
                     try:
-                        # Save new narrative to database with fingerprint
-                        db = await mongo_manager.get_async_database()
-                        narratives_collection = db.narratives
-                        
-                        narrative_doc = {
-                            "theme": theme,
-                            "title": narrative_data["title"],
-                            "summary": narrative_data["summary"],
-                            "nucleus_entity": narrative_data.get("nucleus_entity", ""),
-                            "entities": narrative_data.get("actors", [])[:10],
-                            "article_ids": narrative_data["article_ids"],
-                            "article_count": article_count,
-                            "mention_velocity": round(mention_velocity, 2),
-                            "lifecycle": lifecycle,
-                            "lifecycle_state": lifecycle_state,
-                            "lifecycle_history": lifecycle_history,
-                            "momentum": momentum,
-                            "recency_score": round(recency_score, 3),
-                            "entity_relationships": narrative_data.get("entity_relationships", []),
-                            "fingerprint": fingerprint,
-                            "needs_summary_update": False,
-                            "first_seen": first_seen,
-                            "last_updated": last_updated,
-                            "timeline_data": [],
-                            "peak_activity": {
-                                "date": datetime.now(timezone.utc).date().isoformat(),
-                                "article_count": article_count,
-                                "velocity": round(mention_velocity, 2)
-                            },
-                            "days_active": 1,
-                            "status": lifecycle_state  # Add status field for matching logic
-                        }
-                        
-                        # Validate fingerprint before insertion
+                        # Validate fingerprint before creation
                         if not fingerprint or not fingerprint.get('nucleus_entity'):
                             logger.error(f"Cannot create narrative - invalid fingerprint: {fingerprint}")
                             raise ValueError("Narrative fingerprint must have a valid nucleus_entity")
                         
-                        result = await narratives_collection.insert_one(narrative_doc)
-                        narrative_id = str(result.inserted_id)
+                        # Use upsert_narrative to ensure timestamp validation
+                        narrative_id = await upsert_narrative(
+                            theme=theme,
+                            title=narrative_data["title"],
+                            summary=narrative_data["summary"],
+                            entities=narrative_data.get("actors", [])[:10],
+                            article_ids=narrative_data["article_ids"],
+                            article_count=article_count,
+                            mention_velocity=round(mention_velocity, 2),
+                            lifecycle=lifecycle,
+                            momentum=momentum,
+                            recency_score=round(recency_score, 3),
+                            entity_relationships=narrative_data.get("entity_relationships", []),
+                            first_seen=first_seen,
+                            lifecycle_state=lifecycle_state,
+                            lifecycle_history=lifecycle_history
+                        )
                         
                         logger.info(f"Created new narrative {narrative_id}: {narrative_data['title']}")
                         saved_narratives.append(narrative_data)

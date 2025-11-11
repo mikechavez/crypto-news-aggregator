@@ -114,6 +114,7 @@ class NarrativeResponse(BaseModel):
     entity_relationships: Optional[List[Dict[str, Any]]] = Field(default=[], description="Top 5 entity co-occurrence pairs with weights: [{'a': 'SEC', 'b': 'Binance', 'weight': 3}]")
     first_seen: str = Field(..., description="ISO timestamp when narrative was first detected")
     last_updated: str = Field(..., description="ISO timestamp of last update")
+    last_article_at: Optional[str] = Field(default=None, description="ISO timestamp when the most recent article was published to this narrative")
     days_active: int = Field(default=1, description="Number of days narrative has been active")
     peak_activity: Optional[PeakActivity] = Field(default=None, description="Peak activity metrics")
     articles: List[Dict[str, Any]] = Field(default=[], description="Recent articles in this narrative")
@@ -198,6 +199,28 @@ async def get_active_narratives_endpoint(
             {'$match': match_stage},
             {'$sort': {'last_updated': -1}},
             {'$limit': limit},
+            # Lookup articles to get the most recent article timestamp
+            {'$lookup': {
+                'from': 'articles',
+                'let': {'article_ids': '$article_ids'},
+                'pipeline': [
+                    {'$match': {
+                        '$expr': {
+                            '$in': [{'$toString': '$_id'}, '$$article_ids']
+                        }
+                    }},
+                    {'$project': {'published_at': 1}},
+                    {'$sort': {'published_at': -1}},
+                    {'$limit': 1}
+                ],
+                'as': 'recent_articles'
+            }},
+            # Add computed field for last_article_at
+            {'$addFields': {
+                'last_article_at': {
+                    '$arrayElemAt': ['$recent_articles.published_at', 0]
+                }
+            }},
             {'$project': {
                 '_id': 1,
                 'theme': 1,
@@ -213,6 +236,7 @@ async def get_active_narratives_endpoint(
                 'entity_relationships': 1,
                 'first_seen': 1,
                 'last_updated': 1,
+                'last_article_at': 1,
                 'days_active': 1,
                 'peak_activity': 1,
                 'reawakening_count': 1,
@@ -247,6 +271,14 @@ async def get_active_narratives_endpoint(
                 # Use last_updated as fallback
                 first_seen_str = last_updated_str
             
+            # DEBUG: Log timestamp ordering
+            theme = narrative.get("theme", "unknown")
+            if first_seen and last_updated:
+                if first_seen > last_updated:
+                    logger.warning(f"[API TIMESTAMP BUG] Narrative '{theme}': first_seen={first_seen_str} > last_updated={last_updated_str}")
+                else:
+                    logger.debug(f"[API TIMESTAMP OK] Narrative '{theme}': first_seen={first_seen_str} <= last_updated={last_updated_str}")
+            
             # Handle both old (story) and new (summary) field names
             summary = narrative.get("summary") or narrative.get("story", "")
             
@@ -267,6 +299,19 @@ async def get_active_narratives_endpoint(
             if reawakened_from:
                 reawakened_from_str = reawakened_from.isoformat() if hasattr(reawakened_from, 'isoformat') else str(reawakened_from)
             
+            # Handle last_article_at timestamp (most recent article published_at)
+            last_article_at = narrative.get("last_article_at")
+            last_article_at_str = None
+            if last_article_at:
+                last_article_at_str = last_article_at.isoformat() if hasattr(last_article_at, 'isoformat') else str(last_article_at)
+                # DEBUG: Log when last_article_at differs from last_updated
+                if last_article_at_str != last_updated_str:
+                    logger.debug(f"[API DEBUG] Narrative '{narrative.get('theme')}': last_article_at={last_article_at_str}, last_updated={last_updated_str}")
+            else:
+                # Fallback to last_updated if no articles found
+                last_article_at_str = last_updated_str
+                logger.debug(f"[API DEBUG] Narrative '{narrative.get('theme')}': No last_article_at, using last_updated={last_updated_str}")
+            
             narrative_id = str(narrative.get("_id", ""))
             response_data.append({
                 "id": narrative_id,  # Include as 'id' for Pydantic model
@@ -286,6 +331,7 @@ async def get_active_narratives_endpoint(
                 "entity_relationships": narrative.get("entity_relationships", []),
                 "first_seen": first_seen_str,
                 "last_updated": last_updated_str,
+                "last_article_at": last_article_at_str,
                 "days_active": days_active,
                 "peak_activity": peak_activity,
                 "articles": articles,

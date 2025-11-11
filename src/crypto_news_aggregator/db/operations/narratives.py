@@ -117,6 +117,26 @@ async def upsert_narrative(
     # Check if narrative with this theme exists
     existing = await collection.find_one({"theme": theme})
     
+    # Validate and normalize first_seen and last_updated timestamps
+    first_seen_date = first_seen or now
+    if first_seen_date.tzinfo is None:
+        first_seen_date = first_seen_date.replace(tzinfo=timezone.utc)
+    
+    # Ensure last_updated >= first_seen (prevent data corruption)
+    if now < first_seen_date:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            f"[NARRATIVE VALIDATION] Detected reversed timestamps for theme '{theme}': "
+            f"last_updated ({now}) < first_seen ({first_seen_date}). "
+            f"Using first_seen as last_updated to maintain data integrity."
+        )
+        # Use first_seen as the update time if current time is somehow before first_seen
+        # (this shouldn't happen in normal operation but protects against clock skew)
+        last_updated_date = first_seen_date
+    else:
+        last_updated_date = now
+    
     # Create today's timeline snapshot
     timeline_snapshot = {
         "date": today,
@@ -127,7 +147,38 @@ async def upsert_narrative(
     
     if existing:
         # Update existing narrative
-        first_seen_date = existing.get("first_seen", now)
+        existing_first_seen = existing.get("first_seen", now)
+        if existing_first_seen.tzinfo is None:
+            existing_first_seen = existing_first_seen.replace(tzinfo=timezone.utc)
+        
+        # Check if existing first_seen is already corrupted (in the future)
+        if existing_first_seen > now:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"[NARRATIVE VALIDATION] Detected corrupted first_seen for theme '{theme}': "
+                f"first_seen ({existing_first_seen}) is in the future (now: {now}). "
+                f"Resetting first_seen to now to fix data corruption."
+            )
+            # Fix corrupted first_seen by using current time
+            existing_first_seen = now
+        
+        # Validate existing first_seen vs new last_updated
+        # If last_updated would be before first_seen, keep the existing first_seen
+        if last_updated_date < existing_first_seen:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"[NARRATIVE VALIDATION] Update would create reversed timestamps for theme '{theme}': "
+                f"new last_updated ({last_updated_date}) < existing first_seen ({existing_first_seen}). "
+                f"Keeping existing first_seen and using it as last_updated."
+            )
+            # Use existing first_seen as both first_seen and last_updated
+            first_seen_date = existing_first_seen
+            last_updated_date = existing_first_seen
+        else:
+            first_seen_date = existing_first_seen
+        
         days_active = _calculate_days_active(first_seen_date)
         
         # Get existing timeline data and peak activity
@@ -162,7 +213,8 @@ async def upsert_narrative(
             "momentum": momentum,
             "recency_score": recency_score,
             "entity_relationships": entity_relationships or [],
-            "last_updated": now,
+            "first_seen": first_seen_date,
+            "last_updated": last_updated_date,
             "timeline_data": timeline_data,
             "peak_activity": peak_activity,
             "days_active": days_active
@@ -191,7 +243,6 @@ async def upsert_narrative(
         return str(existing["_id"])
     else:
         # Create new narrative with initial timeline data
-        first_seen_date = first_seen or now
         days_active = _calculate_days_active(first_seen_date)
         
         narrative_data = {
@@ -201,7 +252,7 @@ async def upsert_narrative(
             "entities": entities,
             "article_ids": article_ids,
             "first_seen": first_seen_date,
-            "last_updated": now,
+            "last_updated": last_updated_date,
             "article_count": article_count,
             "mention_velocity": mention_velocity,
             "lifecycle": lifecycle,
