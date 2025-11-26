@@ -31,6 +31,31 @@ class FakeLLMProvider:
         return self._relevance
 
 
+class FakeOptimizedLLM:
+    """Fake optimized LLM for testing entity extraction."""
+    
+    HAIKU_MODEL = "claude-3-5-haiku-20241022"
+    
+    async def extract_entities_batch(self, articles):
+        """Return mock entities based on article content."""
+        results = []
+        for article in articles:
+            title = article.get("title", "").lower()
+            entities = []
+            if "bitcoin" in title or "btc" in title:
+                entities.append({"name": "Bitcoin", "type": "cryptocurrency", "confidence": 0.95, "is_primary": True})
+            if "ethereum" in title or "eth" in title:
+                entities.append({"name": "Ethereum", "type": "cryptocurrency", "confidence": 0.9, "is_primary": False})
+            results.append({"entities": entities})
+        return results
+    
+    async def get_cache_stats(self):
+        return {"active_entries": 0, "hit_rate_percent": 0.0}
+    
+    async def get_cost_summary(self):
+        return {"month_to_date": 0.0, "projected_monthly": 0.0}
+
+
 class FakeRSSService:
     def __init__(self, articles):
         self._articles = articles
@@ -49,6 +74,11 @@ async def test_process_new_articles_from_mongodb_enriches_articles(
         "get_llm_provider",
         lambda: FakeLLMProvider(themes=["ETFs", "Institutional"]),
     )
+    
+    # Mock optimized LLM
+    async def mock_get_optimized_llm(db):
+        return FakeOptimizedLLM()
+    monkeypatch.setattr(rss_fetcher, "get_optimized_llm", mock_get_optimized_llm)
 
     await mongo_db.articles.delete_many({})
     article_doc = {
@@ -91,6 +121,12 @@ async def test_fetch_and_process_rss_feeds_persists_and_enriches(mongo_db, monke
         "get_llm_provider",
         lambda: FakeLLMProvider(themes=["ETFs", "Institutional"]),
     )
+    
+    # Mock optimized LLM
+    async def mock_get_optimized_llm(db):
+        return FakeOptimizedLLM()
+    monkeypatch.setattr(rss_fetcher, "get_optimized_llm", mock_get_optimized_llm)
+    
     await mongo_db.articles.delete_many({})
 
     article = ArticleCreate(
