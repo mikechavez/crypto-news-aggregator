@@ -62,6 +62,7 @@ from fastapi.responses import JSONResponse
 
 from .api.v1 import router as api_router
 from .api import openai_compatibility as openai_api
+from .api import admin as admin_api
 from .core.monitoring import setup_performance_monitoring
 from .core.config import get_settings
 from .core.auth import API_KEY_NAME
@@ -185,6 +186,9 @@ async def forbidden_exception_handler(request: Request, exc: Exception):
 app.include_router(api_router)
 
 app.include_router(openai_api.router, prefix="/v1/chat", tags=["OpenAI Compatibility"])
+
+# Admin endpoints for cost monitoring
+app.include_router(admin_api.router)
 
 
 # Root health check for deployment platforms
