@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { Signals } from './pages/Signals';
 import { Narratives } from './pages/Narratives';
 import { Articles } from './pages/Articles';
+import { CostMonitor } from './pages/CostMonitor';
 // import { EntityDetail } from './pages/EntityDetail';
 
 const queryClient = new QueryClient({
@@ -26,6 +27,7 @@ function App() {
             <Route path="/signals" element={<Signals />} />
             <Route path="/narratives" element={<Narratives />} />
             <Route path="/articles" element={<Articles />} />
+            <Route path="/cost-monitor" element={<CostMonitor />} />
             {/* TODO: Uncomment when backend /api/v1/entities endpoints are implemented */}
             {/* <Route path="/entity/:id" element={<EntityDetail />} /> */}
           </Routes>
