@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { TrendingUp, Newspaper, FileText, Moon, Sun } from 'lucide-react';
+import { TrendingUp, Newspaper, FileText, DollarSign, Moon, Sun } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -16,6 +16,7 @@ export function Layout({ children }: LayoutProps) {
     { path: '/signals', label: 'Signals', icon: TrendingUp },
     { path: '/narratives', label: 'Narratives', icon: Newspaper },
     { path: '/articles', label: 'Articles', icon: FileText },
+    { path: '/cost-monitor', label: 'Cost Monitor', icon: DollarSign },
   ];
 
   return (
