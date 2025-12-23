@@ -169,58 +169,72 @@ async def get_trending_entities(
 ) -> List[Dict[str, Any]]:
     """
     Get trending entities sorted by signal score for a specific timeframe.
-    
-    Filters out stale entities that have no current entity_mentions.
-    
+
+    Filters out stale entities that have no recent entity_mentions within the timeframe.
+
     Args:
         limit: Maximum number of results (default 20)
         min_score: Minimum signal score threshold (default 0.0)
         entity_type: Filter by entity type (optional)
         timeframe: Time window for scoring (24h, 7d, or 30d, default 7d)
-    
+
     Returns:
-        List of signal score documents with active mentions
+        List of signal score documents with recent mentions in the timeframe
     """
     db = await mongo_manager.get_async_database()
     collection = db.signal_scores
     entity_mentions = db.entity_mentions
-    
-    # Map timeframe to score field
+
+    # Map timeframe to score field and days
     score_field_map = {
         "24h": "score_24h",
         "7d": "score_7d",
         "30d": "score_30d",
     }
-    
+
+    timeframe_days_map = {
+        "24h": 1,
+        "7d": 7,
+        "30d": 30,
+    }
+
     score_field = score_field_map.get(timeframe, "score_7d")
-    
+    days = timeframe_days_map.get(timeframe, 7)
+
+    # Calculate cutoff date for filtering mentions
+    from datetime import timedelta
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+
     # Build query - filter by the timeframe-specific score
     query = {score_field: {"$gte": min_score}}
     if entity_type:
         query["entity_type"] = entity_type
-    
+
     # Get trending entities sorted by timeframe-specific score
     # Fetch more than needed to account for filtering
     cursor = collection.find(query).sort(score_field, -1).limit(limit * 2)
-    
+
     results = []
     async for signal in cursor:
         entity = signal.get("entity")
-        
-        # Verify entity has current mentions (filter out stale signals)
+
+        # Verify entity has RECENT mentions within the timeframe (filter out stale signals)
         mention_count = await entity_mentions.count_documents(
-            {"entity": entity},
+            {
+                "entity": entity,
+                "timestamp": {"$gte": cutoff_date}
+            },
             limit=1
         )
-        
+
         if mention_count > 0:
             signal["_id"] = str(signal["_id"])
             results.append(signal)
-            
+
             # Stop once we have enough valid results
             if len(results) >= limit:
                 break
-    
+
     return results
 
 
