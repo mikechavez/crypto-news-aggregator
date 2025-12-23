@@ -75,7 +75,7 @@ export interface Narrative {
   theme: string;              // Theme category (e.g., regulatory, defi_adoption)
   title: string;              // Generated narrative title
   summary: string;            // AI-generated narrative summary
-  entities: string[];         // List of entities in this narrative
+  entities?: string[];        // List of entities in this narrative
   article_count: number;      // Number of articles supporting this narrative
   mention_velocity: number;   // Articles per day rate
   lifecycle: string;          // Lifecycle stage: emerging, rising, hot, cooling, dormant
@@ -87,9 +87,11 @@ export interface Narrative {
   entity_relationships?: EntityRelationship[]; // Top entity co-occurrence pairs
   first_seen: string;         // ISO timestamp when narrative was first detected
   last_updated: string;       // ISO timestamp of last update
+  last_article_at?: string;   // ISO timestamp when most recent article was published to this narrative
   days_active?: number;       // Number of days narrative has been active
   peak_activity?: PeakActivity; // Peak activity metrics
-  articles: ArticleLink[];    // Articles supporting this narrative
+  timeline_data?: Array<{date: string; article_count: number; entities: string[]; velocity: number}>; // Daily timeline snapshots
+  articles?: ArticleLink[];   // Articles supporting this narrative
   // Resurrection/reawakening fields
   reawakening_count?: number; // Number of times narrative has been reactivated from dormant state
   reawakened_from?: string;   // ISO timestamp when narrative went dormant before most recent reactivation

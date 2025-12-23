@@ -626,16 +626,18 @@ export function Narratives() {
                 <p className="text-gray-700 dark:text-gray-300 mb-4">{displaySummary}</p>
               )}
               
-              <div className="flex flex-wrap gap-2 mb-4">
-                {narrative.entities.map((entity, idx) => (
-                  <span
-                    key={idx}
-                    className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-1 rounded text-sm"
-                  >
-                    {entity}
-                  </span>
-                ))}
-              </div>
+              {narrative.entities && narrative.entities.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {narrative.entities.map((entity, idx) => (
+                    <span
+                      key={idx}
+                      className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-1 rounded text-sm"
+                    >
+                      {entity}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               {/* Timeline Bar */}
               <div className="mb-4">
