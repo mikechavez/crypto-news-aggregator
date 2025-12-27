@@ -29,6 +29,7 @@ from .endpoints import auth
 from .endpoints import signals
 from .endpoints import narratives
 from .endpoints import entity_alerts
+from .endpoints import briefing
 
 # Import test endpoints only when explicitly enabled
 def _enable_test_endpoints() -> bool:
@@ -61,6 +62,7 @@ api_key_router.include_router(signals.router, prefix="/signals", tags=["signals"
 api_key_router.include_router(narratives.router, prefix="/narratives", tags=["narratives"])
 api_key_router.include_router(entity_alerts.router, prefix="", tags=["entity-alerts"])
 api_key_router.include_router(articles.router, prefix="/articles", tags=["articles"])
+api_key_router.include_router(briefing.router, prefix="/briefing", tags=["briefing"])
 
 # Include test endpoints only when explicitly enabled
 if _enable_test_endpoints():

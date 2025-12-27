@@ -168,3 +168,39 @@ export interface NarrativeFilters extends Record<string, string | number | boole
   limit?: number;
   offset?: number;
 }
+
+// Briefing types
+export interface BriefingRecommendation {
+  title: string;           // Narrative title
+  theme: string;           // Theme category (Regulatory, Technology, etc.)
+  narrative_id?: string;   // Optional link to narrative
+}
+
+export interface BriefingContent {
+  narrative: string;                    // Full analyst memo (markdown)
+  key_insights: string[];               // Bullet points
+  entities_mentioned: string[];         // Entities in this briefing
+  detected_patterns: string[];          // Patterns agent identified
+  recommendations: BriefingRecommendation[]; // Recommended reading
+}
+
+export interface BriefingMetadata {
+  narratives_analyzed: number;
+  signals_analyzed: number;
+  articles_analyzed: number;
+  generation_time_ms: number;
+}
+
+export interface Briefing {
+  _id: string;
+  type: 'morning' | 'evening';
+  generated_at: string;                 // ISO timestamp
+  content: BriefingContent;
+  metadata: BriefingMetadata;
+  version: string;
+}
+
+export interface BriefingResponse {
+  briefing: Briefing | null;
+  next_briefing_at: string;             // ISO timestamp for next briefing
+}

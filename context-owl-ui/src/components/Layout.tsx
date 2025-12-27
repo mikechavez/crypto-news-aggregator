@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { TrendingUp, Newspaper, FileText, DollarSign, Moon, Sun } from 'lucide-react';
+import { BookOpen, TrendingUp, Newspaper, FileText, DollarSign, Moon, Sun } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -13,6 +13,7 @@ export function Layout({ children }: LayoutProps) {
   const { theme, toggleTheme } = useTheme();
 
   const navItems = [
+    { path: '/', label: 'Briefing', icon: BookOpen },
     { path: '/signals', label: 'Signals', icon: TrendingUp },
     { path: '/narratives', label: 'Narratives', icon: Newspaper },
     { path: '/articles', label: 'Articles', icon: FileText },
@@ -26,7 +27,7 @@ export function Layout({ children }: LayoutProps) {
           <div className="flex justify-between h-16">
             <div className="flex">
               <div className="flex-shrink-0 flex items-center">
-                <h1 className="text-2xl font-bold text-blue-600">Context Owl</h1>
+                <h1 className="text-2xl font-bold text-blue-600">Backdrop</h1>
               </div>
               <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
                 {navItems.map((item) => {
