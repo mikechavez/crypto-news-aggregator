@@ -104,3 +104,6 @@ config.ini
 
 # Vercel
 .vercel/
+
+# Briefing agent memory (instance-specific)
+briefing_memory/

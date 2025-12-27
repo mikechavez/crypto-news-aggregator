@@ -14,7 +14,9 @@ result_backend = settings.CELERY_RESULT_BACKEND
 task_serializer = "json"
 result_serializer = "json"
 accept_content = ["json"]
-timezone = "UTC"
+# Use America/New_York for EST/EDT timezone handling in schedules
+# This ensures 8 AM and 8 PM EST briefings run at correct times year-round
+timezone = "America/New_York"
 enable_utc = True
 
 # Worker settings
@@ -51,12 +53,17 @@ task_queues = {
         "exchange": "alerts",
         "routing_key": "alerts",
     },
+    "briefings": {
+        "exchange": "briefings",
+        "routing_key": "briefings",
+    },
 }
 
 task_routes = {
     "crypto_news_aggregator.tasks.alert_tasks.*": {"queue": "alerts"},
     "crypto_news_aggregator.tasks.fetch_news.*": {"queue": "news"},
     "crypto_news_aggregator.tasks.price_monitor.*": {"queue": "price"},
+    "crypto_news_aggregator.tasks.briefing_tasks.*": {"queue": "briefings"},
 }
 
 

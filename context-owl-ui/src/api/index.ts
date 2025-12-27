@@ -4,6 +4,7 @@ export { narrativesAPI } from './narratives';
 export { entitiesAPI } from './entities';
 export { articlesAPI } from './articles';
 export { adminAPI } from './admin';
+export { briefingAPI } from './briefing';
 export type {
   CostSummary,
   DailyCost,

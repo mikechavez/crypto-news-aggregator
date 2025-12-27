@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
+import { Briefing } from './pages/Briefing';
 import { Signals } from './pages/Signals';
 import { Narratives } from './pages/Narratives';
 import { Articles } from './pages/Articles';
@@ -23,7 +24,7 @@ function App() {
       <BrowserRouter>
         <Layout>
           <Routes>
-            <Route path="/" element={<Navigate to="/signals" replace />} />
+            <Route path="/" element={<Briefing />} />
             <Route path="/signals" element={<Signals />} />
             <Route path="/narratives" element={<Narratives />} />
             <Route path="/articles" element={<Articles />} />
