@@ -134,57 +134,72 @@ async def get_narrative_details(narrative_ids: List[str]) -> List[Dict[str, Any]
 async def get_recent_articles_for_entity(entity: str, limit: int = 5) -> List[Dict[str, Any]]:
     """
     Fetch recent articles mentioning a specific entity.
-    
+
+    Uses aggregation pipeline to join entity_mentions with articles and sort by
+    actual article publication date (not mention timestamp), ensuring the most
+    recently published articles are returned.
+
     Args:
         entity: The entity name to search for
         limit: Maximum number of articles to return (default 5)
-    
+
     Returns:
         List of article dicts with title, url, source, published_at
     """
     db = await mongo_manager.get_async_database()
-    
-    # First, get article IDs from entity_mentions (these are MongoDB ObjectIds)
     mentions_collection = db.entity_mentions
-    cursor = mentions_collection.find(
-        {"entity": entity}
-    ).sort("timestamp", -1).limit(limit * 2)  # Get more mentions to ensure we have enough unique articles
-    
-    article_object_ids = []
-    seen_ids = set()
-    async for mention in cursor:
-        article_id = mention.get("article_id")
-        if article_id and article_id not in seen_ids:
-            try:
-                # Convert string to ObjectId if needed
-                if isinstance(article_id, str):
-                    article_object_ids.append(ObjectId(article_id))
-                else:
-                    article_object_ids.append(article_id)
-                seen_ids.add(article_id)
-                if len(article_object_ids) >= limit:
-                    break
-            except Exception:
-                continue
-    
-    if not article_object_ids:
-        return []
-    
-    # Fetch article details using _id field
-    articles_collection = db.articles
-    cursor = articles_collection.find(
-        {"_id": {"$in": article_object_ids}}
-    ).sort("published_at", -1).limit(limit)
-    
+
+    # Use aggregation pipeline to join entity_mentions with articles
+    # and sort by article published_at (not mention timestamp)
+    pipeline = [
+        # Match mentions for this entity
+        {"$match": {"entity": entity}},
+
+        # Convert article_id string to ObjectId if needed for lookup
+        {"$addFields": {
+            "article_oid": {"$cond": [
+                {"$eq": [{"$type": "$article_id"}, "string"]},
+                {"$toObjectId": "$article_id"},
+                "$article_id"
+            ]}
+        }},
+
+        # Join with articles collection
+        {"$lookup": {
+            "from": "articles",
+            "localField": "article_oid",
+            "foreignField": "_id",
+            "as": "article"
+        }},
+
+        # Unwind the article array (should only be one)
+        {"$unwind": "$article"},
+
+        # Sort by article published_at descending (most recent first)
+        {"$sort": {"article.published_at": -1}},
+
+        # Limit to requested number
+        {"$limit": limit},
+
+        # Project only the fields we need
+        {"$project": {
+            "_id": 0,
+            "title": "$article.title",
+            "url": "$article.url",
+            "source": "$article.source",
+            "published_at": "$article.published_at"
+        }}
+    ]
+
     articles = []
-    async for article in cursor:
+    async for doc in mentions_collection.aggregate(pipeline):
         articles.append({
-            "title": article.get("title", ""),
-            "url": article.get("url", ""),
-            "source": article.get("source", ""),
-            "published_at": article.get("published_at").isoformat() if article.get("published_at") else None
+            "title": doc.get("title", ""),
+            "url": doc.get("url", ""),
+            "source": doc.get("source", ""),
+            "published_at": doc.get("published_at").isoformat() if doc.get("published_at") else None
         })
-    
+
     return articles
 
 
