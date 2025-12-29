@@ -511,11 +511,18 @@ Given the following article, describe:
 
 Then summarize in 2-3 sentences what broader narrative this article contributes to.
 
+**CRITICAL - ANTI-HALLUCINATION RULES:**
+1. ONLY extract information explicitly stated in the article
+2. Do NOT add titles or roles from your training knowledge
+3. Do NOT assume someone is CEO, Chairman, etc. - people change positions
+4. If the article says "CZ" without a title, just use "CZ" - don't add "Binance CEO"
+5. Focus on WHAT happened, not assumptions about who holds what position
+
 **ENTITY NORMALIZATION GUIDELINES:**
 
 1. **Normalize entity names to canonical forms:**
    - "U.S. Securities and Exchange Commission" → "SEC"
-   - "Securities and Exchange Commission" → "SEC"  
+   - "Securities and Exchange Commission" → "SEC"
    - "US SEC" → "SEC"
    - "Ethereum Foundation" → "Ethereum"
    - "Ethereum network" → "Ethereum"
@@ -528,6 +535,7 @@ Then summarize in 2-3 sentences what broader narrative this article contributes 
    - Always use the shortest, most recognizable form
    - Use common abbreviations (SEC, ETF, DeFi) not full names
    - For cryptocurrencies, use the name not ticker (Bitcoin not BTC, Ethereum not ETH)
+   - For people: use their name only, NOT their title (e.g., "CZ" not "Binance CEO CZ")
 
 2. **Nucleus entity selection rules:**
    - If multiple entities have salience 5, choose the one most directly responsible for the main action
@@ -1009,17 +1017,24 @@ async def generate_narrative_from_cluster(cluster: List[Dict[str, Any]]) -> Opti
     snippets_text = "\n".join(article_snippets)
     
     # Build prompt for narrative generation
-    prompt = f"""Analyze these related crypto news articles that share common actors and themes:
+    prompt = f"""Analyze these related crypto news articles and generate a narrative summary.
 
+ARTICLES:
 {snippets_text}
 
 Common actors: {', '.join(unique_actors[:10])}
-Common tensions: {', '.join(unique_tensions[:5])}
 Primary focus: {primary_nucleus}
 
-Generate a cohesive narrative summary:
-1. Create a concise title (max 60 characters) that captures the main story
-2. Write a 2-3 sentence summary of what's happening in this narrative
+CRITICAL RULES:
+1. ONLY use information explicitly stated in the articles above
+2. Do NOT add titles, roles, or facts from your training knowledge
+3. Do NOT assume current roles/titles - people change positions (e.g., someone may have resigned)
+4. If articles don't specify a person's title, don't add one
+5. Focus on WHAT happened, not who holds what position
+
+Generate:
+1. A concise title (max 60 characters) capturing the main story
+2. A 2-3 sentence summary of what's happening based ONLY on the article content
 
 Return valid JSON with no newlines in string values: {{"title": "...", "summary": "..."}}"""
     
@@ -1059,7 +1074,7 @@ Return valid JSON with no newlines in string values: {{"title": "...", "summary"
         
         # Polish the summary for better tone and consistency
         if narrative_data and narrative_data.get('summary'):
-            polish_prompt = f"""Rewrite this narrative summary in 1-2 punchy sentences suitable for a crypto intelligence dashboard. Make it neutral and headline-like:
+            polish_prompt = f"""Rewrite this narrative summary in 1-2 punchy sentences suitable for a crypto intelligence dashboard.
 
 Original: {narrative_data['summary']}
 
@@ -1069,6 +1084,8 @@ Requirements:
 - Focus on the key insight or development
 - 1-2 sentences maximum
 - Professional, neutral tone
+- CRITICAL: Do NOT add any titles, roles, or facts not in the original
+- Do NOT call anyone CEO, Chairman, etc. unless the original says so
 
 Respond with ONLY the rewritten summary, no other text."""
 

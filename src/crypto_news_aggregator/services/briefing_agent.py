@@ -39,10 +39,10 @@ logger = logging.getLogger(__name__)
 
 # LLM Configuration
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-DEFAULT_MODEL = "claude-3-haiku-20240307"
+DEFAULT_MODEL = "claude-sonnet-4-5-20250929"  # Sonnet 4.5 - best instruction following
 FALLBACK_MODELS = [
-    "claude-3-5-sonnet-20241022",
-    "claude-3-5-sonnet-20240620",
+    "claude-3-5-haiku-20241022",  # Newer Haiku as fallback
+    "claude-3-haiku-20240307",    # Old Haiku as last resort
 ]
 
 
@@ -203,21 +203,79 @@ class BriefingAgent:
         signals = await cursor.to_list(length=limit)
         return signals
 
-    async def _get_active_narratives(self, limit: int = 15) -> List[Dict[str, Any]]:
-        """Get active narratives from the database."""
+    async def _get_active_narratives(self, limit: int = 15, max_age_days: int = 7) -> List[Dict[str, Any]]:
+        """Get active narratives from the database with fresh recency calculation.
+
+        Args:
+            limit: Maximum number of narratives to return
+            max_age_days: Only include narratives with articles in the last N days
+        """
+        from math import exp
+        from bson import ObjectId
+
         db = await mongo_manager.get_async_database()
-        collection = db.narratives
+        narratives_collection = db.narratives
+        articles_collection = db.articles
 
         # Get narratives that are not dormant
         active_states = ["emerging", "rising", "hot", "cooling", "echo", "reactivated"]
 
-        cursor = collection.find(
+        cursor = narratives_collection.find(
             {"lifecycle_state": {"$in": active_states}},
-            sort=[("recency_score", -1), ("mention_velocity", -1)],
-        ).limit(limit)
+        ).limit(limit * 3)  # Get more to filter after recency check
 
-        narratives = await cursor.to_list(length=limit)
-        return narratives
+        narratives = await cursor.to_list(length=limit * 3)
+
+        # Calculate fresh recency for each narrative based on newest article
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(days=max_age_days)
+        fresh_narratives = []
+
+        for narrative in narratives:
+            article_ids = narrative.get("article_ids", [])
+            if not article_ids:
+                continue
+
+            # Get newest article date
+            object_ids = [ObjectId(aid) if isinstance(aid, str) else aid for aid in article_ids[:10]]
+            article_cursor = articles_collection.find(
+                {"_id": {"$in": object_ids}},
+                {"published_at": 1}
+            )
+            articles = await article_cursor.to_list(length=10)
+
+            if not articles:
+                continue
+
+            dates = [a.get("published_at") for a in articles if a.get("published_at")]
+            if not dates:
+                continue
+
+            newest_article = max(dates)
+
+            # Ensure timezone aware
+            if newest_article.tzinfo is None:
+                newest_article = newest_article.replace(tzinfo=timezone.utc)
+
+            # Skip narratives older than cutoff
+            if newest_article < cutoff:
+                logger.debug(f"Skipping stale narrative: {narrative.get('title', 'Unknown')[:40]} (newest: {newest_article})")
+                continue
+
+            # Calculate fresh recency score (24h half-life)
+            hours_since = (now - newest_article).total_seconds() / 3600
+            fresh_recency = exp(-hours_since / 24)
+
+            narrative["_fresh_recency"] = fresh_recency
+            narrative["_newest_article"] = newest_article
+            fresh_narratives.append(narrative)
+
+        # Sort by fresh recency and return top N
+        fresh_narratives.sort(key=lambda x: x.get("_fresh_recency", 0), reverse=True)
+
+        logger.info(f"Filtered to {len(fresh_narratives)} fresh narratives (max {max_age_days} days old)")
+
+        return fresh_narratives[:limit]
 
     async def _generate_with_llm(
         self, briefing_input: BriefingInput
@@ -283,38 +341,52 @@ class BriefingAgent:
 
         return f"""You are a senior crypto market analyst writing a {time_context} briefing memo.
 
-Your role is to synthesize market signals, narratives, and patterns into an insightful,
-actionable briefing for sophisticated crypto market participants.
+Your role is to synthesize ONLY the narratives listed below into an insightful briefing.
 
-Writing Style:
-- Professional analyst perspective - objective but with informed opinion
-- Write as a flowing narrative memo, NOT bullet points
-- Connect dots between events (causal relationships)
-- Be direct about uncertainty when data is limited
-- Include your professional "read" on situations with reasoning
-- Explain "why it matters" for each major insight
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL: ZERO TOLERANCE FOR HALLUCINATION
+═══════════════════════════════════════════════════════════════════════════════
 
-Focus Areas:
-- Prioritize regulatory developments and institutional moves
-- Highlight entities that are NEW to discussions (not just trending)
-- When major expected events exist (Fed, SEC, ETF decisions), always mention them
+You will be given a list of narratives below. Your briefing MUST:
+✓ ONLY discuss narratives explicitly listed in the data below
+✓ ONLY use facts, names, and details that appear in those narratives
+✗ NEVER add companies, people, events, or facts from your training knowledge
+✗ NEVER mention FalconX, 21Shares, SEC restructuring, CZ, or Binance unless they appear in the narratives below
+✗ NEVER invent acquisitions, partnerships, or regulatory events
 
-What to Avoid:
-- Minor protocol upgrades unless they have market significance
-- Price movements without context (the "why" behind the move)
-- Overly bullish/bearish language without justification
-- Generic market commentary without specific insights
+If you mention something not in the provided narratives, the briefing is INVALID.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+WRITING RULES:
+
+1. ONLY COVER NARRATIVES FROM THE DATA
+   - Read the "Active Narratives" section carefully
+   - Each narrative you discuss MUST match one of the titles listed
+   - Do not add stories that aren't in the list
+
+2. USE EXACT DETAILS FROM SUMMARIES
+   - The narrative summaries contain the facts you should use
+   - Copy specific details (names, amounts, events) from the summaries
+   - If a summary lacks details, say so rather than inventing them
+
+3. NO GENERIC FILLER
+   - BANNED: "The crypto markets continue to...", "In a mix of developments..."
+   - BANNED: "Looking ahead, the industry will be shaped by..."
+   - Start directly with your most important story
+
+4. STRUCTURE
+   - Each paragraph = one narrative or connected set of narratives
+   - End with a specific insight about what to watch
 
 Output Format:
-Return valid JSON with this structure:
+Return valid JSON:
 {{
-    "narrative": "The main briefing narrative as flowing prose...",
+    "narrative": "The briefing text...",
     "key_insights": ["insight1", "insight2", "insight3"],
     "entities_mentioned": ["entity1", "entity2"],
-    "detected_patterns": ["pattern description 1", "pattern description 2"],
-    "recommendations": [
-        {{"title": "Article/Narrative Title", "theme": "theme_name"}},
-    ],
+    "detected_patterns": ["pattern1", "pattern2"],
+    "recommendations": [{{"title": "...", "theme": "..."}}],
     "confidence_score": 0.85
 }}"""
 
@@ -340,15 +412,29 @@ Return valid JSON with this structure:
                 velocity = signal.get("metrics", {}).get("velocity_24h", 0)
                 parts.append(f"- {entity}: score={score:.1f}, velocity={velocity:.0f}%\n")
 
-        # Current narratives
+        # Current narratives - include summaries for detail
         if briefing_input.narratives:
-            parts.append("\n## Active Narratives\n")
+            # Build explicit list of allowed narratives
+            narrative_titles = [n.get("title", "Untitled") for n in briefing_input.narratives[:8]]
+
+            parts.append("\n═══════════════════════════════════════════════════════════════════════════════\n")
+            parts.append("ALLOWED NARRATIVES - You may ONLY discuss these stories:\n")
+            for i, title in enumerate(narrative_titles, 1):
+                parts.append(f"  {i}. {title}\n")
+            parts.append("\nAny other company, person, or event NOT listed above is FORBIDDEN.\n")
+            parts.append("═══════════════════════════════════════════════════════════════════════════════\n\n")
+
+            parts.append("## Narrative Details (use these facts):\n\n")
             for narrative in briefing_input.narratives[:8]:
                 title = narrative.get("title", "Untitled")
-                theme = narrative.get("theme", "unknown")
-                lifecycle = narrative.get("lifecycle_state", "unknown")
-                momentum = narrative.get("momentum", "unknown")
-                parts.append(f"- **{title}** ({theme}): {lifecycle}, momentum: {momentum}\n")
+                summary = narrative.get("summary", "")
+                article_count = narrative.get("article_count", 0)
+
+                parts.append(f"### {title}\n")
+                parts.append(f"Sources: {article_count} articles\n")
+                if summary:
+                    parts.append(f"Facts: {summary}\n")
+                parts.append("\n")
 
         # Detected patterns
         patterns_context = briefing_input.patterns.to_prompt_context()
@@ -364,7 +450,13 @@ Return valid JSON with this structure:
                 content = inp.get("content", "")[:200]
                 parts.append(f"### {title}\n{content}...\n\n")
 
-        parts.append("\nGenerate the briefing narrative now. Return ONLY valid JSON.")
+        parts.append("\n---\n")
+        parts.append("Generate the briefing now. REMEMBER:\n")
+        parts.append("- ONLY use facts from the narratives and signals above\n")
+        parts.append("- Include specific details from the narrative summaries\n")
+        parts.append("- If a narrative lacks details, either skip it or acknowledge the limitation\n")
+        parts.append("- No generic openings or closings\n")
+        parts.append("\nReturn ONLY valid JSON.")
 
         return "".join(parts)
 
@@ -372,6 +464,9 @@ Return valid JSON with this structure:
         self, generated: GeneratedBriefing, briefing_input: BriefingInput
     ) -> str:
         """Build prompt for self-critique."""
+        # Build list of narrative titles for grounding check
+        narrative_titles = [n.get("title", "") for n in briefing_input.narratives[:8]]
+
         return f"""Review this crypto briefing for quality issues:
 
 BRIEFING NARRATIVE:
@@ -380,15 +475,22 @@ BRIEFING NARRATIVE:
 KEY INSIGHTS:
 {json.dumps(generated.key_insights, indent=2)}
 
-DETECTED PATTERNS:
-{json.dumps(generated.detected_patterns, indent=2)}
+AVAILABLE NARRATIVES (the only valid sources):
+{json.dumps(narrative_titles, indent=2)}
 
 Check for these issues:
-1. Missing context: Are major patterns/events mentioned but not explained?
-2. Unsupported claims: Are there statements without evidence from the data?
-3. Missing connections: Are there obvious connections between events that weren't made?
-4. Repetition from history: Does this repeat insights from recent briefings without new context?
-5. Tone issues: Is it too bullish/bearish without justification?
+
+1. HALLUCINATION: Does the briefing mention facts, companies, events, or numbers that are NOT from the provided narratives? This is the most critical issue.
+
+2. VAGUE CLAIMS: Are there statements like "X is navigating challenges" without specific details? Each claim needs specifics.
+
+3. MISSING CONTEXT: Are numbers mentioned without baselines or comparisons?
+
+4. GENERIC FILLER: Does it start with "The crypto markets continue to..." or end with generic forward-looking statements?
+
+5. ABRUPT TRANSITIONS: Does it switch topics mid-paragraph without logical connection?
+
+6. MISSING "WHY IT MATTERS": Are events mentioned without explaining their significance?
 
 Respond with:
 {{
