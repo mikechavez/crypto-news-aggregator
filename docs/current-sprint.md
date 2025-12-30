@@ -10,11 +10,6 @@
 
 ## Backlog
 
-- [ ] [BUG-002] Briefing timestamp timezone issue
-  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/bug-briefing-timestamp-timezone.md`
-  - Priority: High
-  - Complexity: Low
-
 - [ ] [FEATURE-007] Celery Beat on Railway
   - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/feature-celery-beat-railway.md`
   - Priority: High
@@ -40,6 +35,11 @@
 - ✅ [BUG-001] Stale narratives fix
   - Completed: 2025-12-29
   - Recalculates recency at query time, filters 7-day window
+
+- ✅ [BUG-002] Briefing timestamp timezone issue
+  - Completed: 2025-12-30
+  - Backend: Ensures UTC timezone suffix on ISO timestamps
+  - Frontend: Added year to date format
 
 ---
 

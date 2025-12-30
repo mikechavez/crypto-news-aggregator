@@ -10,7 +10,7 @@ import type { Briefing as BriefingType, BriefingRecommendation } from '../types'
 
 /**
  * Format the briefing date for display
- * e.g., "Thursday, December 26"
+ * e.g., "Thursday, December 26, 2025"
  */
 function formatBriefingDate(dateString: string): string {
   const date = new Date(dateString);
@@ -18,6 +18,7 @@ function formatBriefingDate(dateString: string): string {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
+    year: 'numeric',
   }).format(date);
 }
 
