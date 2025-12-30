@@ -146,6 +146,57 @@ ls /claude-vault/.../done/ | grep FEATURE
 
 ---
 
+## 📐 Architectural Decision Records (ADRs)
+
+### When to Create an ADR
+
+Create ADR for:
+- Technology/framework choices
+- Database or architecture changes
+- LLM model selections
+- Security implementations
+- Performance strategies
+
+### Quick Creation
+
+**Tell Claude:**
+```
+"This feels like an architectural decision - should we create an ADR?"
+```
+
+Claude will create the ADR file and fill in the template.
+
+**Or manually:**
+```bash
+cp docs/decisions/template.md docs/decisions/002-decision-name.md
+# Edit file, then add to docs/decisions/README.md
+```
+
+### See Example
+`docs/decisions/001-sonnet-vs-haiku-for-briefing.md`
+
+---
+
+## 📚 Architecture Documentation
+
+### Quick Reference Locations
+
+```bash
+docs/architecture/           # API, DB schemas, system overview
+docs/codebase-exploration/   # Service patterns, workers, frontend
+docs/coding-standards/       # Dev, testing, security, UI standards
+```
+
+### When to Check
+
+- **Before new work:** Read `architecture/technical overview.md`
+- **API changes:** Check `architecture/api-schemas.md`
+- **Database changes:** Check `architecture/database-schemas.md`
+- **Writing tests:** Follow `coding-standards/testing-standards.md`
+- **Building UI:** Reference `codebase-exploration/frontend-architecture.md`
+
+---
+
 ## 🔧 Git Workflow
 
 ### Branch Names

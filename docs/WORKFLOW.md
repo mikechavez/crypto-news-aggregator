@@ -11,6 +11,8 @@ This document defines the complete development workflow for Backdrop. Update thi
 - [Daily Workflow](#daily-workflow)
 - [Sprint Workflow](#sprint-workflow)
 - [Ticket Workflow](#ticket-workflow)
+- [Architectural Decision Records (ADRs)](#architectural-decision-records-adrs)
+- [Using Architecture Documentation](#using-architecture-documentation)
 - [Documentation Locations](#documentation-locations)
 - [Automation Scripts](#automation-scripts)
 
@@ -327,6 +329,156 @@ backlog/ → in-progress/ → done/
 **backlog/** - Not yet started, prioritized in SPRINTS.md
 **in-progress/** - Actively being worked on
 **done/** - Completed, includes completion summary
+
+---
+
+## Architectural Decision Records (ADRs)
+
+### What is an ADR?
+
+An ADR documents an important architectural decision along with its context and consequences. Think of it as a record of "why we chose X over Y" for future reference.
+
+### When to Create an ADR
+
+Create an ADR when making significant decisions about:
+
+**Technology Choices:**
+- Choosing between frameworks or libraries
+- Selecting database technologies
+- Picking LLM models for specific tasks
+
+**Architecture Patterns:**
+- System architecture changes
+- API design approaches
+- Caching strategies
+
+**Performance & Scale:**
+- Performance optimization strategies
+- Scaling approaches
+
+**Security:**
+- Authentication/authorization implementations
+- Security model decisions
+
+### When NOT to Create an ADR
+
+Skip ADRs for:
+- Small implementation details
+- Obvious choices with no alternatives
+- Temporary workarounds
+- Code style preferences (those go in coding standards)
+
+### How to Create an ADR
+
+**Option A: Ask Claude (Recommended)**
+
+During work, if an architectural decision is made, Claude will ask:
+```
+This looks like an architectural decision: [brief description]
+Should I create an ADR in docs/decisions/?
+```
+
+If you say yes, Claude will:
+- Create the ADR file with next sequential number
+- Fill in the template based on the decision made
+- Add it to `docs/decisions/README.md`
+
+**Option B: Manual**
+
+```bash
+# Copy template
+cp docs/decisions/template.md docs/decisions/002-decision-name.md
+
+# Fill in the sections
+code docs/decisions/002-decision-name.md
+
+# Add to index
+# Edit docs/decisions/README.md to list the new ADR
+```
+
+### ADR Structure
+
+Each ADR includes:
+- **Context** - What problem prompted this decision?
+- **Decision** - What was decided and why?
+- **Alternatives Considered** - What other options were evaluated?
+- **Consequences** - Positive, negative, and neutral outcomes
+- **Validation** - How will we know if this was the right choice?
+
+### Example ADRs
+
+See `docs/decisions/001-sonnet-vs-haiku-for-briefing.md` for a real example of choosing between LLM models.
+
+### Numbering Convention
+
+ADRs are numbered sequentially:
+- `001-decision-name.md`
+- `002-decision-name.md`
+- `003-decision-name.md`
+
+Always use the next available number.
+
+---
+
+## Using Architecture Documentation
+
+### Quick Navigation
+
+All architecture docs are in `docs/`:
+
+```bash
+docs/
+├── README.md                    # Start here - navigation guide
+├── architecture/                # Technical architecture
+│   ├── api-schemas.md          # API endpoint schemas
+│   ├── database-schemas.md     # MongoDB collection schemas
+│   └── technical overview.md   # System architecture overview
+├── codebase-exploration/        # Code patterns and structure
+│   ├── backend-service-patterns.md
+│   ├── background-workers.md
+│   └── frontend-architecture.md
+└── coding-standards/            # Development standards
+    ├── development-standards.md
+    ├── testing-standards.md
+    ├── security-standards.md
+    └── ui-standards.md
+```
+
+### When to Reference These Docs
+
+**Before starting new work:**
+- Read `architecture/technical overview.md` to understand system structure
+- Check `codebase-exploration/` for patterns to follow
+- Review `coding-standards/` for rules to follow
+
+**When making API changes:**
+- Reference `architecture/api-schemas.md` for existing patterns
+- Follow established naming conventions
+
+**When modifying database:**
+- Check `architecture/database-schemas.md` for collection structure
+- Understand relationships between collections
+
+**When writing tests:**
+- Follow `coding-standards/testing-standards.md`
+
+**When building UI:**
+- Reference `codebase-exploration/frontend-architecture.md`
+- Follow `coding-standards/ui-standards.md`
+
+### Updating Architecture Docs
+
+These docs are symlinked from `/claude-vault/.../context/`, so:
+
+**To update:**
+1. Edit the file in `/claude-vault/.../context/`
+2. Changes appear automatically in repo via symlink
+3. No need to commit (external files)
+
+**To add new docs:**
+1. Create in `/claude-vault/.../context/` in appropriate folder
+2. Will be accessible via symlink
+3. Or add to repo if it's specific to current code state
 
 ---
 
