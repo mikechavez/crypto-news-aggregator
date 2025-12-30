@@ -134,11 +134,17 @@ def _format_briefing(briefing: Dict[str, Any]) -> Dict[str, Any]:
     """Format a briefing document for API response."""
     generated_at = briefing.get("generated_at")
     if generated_at:
-        generated_at_str = (
-            generated_at.isoformat()
-            if hasattr(generated_at, "isoformat")
-            else str(generated_at)
-        )
+        if hasattr(generated_at, "isoformat"):
+            # Ensure timezone-aware datetime for proper frontend parsing
+            if hasattr(generated_at, "tzinfo") and generated_at.tzinfo is None:
+                # Naive datetime - assume UTC
+                generated_at = generated_at.replace(tzinfo=timezone.utc)
+            generated_at_str = generated_at.isoformat()
+        else:
+            # String - append Z if no timezone info present
+            generated_at_str = str(generated_at)
+            if not generated_at_str.endswith("Z") and "+" not in generated_at_str:
+                generated_at_str += "Z"
     else:
         generated_at_str = datetime.now(timezone.utc).isoformat()
 
