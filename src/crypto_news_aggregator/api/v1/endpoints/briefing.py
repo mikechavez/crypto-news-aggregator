@@ -386,6 +386,68 @@ async def get_next_briefing_time_endpoint():
 
 
 # =============================================================================
+# Admin Endpoints
+# =============================================================================
+
+
+class GenerateBriefingRequest(BaseModel):
+    """Request to manually generate a briefing."""
+
+    type: str = Field("morning", description="Briefing type: 'morning' or 'evening'")
+    force: bool = Field(True, description="Force generation even if one exists today")
+
+
+class GenerateBriefingResponse(BaseModel):
+    """Response from manual briefing generation."""
+
+    success: bool
+    message: str
+    briefing_id: Optional[str] = None
+
+
+@router.post("/generate", response_model=GenerateBriefingResponse)
+async def generate_briefing_endpoint(request: GenerateBriefingRequest):
+    """
+    Manually trigger briefing generation.
+
+    This endpoint allows admins to manually generate a briefing without
+    waiting for the scheduled Celery Beat task.
+
+    Args:
+        request: Generation parameters (type, force)
+
+    Returns:
+        GenerateBriefingResponse with success status and briefing ID
+    """
+    from ....services.briefing_agent import generate_morning_briefing, generate_evening_briefing
+
+    try:
+        if request.type == "morning":
+            briefing = await generate_morning_briefing(force=request.force)
+        elif request.type == "evening":
+            briefing = await generate_evening_briefing(force=request.force)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid briefing type. Use 'morning' or 'evening'")
+
+        if briefing:
+            return GenerateBriefingResponse(
+                success=True,
+                message=f"Successfully generated {request.type} briefing",
+                briefing_id=str(briefing.get("_id")),
+            )
+        else:
+            return GenerateBriefingResponse(
+                success=False,
+                message="Briefing generation returned no result (may already exist today)",
+                briefing_id=None,
+            )
+
+    except Exception as e:
+        logger.exception(f"Error generating briefing: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate briefing: {str(e)}")
+
+
+# =============================================================================
 # Manual Input Endpoints
 # =============================================================================
 
