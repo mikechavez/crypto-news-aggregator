@@ -92,15 +92,11 @@ Implemented article-level relevance classification to filter noise from signals 
 
 ## Next Session Checklist
 
-1. **Run backfill** to classify existing ~24k articles:
-   ```bash
-   poetry run python scripts/backfill_relevance_tiers.py
-   ```
-   - Dry run tested successfully (2026-01-02)
-   - Distribution: ~10% Tier 1, ~88% Tier 2, ~2% Tier 3
-   - Full run interrupted - needs to complete
+1. ~~**Run backfill** - COMPLETE (2026-01-02)~~
+   - Classified ~22k articles
+   - Distribution: ~15% Tier 1, ~83% Tier 2, ~2% Tier 3
 
-2. **Commit changes** on `feature/briefing-agent` branch
+2. ~~**Commit changes** - COMPLETE (2026-01-02)~~
 
 3. **Test locally** - verify signals/narratives are filtering correctly
 
