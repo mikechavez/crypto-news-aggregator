@@ -18,8 +18,10 @@
     - Implemented article relevance classifier (Tier 1/2/3)
     - Signals now filter by relevance tier
     - Narratives now filter by relevance tier
-    - Backfill script ready for existing articles
-  - **Next:** Run backfill, deploy, tune patterns based on prod data
+    - Backfill complete: ~22k articles classified
+    - Distribution: ~15% Tier 1, ~83% Tier 2, ~2% Tier 3
+    - Committed to `feature/briefing-agent` branch
+  - **Next:** Test locally, deploy to Railway, tune patterns
 
 ---
 
