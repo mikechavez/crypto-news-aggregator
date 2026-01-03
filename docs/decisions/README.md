@@ -4,6 +4,7 @@ This directory contains records of architectural decisions made during developme
 
 ## Active Decisions
 
+- [002. Rule-Based Article Relevance Classification](./002-rule-based-relevance-classification.md) - 2026-01-02
 - [001. Use Claude Sonnet 4.5 for Briefing Generation](./001-sonnet-vs-haiku-for-briefing.md) - 2025-12-29
 
 ## What is an ADR?

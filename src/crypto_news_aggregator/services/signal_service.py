@@ -8,53 +8,187 @@ This service calculates signal scores based on:
 
 Note: All entity queries use the entity name as stored in entity_mentions,
 which should already be normalized to canonical form by the RSS fetcher.
+
+IMPORTANT: Signal calculations only include mentions from articles with
+relevance_tier <= 2 (high and medium signal). Low-signal articles (tier 3)
+are excluded to reduce noise.
 """
 
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
+from bson import ObjectId
 from crypto_news_aggregator.db.mongodb import mongo_manager
 from crypto_news_aggregator.services.entity_normalization import normalize_entity_name
 
 logger = logging.getLogger(__name__)
 
+# Maximum relevance tier to include in signal calculations
+# Tier 1 = high signal, Tier 2 = medium, Tier 3 = low (excluded)
+MAX_RELEVANCE_TIER = 2
+
+
+async def _get_high_signal_article_ids(
+    db,
+    start_time: datetime = None,
+    end_time: datetime = None
+) -> set:
+    """
+    Get article IDs that have relevance_tier <= MAX_RELEVANCE_TIER.
+
+    Args:
+        db: Database instance
+        start_time: Optional start time filter (published_at)
+        end_time: Optional end time filter (published_at)
+
+    Returns:
+        Set of article IDs (as strings) that are high/medium signal
+    """
+    query = {
+        "$or": [
+            {"relevance_tier": {"$lte": MAX_RELEVANCE_TIER}},
+            {"relevance_tier": {"$exists": False}},  # Include unclassified articles
+            {"relevance_tier": None},
+        ]
+    }
+
+    if start_time or end_time:
+        time_filter = {}
+        if start_time:
+            time_filter["$gte"] = start_time
+        if end_time:
+            time_filter["$lt"] = end_time
+        if time_filter:
+            query["created_at"] = time_filter
+
+    cursor = db.articles.find(query, {"_id": 1})
+    article_ids = set()
+    async for doc in cursor:
+        article_ids.add(str(doc["_id"]))
+
+    return article_ids
+
+
+async def _count_filtered_mentions(
+    db,
+    entity: str,
+    start_time: datetime = None,
+    end_time: datetime = None,
+    high_signal_article_ids: set = None
+) -> int:
+    """
+    Count entity mentions, filtering by relevance tier.
+
+    Args:
+        db: Database instance
+        entity: Entity to count mentions for
+        start_time: Optional start time filter
+        end_time: Optional end time filter
+        high_signal_article_ids: Pre-fetched set of high-signal article IDs
+
+    Returns:
+        Count of mentions from high/medium signal articles
+    """
+    collection = db.entity_mentions
+
+    # Build base query
+    query = {
+        "entity": entity,
+        "is_primary": True,
+    }
+
+    if start_time or end_time:
+        time_filter = {}
+        if start_time:
+            time_filter["$gte"] = start_time
+        if end_time:
+            time_filter["$lt"] = end_time
+        if time_filter:
+            query["created_at"] = time_filter
+
+    # If we have a pre-fetched set of article IDs, use it
+    if high_signal_article_ids is not None:
+        query["article_id"] = {"$in": list(high_signal_article_ids)}
+        return await collection.count_documents(query)
+
+    # Otherwise, use aggregation to join and filter
+    pipeline = [
+        {"$match": query},
+        {
+            "$lookup": {
+                "from": "articles",
+                "let": {"article_id": {"$toObjectId": "$article_id"}},
+                "pipeline": [
+                    {
+                        "$match": {
+                            "$expr": {"$eq": ["$_id", "$$article_id"]},
+                        }
+                    },
+                    {
+                        "$match": {
+                            "$or": [
+                                {"relevance_tier": {"$lte": MAX_RELEVANCE_TIER}},
+                                {"relevance_tier": {"$exists": False}},
+                                {"relevance_tier": None},
+                            ]
+                        }
+                    }
+                ],
+                "as": "article"
+            }
+        },
+        {"$match": {"article": {"$ne": []}}},  # Only keep mentions with matching articles
+        {"$count": "total"}
+    ]
+
+    result = await collection.aggregate(pipeline).to_list(length=1)
+    return result[0]["total"] if result else 0
+
 
 async def calculate_mentions_and_velocity(entity: str, timeframe_hours: int) -> Dict[str, float]:
     """
     Calculate mention count and velocity (growth rate) for an entity over a timeframe.
-    
+
+    Only includes mentions from high/medium signal articles (relevance_tier <= 2).
+
     Velocity = (current_period - previous_period) / previous_period * 100
     Example: 50 mentions this week vs 30 last week = (50-30)/30*100 = 67% growth
-    
+
     Args:
         entity: The entity to calculate metrics for
         timeframe_hours: Timeframe in hours (24, 168 for 7d, 720 for 30d)
-    
+
     Returns:
         Dict with 'mentions' (count) and 'velocity' (growth rate as percentage, e.g., 67.0 for 67%)
     """
     db = await mongo_manager.get_async_database()
-    collection = db.entity_mentions
-    
+
     # MongoDB stores datetimes as UTC but returns them as naive
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     current_period_start = now - timedelta(hours=timeframe_hours)
     previous_period_start = now - timedelta(hours=timeframe_hours * 2)
-    
-    # Count mentions in current period (primary entities only)
-    current_mentions = await collection.count_documents({
-        "entity": entity,
-        "is_primary": True,
-        "created_at": {"$gte": current_period_start}
-    })
-    
-    # Count mentions in previous period (primary entities only)
-    previous_mentions = await collection.count_documents({
-        "entity": entity,
-        "is_primary": True,
-        "created_at": {"$gte": previous_period_start, "$lt": current_period_start}
-    })
-    
+
+    # Get high-signal article IDs for the full time range (for efficiency)
+    high_signal_ids = await _get_high_signal_article_ids(
+        db,
+        start_time=previous_period_start
+    )
+
+    # Count mentions in current period (primary entities only, high-signal articles only)
+    current_mentions = await _count_filtered_mentions(
+        db, entity,
+        start_time=current_period_start,
+        high_signal_article_ids=high_signal_ids
+    )
+
+    # Count mentions in previous period (primary entities only, high-signal articles only)
+    previous_mentions = await _count_filtered_mentions(
+        db, entity,
+        start_time=previous_period_start,
+        end_time=current_period_start,
+        high_signal_article_ids=high_signal_ids
+    )
+
     # Calculate velocity as growth rate percentage
     if previous_mentions == 0:
         # If no previous data, velocity is 100% if we have current mentions, else 0%
@@ -62,7 +196,7 @@ async def calculate_mentions_and_velocity(entity: str, timeframe_hours: int) -> 
     else:
         # Growth rate as percentage: (current - previous) / previous * 100
         velocity = ((current_mentions - previous_mentions) / previous_mentions) * 100
-    
+
     return {
         "mentions": float(current_mentions),
         "velocity": velocity
@@ -72,111 +206,143 @@ async def calculate_mentions_and_velocity(entity: str, timeframe_hours: int) -> 
 async def calculate_velocity(entity: str, timeframe_hours: int = 24) -> float:
     """
     Calculate mention velocity for an entity (legacy method for backward compatibility).
-    
+
+    Only includes mentions from high/medium signal articles (relevance_tier <= 2).
+
     Velocity = (mentions in last 1 hour) / (mentions in last 24 hours / 24)
     This gives us a ratio showing if mentions are accelerating.
-    
+
     Args:
         entity: The entity to calculate velocity for
         timeframe_hours: Timeframe for baseline calculation (default 24)
-    
+
     Returns:
         Velocity score (higher = more acceleration)
     """
     db = await mongo_manager.get_async_database()
-    collection = db.entity_mentions
-    
+
     # MongoDB stores datetimes as UTC but returns them as naive
     # Use naive datetimes for comparison
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     one_hour_ago = now - timedelta(hours=1)
     timeframe_ago = now - timedelta(hours=timeframe_hours)
-    
-    # Count mentions in last hour (primary entities only)
-    mentions_1h = await collection.count_documents({
-        "entity": entity,
-        "is_primary": True,
-        "created_at": {"$gte": one_hour_ago}
-    })
-    
-    # Count mentions in full timeframe (primary entities only)
-    mentions_timeframe = await collection.count_documents({
-        "entity": entity,
-        "is_primary": True,
-        "created_at": {"$gte": timeframe_ago}
-    })
-    
+
+    # Get high-signal article IDs for efficiency
+    high_signal_ids = await _get_high_signal_article_ids(db, start_time=timeframe_ago)
+
+    # Count mentions in last hour (primary entities only, high-signal only)
+    mentions_1h = await _count_filtered_mentions(
+        db, entity,
+        start_time=one_hour_ago,
+        high_signal_article_ids=high_signal_ids
+    )
+
+    # Count mentions in full timeframe (primary entities only, high-signal only)
+    mentions_timeframe = await _count_filtered_mentions(
+        db, entity,
+        start_time=timeframe_ago,
+        high_signal_article_ids=high_signal_ids
+    )
+
     # Calculate velocity
     if mentions_timeframe == 0:
         # No historical data, return current hour count as baseline
         return float(mentions_1h)
-    
+
     # Expected mentions per hour based on timeframe average
     expected_per_hour = mentions_timeframe / timeframe_hours
-    
+
     if expected_per_hour == 0:
         return float(mentions_1h)
-    
+
     # Velocity ratio: actual vs expected
     velocity = mentions_1h / expected_per_hour
-    
+
     return velocity
 
 
 async def calculate_source_diversity(entity: str) -> int:
     """
     Calculate source diversity for an entity.
-    
+
+    Only includes mentions from high/medium signal articles (relevance_tier <= 2).
+
     Counts the number of unique sources that have mentioned this entity.
     Entity mentions have a 'source' field directly.
-    
+
     Args:
         entity: The entity to calculate diversity for
-    
+
     Returns:
         Number of unique sources
     """
     db = await mongo_manager.get_async_database()
-    entity_mentions_collection = db.entity_mentions
-    
-    # Get unique sources directly from entity mentions (primary mentions only)
-    sources = await entity_mentions_collection.distinct(
-        "source",
-        {"entity": entity, "is_primary": True}
-    )
-    
-    return len(sources)
+
+    # Get high-signal article IDs
+    high_signal_ids = await _get_high_signal_article_ids(db)
+
+    # Use aggregation to get unique sources from high-signal articles only
+    pipeline = [
+        {
+            "$match": {
+                "entity": entity,
+                "is_primary": True,
+                "article_id": {"$in": list(high_signal_ids)} if high_signal_ids else {"$exists": True}
+            }
+        },
+        {
+            "$group": {
+                "_id": "$source"
+            }
+        },
+        {
+            "$count": "unique_sources"
+        }
+    ]
+
+    result = await db.entity_mentions.aggregate(pipeline).to_list(length=1)
+    return result[0]["unique_sources"] if result else 0
 
 
 async def calculate_sentiment_metrics(entity: str) -> Dict[str, float]:
     """
     Calculate sentiment metrics for an entity.
-    
+
+    Only includes mentions from high/medium signal articles (relevance_tier <= 2).
+
     Args:
         entity: The entity to calculate sentiment for
-    
+
     Returns:
         Dict with avg, min, max, and divergence (std deviation approximation)
     """
     db = await mongo_manager.get_async_database()
     collection = db.entity_mentions
-    
+
+    # Get high-signal article IDs
+    high_signal_ids = await _get_high_signal_article_ids(db)
+
     # Map sentiment labels to numeric scores
     sentiment_map = {
         "positive": 1.0,
         "neutral": 0.0,
         "negative": -1.0,
     }
-    
-    # Get all mentions with sentiment (primary mentions only)
-    cursor = collection.find({"entity": entity, "is_primary": True})
-    
+
+    # Build query with article filter
+    query = {"entity": entity, "is_primary": True}
+    if high_signal_ids:
+        query["article_id"] = {"$in": list(high_signal_ids)}
+
+    # Get all mentions with sentiment (primary mentions only, high-signal only)
+    cursor = collection.find(query)
+
     sentiment_scores = []
     async for mention in cursor:
         sentiment = mention.get("sentiment", "neutral")
         score = sentiment_map.get(sentiment, 0.0)
         sentiment_scores.append(score)
-    
+
     if not sentiment_scores:
         return {
             "avg": 0.0,
@@ -184,16 +350,16 @@ async def calculate_sentiment_metrics(entity: str) -> Dict[str, float]:
             "max": 0.0,
             "divergence": 0.0,
         }
-    
+
     # Calculate metrics
     avg = sum(sentiment_scores) / len(sentiment_scores)
     min_score = min(sentiment_scores)
     max_score = max(sentiment_scores)
-    
+
     # Calculate divergence (variance approximation)
     variance = sum((x - avg) ** 2 for x in sentiment_scores) / len(sentiment_scores)
     divergence = variance ** 0.5  # Standard deviation
-    
+
     return {
         "avg": avg,
         "min": min_score,
@@ -228,41 +394,45 @@ async def get_narratives_for_entity(entity: str) -> list:
 async def calculate_recency_factor(entity: str, timeframe_hours: int) -> float:
     """
     Calculate recency factor - boost for recent activity.
-    
+
+    Only includes mentions from high/medium signal articles (relevance_tier <= 2).
+
     Measures what percentage of mentions occurred in the most recent 20% of the timeframe.
-    
+
     Args:
         entity: The entity to calculate recency for
         timeframe_hours: Timeframe in hours
-    
+
     Returns:
         Recency factor (0.0 to 1.0)
     """
     db = await mongo_manager.get_async_database()
-    collection = db.entity_mentions
-    
+
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     timeframe_start = now - timedelta(hours=timeframe_hours)
     recent_window_hours = timeframe_hours * 0.2  # Most recent 20%
     recent_start = now - timedelta(hours=recent_window_hours)
-    
-    # Count total mentions in timeframe
-    total_mentions = await collection.count_documents({
-        "entity": entity,
-        "is_primary": True,
-        "created_at": {"$gte": timeframe_start}
-    })
-    
+
+    # Get high-signal article IDs for the timeframe
+    high_signal_ids = await _get_high_signal_article_ids(db, start_time=timeframe_start)
+
+    # Count total mentions in timeframe (high-signal only)
+    total_mentions = await _count_filtered_mentions(
+        db, entity,
+        start_time=timeframe_start,
+        high_signal_article_ids=high_signal_ids
+    )
+
     if total_mentions == 0:
         return 0.0
-    
-    # Count mentions in recent window
-    recent_mentions = await collection.count_documents({
-        "entity": entity,
-        "is_primary": True,
-        "created_at": {"$gte": recent_start}
-    })
-    
+
+    # Count mentions in recent window (high-signal only)
+    recent_mentions = await _count_filtered_mentions(
+        db, entity,
+        start_time=recent_start,
+        high_signal_article_ids=high_signal_ids
+    )
+
     # Recency factor is the proportion of mentions that are recent
     recency = recent_mentions / total_mentions
     return recency
