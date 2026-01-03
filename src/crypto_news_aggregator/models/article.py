@@ -67,6 +67,16 @@ class ArticleBase(BaseModel):
     metrics: ArticleMetrics
     keywords: List[str] = []
     relevance_score: Optional[float] = None
+    relevance_tier: Optional[int] = Field(
+        None,
+        ge=1,
+        le=3,
+        description="Relevance tier: 1=high signal, 2=medium, 3=low/exclude"
+    )
+    relevance_reason: Optional[str] = Field(
+        None,
+        description="Reason for relevance classification"
+    )
     sentiment_score: Optional[float] = None
     sentiment_label: Optional[str] = None
     raw_data: Dict[str, Any]  # To store the raw article payload
@@ -95,6 +105,8 @@ class ArticleUpdate(BaseModel):
 
     text: Optional[str] = None
     relevance_score: Optional[float] = None
+    relevance_tier: Optional[int] = Field(None, ge=1, le=3)
+    relevance_reason: Optional[str] = None
     metrics: Optional[ArticleMetrics] = None
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

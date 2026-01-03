@@ -20,6 +20,10 @@ from ..llm.factory import get_llm_provider
 
 logger = logging.getLogger(__name__)
 
+# Maximum relevance tier to include in narrative detection/backfill
+# Tier 1 = high signal, Tier 2 = medium, Tier 3 = low (excluded)
+MAX_RELEVANCE_TIER = 2
+
 
 def validate_narrative_json(data: Dict) -> Tuple[bool, Optional[str]]:
     """
@@ -415,10 +419,16 @@ async def get_articles_by_theme(
     from datetime import timedelta
     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
     
-    # Find articles with this theme
+    # Find articles with this theme (high-signal only)
+    # Include articles with no tier yet (unclassified) for backward compatibility
     cursor = articles_collection.find({
         "themes": theme,
-        "published_at": {"$gte": cutoff_time}
+        "published_at": {"$gte": cutoff_time},
+        "$or": [
+            {"relevance_tier": {"$lte": MAX_RELEVANCE_TIER}},
+            {"relevance_tier": {"$exists": False}},
+            {"relevance_tier": None},
+        ]
     }).sort("published_at", -1)
     
     articles = []
@@ -891,21 +901,34 @@ async def backfill_narratives_for_recent_articles(hours: int = 48, limit: int = 
     from datetime import timedelta
     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
     
-    # Find articles needing narrative extraction
+    # Find articles needing narrative extraction (high-signal only)
     # Only process if:
     # 1. Missing narrative_summary, OR
-    # 2. Missing narrative_hash (old format), OR  
+    # 2. Missing narrative_hash (old format), OR
     # 3. Missing actors or nucleus_entity (incomplete data)
+    # AND: relevance_tier is high/medium or not yet classified
     cursor = articles_collection.find({
         "published_at": {"$gte": cutoff_time},
-        "$or": [
-            {"narrative_summary": {"$exists": False}},
-            {"narrative_summary": None},
-            {"actors": {"$exists": False}},
-            {"actors": None},
-            {"nucleus_entity": {"$exists": False}},
-            {"nucleus_entity": None},
-            {"narrative_hash": {"$exists": False}},  # Missing hash = needs processing
+        # Relevance filter: skip tier 3 (low signal) articles
+        "$and": [
+            {
+                "$or": [
+                    {"relevance_tier": {"$lte": MAX_RELEVANCE_TIER}},
+                    {"relevance_tier": {"$exists": False}},
+                    {"relevance_tier": None},
+                ]
+            },
+            {
+                "$or": [
+                    {"narrative_summary": {"$exists": False}},
+                    {"narrative_summary": None},
+                    {"actors": {"$exists": False}},
+                    {"actors": None},
+                    {"nucleus_entity": {"$exists": False}},
+                    {"nucleus_entity": None},
+                    {"narrative_hash": {"$exists": False}},  # Missing hash = needs processing
+                ]
+            }
         ]
     }).limit(limit)
     

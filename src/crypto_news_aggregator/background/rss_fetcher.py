@@ -14,6 +14,7 @@ from ..db.mongodb import mongo_manager
 from ..core.config import settings
 from ..services.entity_normalization import normalize_entity_name
 from ..services.selective_processor import create_processor
+from ..services.relevance_classifier import classify_article
 
 logger = logging.getLogger(__name__)
 
@@ -428,6 +429,8 @@ async def process_new_articles_from_mongodb():
             {"sentiment_score": None},
             {"sentiment_score": 0.0},
             {"sentiment": {"$exists": False}},
+            {"relevance_tier": {"$exists": False}},
+            {"relevance_tier": None},
         ]
     }
 
@@ -573,6 +576,7 @@ async def process_new_articles_from_mongodb():
 
     # Now process articles individually for other enrichments
     processed = 0
+    tier_counts = {1: 0, 2: 0, 3: 0}  # Track tier distribution
     async for article in collection.find(enrichment_query):
         article_id = article.get("_id")
         try:
@@ -589,6 +593,21 @@ async def process_new_articles_from_mongodb():
             if not combined_text:
                 logger.debug("Skipping article %s due to missing text", article_id)
                 continue
+
+            # Classify article relevance tier (rule-based, no LLM cost)
+            classification = classify_article(
+                title=title,
+                text=combined_text[:1000],  # First 1000 chars for classification
+                source=article.get("source")
+            )
+            relevance_tier = classification["tier"]
+            relevance_reason = classification["reason"]
+
+            tier_emoji = {1: "🔥", 2: "📰", 3: "🔇"}[relevance_tier]
+            tier_counts[relevance_tier] += 1
+            logger.debug(
+                f"{tier_emoji} Article {article_id}: Tier {relevance_tier} ({relevance_reason})"
+            )
 
             try:
                 relevance_score = float(llm_client.score_relevance(combined_text))
@@ -674,6 +693,8 @@ async def process_new_articles_from_mongodb():
             update_operations = {
                 "$set": {
                     "relevance_score": relevance_score,
+                    "relevance_tier": relevance_tier,
+                    "relevance_reason": relevance_reason,
                     "sentiment_score": sentiment_score,
                     "sentiment_label": sentiment_label,
                     "sentiment": sentiment_payload,
@@ -775,6 +796,10 @@ async def process_new_articles_from_mongodb():
         logger.info(
             "Enriched %s article(s) with sentiment, themes, keywords, and entities",
             processed,
+        )
+        # Log tier distribution
+        logger.info(
+            f"📊 Relevance tiers: 🔥 High={tier_counts[1]}, 📰 Medium={tier_counts[2]}, 🔇 Low={tier_counts[3]}"
         )
 
     return processed

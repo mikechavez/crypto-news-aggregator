@@ -11,6 +11,10 @@ This service identifies narratives by:
 Supports both:
 - NEW: Salience-based clustering (default) - uses nucleus entity and actor salience
 - OLD: Theme-based clustering (fallback) - uses predefined theme categories
+
+IMPORTANT: Narrative detection only includes articles with relevance_tier <= 2
+(high and medium signal). Low-signal articles (tier 3) are excluded to
+prevent noise from polluting narratives.
 """
 
 import json
@@ -52,6 +56,10 @@ SALIENCE_CLUSTERING_CONFIG = {
 # Blacklist of entities that should not become narrative nucleus entities
 # These are typically advertising/promotional content or irrelevant entities
 BLACKLIST_ENTITIES = {'Benzinga', 'Sarah Edwards'}
+
+# Maximum relevance tier to include in narrative detection
+# Tier 1 = high signal, Tier 2 = medium, Tier 3 = low (excluded)
+MAX_RELEVANCE_TIER = 2
 
 
 def calculate_recent_velocity(article_dates: List[datetime], lookback_days: int = 7) -> float:
@@ -593,9 +601,16 @@ async def detect_narratives(
             db = await mongo_manager.get_async_database()
             articles_collection = db.articles
             
+            # Filter for high-signal articles only (tier 1 & 2)
+            # Include articles with no tier yet (unclassified) for backward compatibility
             cursor = articles_collection.find({
                 "published_at": {"$gte": cutoff_time},
-                "narrative_summary": {"$exists": True}  # Has narrative data
+                "narrative_summary": {"$exists": True},  # Has narrative data
+                "$or": [
+                    {"relevance_tier": {"$lte": MAX_RELEVANCE_TIER}},
+                    {"relevance_tier": {"$exists": False}},
+                    {"relevance_tier": None},
+                ]
             })
             
             articles = await cursor.to_list(length=None)

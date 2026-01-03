@@ -1,59 +1,112 @@
-# Current Sprint: Sprint 1 (Quick Wins)
+# Current Sprint: Sprint 2 (Intelligence Layer)
 
-**Goal:** Fix critical UX issues and enable automated briefings
+**Goal:** Redesign signals and narratives to produce intelligence, not noise
 
-**Sprint Duration:** 2025-12-26 to 2025-12-30
+**Sprint Duration:** 2025-12-31 to TBD
 
-**Velocity Target:** 4 tickets
-
----
-
-## Backlog
-
-- [ ] [FEATURE-007] Celery Beat on Railway
-  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/feature-celery-beat-railway.md`
-  - Priority: High
-  - Complexity: Medium
+**Velocity Target:** TBD
 
 ---
 
 ## In Progress
 
-- [FEATURE-003] Briefing prompt engineering
+- [x] [FEATURE-008] Signals & Narratives Redesign - **Phase 1: Relevance Filtering COMPLETE**
+  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/feature-signals-narratives-redesign.md`
+  - Priority: High
+  - Complexity: Large
+  - **Progress:**
+    - Implemented article relevance classifier (Tier 1/2/3)
+    - Signals now filter by relevance tier
+    - Narratives now filter by relevance tier
+    - Backfill script ready for existing articles
+  - **Next:** Run backfill, deploy, tune patterns based on prod data
+
+---
+
+## Backlog
+
+- [ ] [CHORE-001] Tune Relevance Classifier Rules
+  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/chore-tune-relevance-classifier.md`
+  - Priority: Medium
+  - Complexity: Small
+  - Created this session - tune patterns after seeing prod data
+
+- [ ] [FEATURE-003] Briefing prompt engineering
   - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/in-progress/feature-briefing-prompt-engineering.md`
-  - Status: Testing anti-hallucination prompts with Sonnet
-  - Started: 2025-12-29
+  - Priority: High
+  - Complexity: Medium
+  - Blocked by: FEATURE-008 (partially unblocked now)
+
+- [ ] [FEATURE-007] Celery Beat on Railway
+  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/feature-celery-beat-railway.md`
+  - Priority: Medium
+  - Complexity: Medium
+
+- [ ] [BUG-003] Narrative deep-links
+  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/bug-narrative-deep-links.md`
+  - Priority: Low
+  - Complexity: Small
 
 ---
 
 ## Completed This Sprint
 
-- ✅ [FEATURE-002] Upgrade to Sonnet 4.5
-  - Completed: 2025-12-29
-  - Resolved hallucination issues
+### 2026-01-02: Relevance Filtering Implementation
 
-- ✅ [BUG-001] Stale narratives fix
-  - Completed: 2025-12-29
-  - Recalculates recency at query time, filters 7-day window
+Implemented article-level relevance classification to filter noise from signals and narratives:
 
-- ✅ [BUG-002] Briefing timestamp timezone issue
-  - Completed: 2025-12-30
-  - Backend: Ensures UTC timezone suffix on ISO timestamps
-  - Frontend: Added year to date format
+**Files Created:**
+- `src/crypto_news_aggregator/services/relevance_classifier.py` - Rule-based classifier
+- `scripts/backfill_relevance_tiers.py` - Backfill script for existing articles
+- `scripts/test_classifier.py` - Test script
+
+**Files Modified:**
+- `src/crypto_news_aggregator/models/article.py` - Added `relevance_tier`, `relevance_reason`
+- `src/crypto_news_aggregator/background/rss_fetcher.py` - Classify on ingestion
+- `src/crypto_news_aggregator/services/signal_service.py` - Filter by tier
+- `src/crypto_news_aggregator/services/narrative_service.py` - Filter by tier
+- `src/crypto_news_aggregator/services/narrative_themes.py` - Filter by tier
+
+**Classification Tiers:**
+- Tier 1 (High): SEC, hacks, ETF flows, institutional moves
+- Tier 2 (Medium): Standard crypto news
+- Tier 3 (Low): Gaming, speculation, price predictions - EXCLUDED
 
 ---
 
 ## Blocked
 
-None currently
+- [FEATURE-003] Briefing prompt engineering
+  - Was blocked by: FEATURE-008 (upstream data quality)
+  - Status: Partially unblocked - relevance filtering in place
 
 ---
 
 ## Notes
 
-- Haiku couldn't follow anti-hallucination instructions despite explicit prompts
-- Sonnet upgrade ($3.50/month more) worth it for customer-facing content
-- Manual briefing trigger endpoint added until Celery Beat configured
+- Sprint 1 closed with 3/4 tickets complete
+- Major discovery: signals/narratives need redesign before briefings can improve
+- See Sprint 1 retro: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/sprints/sprint-1-retro.md`
+
+---
+
+## Next Session Checklist
+
+1. **Run backfill** to classify existing ~24k articles:
+   ```bash
+   poetry run python scripts/backfill_relevance_tiers.py
+   ```
+   - Dry run tested successfully (2026-01-02)
+   - Distribution: ~10% Tier 1, ~88% Tier 2, ~2% Tier 3
+   - Full run interrupted - needs to complete
+
+2. **Commit changes** on `feature/briefing-agent` branch
+
+3. **Test locally** - verify signals/narratives are filtering correctly
+
+4. **Deploy to Railway** and monitor
+
+5. **Review tier distribution** in prod and tune patterns (CHORE-001)
 
 ---
 
