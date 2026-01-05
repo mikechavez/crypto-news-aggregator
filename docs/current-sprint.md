@@ -107,12 +107,20 @@ Implemented article-level relevance classification to filter noise from signals 
    - Signal scores need recalculation (background task will handle)
 
 4. ~~**Deploy to Railway** - COMPLETE (2026-01-04)~~
-   - PR #124 merged to main
-   - Railway auto-deploy triggered
-   - Monitoring deployment progress
+   - PR #124 merged to main (relevance filtering)
+   - Hit loguru dependency issue - fixed via PR #125
+   - Railway deployment successful - API responding
+   - Background tasks running (RSS, narratives, alerts)
 
-5. **Review tier distribution** in prod and tune patterns (CHORE-001)
-   - Monitor signal scores recalculation (every 2 minutes)
+5. **Backfill signal scores** - IN PROGRESS (2026-01-04)
+   - Discovered: signal scores are 3 months old
+   - Issue: update_signal_scores only looks at last 30 minutes
+   - Created scripts/backfill_signal_scores.py
+   - Running backfill for entities from last 7 days
+   - Branch: fix/add-loguru-dependency (needs cleanup after backfill)
+
+6. **Review tier distribution** in prod and tune patterns (CHORE-001)
+   - Monitor signal scores after backfill completes
    - Check production tier distribution
    - Tune patterns if needed
 
