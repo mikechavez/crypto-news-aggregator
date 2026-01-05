@@ -33,7 +33,6 @@ frozenlist==1.7.0
 greenlet==3.2.4
 gunicorn==23.0.0
 h11==0.16.0
-loguru==0.7.2
 httpcore==1.0.9
 httptools==0.6.4
 httpx==0.28.1
