@@ -100,11 +100,21 @@ Implemented article-level relevance classification to filter noise from signals 
 
 2. ~~**Commit changes** - COMPLETE (2026-01-02)~~
 
-3. **Test locally** - verify signals/narratives are filtering correctly
+3. ~~**Test locally** - COMPLETE (2026-01-04)~~
+   - Verified relevance tier filtering works correctly
+   - Bitcoin test: 29 mentions in last 24h (7 Tier 1, 22 Tier 2, 0 Tier 3)
+   - Confirmed Tier 3 articles properly excluded from signals
+   - Signal scores need recalculation (background task will handle)
 
-4. **Deploy to Railway** and monitor
+4. ~~**Deploy to Railway** - COMPLETE (2026-01-04)~~
+   - PR #124 merged to main
+   - Railway auto-deploy triggered
+   - Monitoring deployment progress
 
 5. **Review tier distribution** in prod and tune patterns (CHORE-001)
+   - Monitor signal scores recalculation (every 2 minutes)
+   - Check production tier distribution
+   - Tune patterns if needed
 
 ---
 
