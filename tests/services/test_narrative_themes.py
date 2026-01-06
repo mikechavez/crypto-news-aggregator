@@ -335,6 +335,7 @@ def mock_llm_response_narrative_discovery():
             "Coinbase": 3
         },
         "nucleus_entity": "SEC",
+        "narrative_focus": "regulatory enforcement action",
         "actions": ["SEC filed charges against exchanges", "Alleged unregistered securities operations"],
         "tensions": ["Regulation vs. Innovation", "Centralization vs. Decentralization"],
         "implications": "Enforcement actions mark escalation in regulatory pressure on crypto industry",
@@ -654,7 +655,7 @@ async def test_extract_themes_basic_functionality(sample_article_data):
 
 class TestValidateNarrativeJson:
     """Unit tests for validate_narrative_json function."""
-    
+
     @pytest.fixture
     def valid_narrative_data(self):
         """Valid narrative data for testing."""
@@ -666,6 +667,7 @@ class TestValidateNarrativeJson:
                 "Coinbase": 3
             },
             "nucleus_entity": "SEC",
+            "narrative_focus": "regulatory enforcement action",
             "actions": ["Filed lawsuit", "Announced enforcement"],
             "tensions": ["Regulation vs Innovation"],
             "narrative_summary": "The SEC is intensifying regulatory enforcement against major crypto exchanges."
@@ -851,24 +853,52 @@ class TestValidateNarrativeJson:
         
         assert is_valid is True
     
+    def test_validate_narrative_focus_required(self, valid_narrative_data):
+        """Test validation fails when narrative_focus is missing."""
+        del valid_narrative_data["narrative_focus"]
+
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+
+        assert is_valid is False
+        assert "Missing required field: narrative_focus" in error
+
+    def test_validate_narrative_focus_empty_string(self, valid_narrative_data):
+        """Test validation fails for empty narrative_focus."""
+        valid_narrative_data["narrative_focus"] = ""
+
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+
+        assert is_valid is False
+        assert "narrative_focus must be non-empty string" in error
+
+    def test_validate_narrative_focus_normalized_lowercase(self, valid_narrative_data):
+        """Test that narrative_focus is normalized to lowercase."""
+        valid_narrative_data["narrative_focus"] = "  REGULATORY Enforcement Action  "
+
+        is_valid, error = validate_narrative_json(valid_narrative_data)
+
+        assert is_valid is True
+        assert valid_narrative_data["narrative_focus"] == "regulatory enforcement action"
+
     def test_validate_all_required_fields_present(self):
         """Test that all required fields are checked."""
-        required_fields = ['actors', 'actor_salience', 'nucleus_entity', 
-                          'actions', 'tensions', 'narrative_summary']
-        
+        required_fields = ['actors', 'actor_salience', 'nucleus_entity',
+                          'narrative_focus', 'actions', 'tensions', 'narrative_summary']
+
         for field in required_fields:
             data = {
                 "actors": ["SEC"],
                 "actor_salience": {"SEC": 5},
                 "nucleus_entity": "SEC",
+                "narrative_focus": "regulatory enforcement",
                 "actions": ["Filed lawsuit"],
                 "tensions": ["Regulation"],
                 "narrative_summary": "The SEC is taking action."
             }
             del data[field]
-            
+
             is_valid, error = validate_narrative_json(data)
-            
+
             assert is_valid is False
             assert f"Missing required field: {field}" in error
 
@@ -894,6 +924,7 @@ class TestValidateNarrativeJsonIntegration:
                     "Coinbase": 3
                 },
                 "nucleus_entity": "SEC",
+                "narrative_focus": "regulatory enforcement action",
                 "actions": ["Filed lawsuit against Binance"],
                 "tensions": ["Regulation vs Innovation"],
                 "implications": "Signals regulatory crackdown",
@@ -1029,13 +1060,14 @@ class TestValidateNarrativeJsonIntegration:
                 "Coinbase": 3
             },
             "nucleus_entity": "SEC",
+            "narrative_focus": "regulatory enforcement",
             "actions": ["Filed lawsuit"],
             "tensions": ["Regulation"],
             "narrative_summary": "SEC enforcement action against exchanges."
         }
-        
+
         is_valid, error = validate_narrative_json(data)
-        
+
         # Should auto-fix by adding SEC to actors
         assert is_valid is True
         assert "SEC" in data["actors"]
@@ -1054,6 +1086,7 @@ class TestComputeNarrativeFingerprint:
         """Sample cluster data with actors as dict (salience scores)."""
         return {
             "nucleus_entity": "SEC",
+            "narrative_focus": "regulatory enforcement action",
             "actors": {
                 "SEC": 5,
                 "Binance": 4,
@@ -1070,12 +1103,13 @@ class TestComputeNarrativeFingerprint:
                 "Requested additional disclosures"
             ]
         }
-    
+
     @pytest.fixture
     def sample_cluster_with_list_actors(self):
         """Sample cluster data with actors as list."""
         return {
             "nucleus_entity": "Ethereum",
+            "narrative_focus": "protocol upgrade deployment",
             "actors": ["Ethereum", "Vitalik Buterin", "EIP-4844", "Layer 2"],
             "actions": [
                 "Deployed Dencun upgrade",
@@ -1087,47 +1121,55 @@ class TestComputeNarrativeFingerprint:
     def test_fingerprint_with_dict_actors(self, sample_cluster_with_dict_actors):
         """Test fingerprint computation with actors as dict (salience scores)."""
         fingerprint = compute_narrative_fingerprint(sample_cluster_with_dict_actors)
-        
+
         # Check structure
         assert "nucleus_entity" in fingerprint
+        assert "narrative_focus" in fingerprint
         assert "top_actors" in fingerprint
         assert "key_actions" in fingerprint
         assert "timestamp" in fingerprint
-        
+
         # Check nucleus entity
         assert fingerprint["nucleus_entity"] == "SEC"
-        
+
+        # Check narrative focus (normalized to lowercase)
+        assert fingerprint["narrative_focus"] == "regulatory enforcement action"
+
         # Check top actors (should be sorted by salience, top 5)
         assert len(fingerprint["top_actors"]) == 5
         assert fingerprint["top_actors"][0] == "SEC"  # Highest salience (5)
         # Binance and Coinbase both have salience 4, order may vary
         assert "Binance" in fingerprint["top_actors"][:3]
         assert "Coinbase" in fingerprint["top_actors"][:3]
-        
+
         # Check key actions (top 3)
         assert len(fingerprint["key_actions"]) == 3
         assert fingerprint["key_actions"][0] == "Filed lawsuit against major exchanges"
-        
+
         # Check timestamp is datetime
         assert isinstance(fingerprint["timestamp"], datetime)
-    
+
     def test_fingerprint_with_list_actors(self, sample_cluster_with_list_actors):
         """Test fingerprint computation with actors as list."""
         fingerprint = compute_narrative_fingerprint(sample_cluster_with_list_actors)
-        
+
         # Check structure
         assert "nucleus_entity" in fingerprint
+        assert "narrative_focus" in fingerprint
         assert "top_actors" in fingerprint
         assert "key_actions" in fingerprint
         assert "timestamp" in fingerprint
-        
+
         # Check nucleus entity
         assert fingerprint["nucleus_entity"] == "Ethereum"
-        
+
+        # Check narrative focus (normalized to lowercase)
+        assert fingerprint["narrative_focus"] == "protocol upgrade deployment"
+
         # Check top actors (should take first 5 from list)
         assert len(fingerprint["top_actors"]) == 4  # Only 4 actors in sample
         assert fingerprint["top_actors"] == ["Ethereum", "Vitalik Buterin", "EIP-4844", "Layer 2"]
-        
+
         # Check key actions (top 3)
         assert len(fingerprint["key_actions"]) == 3
         assert "Deployed Dencun upgrade" in fingerprint["key_actions"]
@@ -1136,23 +1178,25 @@ class TestComputeNarrativeFingerprint:
         """Test fingerprint computation with empty cluster."""
         empty_cluster = {}
         fingerprint = compute_narrative_fingerprint(empty_cluster)
-        
+
         # Should handle gracefully
         assert fingerprint["nucleus_entity"] == ""
+        assert fingerprint["narrative_focus"] == ""
         assert fingerprint["top_actors"] == []
         assert fingerprint["key_actions"] == []
         assert isinstance(fingerprint["timestamp"], datetime)
-    
+
     def test_fingerprint_with_missing_fields(self):
         """Test fingerprint computation with missing fields."""
         partial_cluster = {
             "nucleus_entity": "Bitcoin"
-            # Missing actors and actions
+            # Missing narrative_focus, actors and actions
         }
         fingerprint = compute_narrative_fingerprint(partial_cluster)
-        
+
         # Should handle gracefully
         assert fingerprint["nucleus_entity"] == "Bitcoin"
+        assert fingerprint["narrative_focus"] == ""
         assert fingerprint["top_actors"] == []
         assert fingerprint["key_actions"] == []
         assert isinstance(fingerprint["timestamp"], datetime)
@@ -1278,30 +1322,33 @@ class TestComputeNarrativeFingerprint:
 
 class TestCalculateFingerprintSimilarity:
     """Unit tests for calculate_fingerprint_similarity function."""
-    
+
     @pytest.fixture
     def fingerprint_sec_binance(self):
         """Sample fingerprint for SEC vs Binance narrative."""
         return {
             'nucleus_entity': 'SEC',
+            'narrative_focus': 'regulatory enforcement action',
             'top_actors': ['SEC', 'Binance', 'Coinbase', 'Kraken', 'Gemini'],
             'key_actions': ['filed lawsuit', 'regulatory enforcement', 'compliance review']
         }
-    
+
     @pytest.fixture
     def fingerprint_sec_coinbase(self):
         """Sample fingerprint for SEC vs Coinbase narrative (similar to Binance)."""
         return {
             'nucleus_entity': 'SEC',
+            'narrative_focus': 'regulatory enforcement',
             'top_actors': ['SEC', 'Coinbase', 'Kraken', 'FTX', 'Gemini'],
             'key_actions': ['filed lawsuit', 'enforcement action', 'securities violation']
         }
-    
+
     @pytest.fixture
     def fingerprint_defi_growth(self):
         """Sample fingerprint for DeFi growth narrative (different)."""
         return {
             'nucleus_entity': 'Uniswap',
+            'narrative_focus': 'tvl growth momentum',
             'top_actors': ['Uniswap', 'Aave', 'Compound', 'MakerDAO', 'Curve'],
             'key_actions': ['TVL increase', 'new protocol launch', 'yield farming']
         }
@@ -1312,31 +1359,34 @@ class TestCalculateFingerprintSimilarity:
             fingerprint_sec_binance,
             fingerprint_sec_binance
         )
-        
+
         # Identical fingerprints should have similarity 1.0 + 0.1 semantic boost = 1.1
-        assert similarity == 1.1
-    
+        assert 1.09 <= similarity <= 1.11  # Account for floating point precision
+
     def test_same_nucleus_high_actor_overlap(self, fingerprint_sec_binance, fingerprint_sec_coinbase):
         """Test high similarity when nucleus matches and actors overlap significantly."""
         similarity = calculate_fingerprint_similarity(
             fingerprint_sec_binance,
             fingerprint_sec_coinbase
         )
-        
-        # Same nucleus (0.45) + high actor overlap (0.35 * 4/7) + some action overlap (0.2 * 1/5) + semantic boost (0.1)
-        # Expected: 0.45 + 0.2 + 0.04 + 0.1 = ~0.79
-        # Actual: actors overlap = {SEC, Coinbase, Kraken, Gemini} = 4, union = 7
-        # Actions overlap = {filed lawsuit} = 1, union = 5
-        assert 0.75 <= similarity <= 0.85
-    
+
+        # New weights: nucleus (0.30) + focus (0.35) + actors (0.20) + actions (0.15) + boost (0.10)
+        # Same nucleus: 0.30
+        # Focus: "regulatory enforcement action" vs "regulatory enforcement" -> 2/3 word overlap = 0.67 * 0.35 = 0.23
+        # Actors overlap: {SEC, Coinbase, Kraken, Gemini} = 4, union = 7 -> 4/7 * 0.20 = 0.11
+        # Actions overlap: {filed lawsuit} = 1, union = 5 -> 1/5 * 0.15 = 0.03
+        # Semantic boost: nucleus matches + focus >= 0.5 -> 0.10
+        # Expected: 0.30 + 0.23 + 0.11 + 0.03 + 0.10 = ~0.77
+        assert 0.70 <= similarity <= 0.85
+
     def test_different_nucleus_different_actors(self, fingerprint_sec_binance, fingerprint_defi_growth):
         """Test low similarity when nucleus and actors are different."""
         similarity = calculate_fingerprint_similarity(
             fingerprint_sec_binance,
             fingerprint_defi_growth
         )
-        
-        # Different nucleus (0.0) + no actor overlap (0.0) + no action overlap (0.0)
+
+        # Different nucleus (0.0) + no focus overlap (0.0) + no actor overlap (0.0) + no action overlap (0.0)
         # Expected: ~0.0
         assert similarity < 0.1
     
@@ -1344,244 +1394,288 @@ class TestCalculateFingerprintSimilarity:
         """Test moderate similarity when nucleus matches but actors don't overlap."""
         fp1 = {
             'nucleus_entity': 'Bitcoin',
+            'narrative_focus': 'institutional buying momentum',
             'top_actors': ['Bitcoin', 'MicroStrategy', 'Saylor'],
             'key_actions': ['institutional buying', 'treasury allocation']
         }
         fp2 = {
             'nucleus_entity': 'Bitcoin',
+            'narrative_focus': 'nation-state adoption',
             'top_actors': ['Bitcoin', 'El Salvador', 'Bukele'],
             'key_actions': ['nation-state adoption', 'legal tender']
         }
-        
+
         similarity = calculate_fingerprint_similarity(fp1, fp2)
-        
-        # Same nucleus (0.45) + some actor overlap (Bitcoin) (0.35 * 1/5) + no action overlap + semantic boost (0.1)
-        # Expected: 0.45 + 0.07 + 0.0 + 0.1 = 0.62
-        assert 0.58 <= similarity <= 0.66
-    
+
+        # New weights: nucleus (0.30) + focus (0.35) + actors (0.20) + actions (0.15) + boost (0.10)
+        # Same nucleus: 0.30
+        # Focus: "institutional buying momentum" vs "nation-state adoption" -> 0/5 word overlap = 0.0
+        # Actor overlap: {Bitcoin} = 1, union = 5 -> 1/5 * 0.20 = 0.04
+        # Action overlap: 0
+        # No semantic boost (focus < 0.5)
+        # Expected: 0.30 + 0.0 + 0.04 + 0.0 = ~0.34
+        assert 0.30 <= similarity <= 0.40
+
     def test_different_nucleus_high_actor_overlap(self):
         """Test similarity when nucleus differs but actors overlap significantly."""
         fp1 = {
             'nucleus_entity': 'SEC',
+            'narrative_focus': 'regulatory enforcement',
             'top_actors': ['SEC', 'Binance', 'Coinbase', 'Kraken'],
             'key_actions': ['regulatory action']
         }
         fp2 = {
             'nucleus_entity': 'Binance',
+            'narrative_focus': 'compliance response',
             'top_actors': ['Binance', 'SEC', 'Coinbase', 'Kraken'],
             'key_actions': ['compliance response']
         }
-        
+
         similarity = calculate_fingerprint_similarity(fp1, fp2)
-        
-        # Different nucleus (0.0) + high actor overlap (4/4 = 1.0) + no action overlap
-        # Expected: 0.0 + 0.35 * 1.0 + 0.0 = 0.35
-        assert 0.30 <= similarity <= 0.40
+
+        # Different nucleus (0.0) + no focus overlap (0.0) + high actor overlap (4/4 = 1.0 * 0.20) + no action overlap
+        # Expected: 0.0 + 0.0 + 0.20 + 0.0 = 0.20
+        assert 0.15 <= similarity <= 0.25
     
     def test_empty_fingerprints(self):
         """Test similarity of empty fingerprints."""
         fp1 = {
             'nucleus_entity': '',
+            'narrative_focus': '',
             'top_actors': [],
             'key_actions': []
         }
         fp2 = {
             'nucleus_entity': '',
+            'narrative_focus': '',
             'top_actors': [],
             'key_actions': []
         }
-        
+
         similarity = calculate_fingerprint_similarity(fp1, fp2)
-        
-        # Empty fingerprints should have 0.0 similarity
-        assert similarity == 0.0
-    
+
+        # Empty fingerprints: both missing focus gives 0.5 focus score (legacy compatibility)
+        # 0.0 + 0.5*0.35 + 0.0 + 0.0 = 0.175
+        assert 0.15 <= similarity <= 0.20
+
     def test_one_empty_fingerprint(self, fingerprint_sec_binance):
         """Test similarity when one fingerprint is empty."""
         empty_fp = {
             'nucleus_entity': '',
+            'narrative_focus': '',
             'top_actors': [],
             'key_actions': []
         }
-        
+
         similarity = calculate_fingerprint_similarity(
             fingerprint_sec_binance,
             empty_fp
         )
-        
-        # Should have 0.0 similarity
-        assert similarity == 0.0
-    
+
+        # One has focus, one doesn't -> focus_match = 0.0
+        # Should have low similarity
+        assert similarity < 0.1
+
     def test_missing_fields_handled_gracefully(self):
         """Test that missing fields are handled gracefully."""
-        fp1 = {'nucleus_entity': 'SEC'}  # Missing actors and actions
+        fp1 = {'nucleus_entity': 'SEC'}  # Missing narrative_focus, actors and actions
         fp2 = {
             'nucleus_entity': 'SEC',
+            'narrative_focus': 'enforcement action',
             'top_actors': ['SEC', 'Binance'],
             'key_actions': ['lawsuit']
         }
-        
+
         similarity = calculate_fingerprint_similarity(fp1, fp2)
-        
-        # Same nucleus (0.45) + no actors in fp1 (0.0) + no actions in fp1 (0.0) + semantic boost (0.1)
-        # Expected: 0.55
-        assert 0.50 <= similarity <= 0.60
+
+        # Same nucleus (0.30) + one missing focus (0.0) + no actors in fp1 (0.0) + no actions in fp1 (0.0)
+        # No semantic boost (focus < 0.5)
+        # Expected: 0.30
+        assert 0.25 <= similarity <= 0.35
     
     def test_action_overlap_contribution(self):
         """Test that action overlap contributes to similarity score."""
         fp1 = {
             'nucleus_entity': 'DeFi',
+            'narrative_focus': 'tvl growth momentum',
             'top_actors': ['Uniswap', 'Aave'],
             'key_actions': ['TVL growth', 'new protocol', 'yield farming']
         }
         fp2 = {
             'nucleus_entity': 'DeFi',
+            'narrative_focus': 'tvl growth momentum',
             'top_actors': ['Uniswap', 'Aave'],
             'key_actions': ['TVL growth', 'new protocol', 'liquidity mining']
         }
-        
+
         similarity = calculate_fingerprint_similarity(fp1, fp2)
-        
-        # Same nucleus (0.45) + full actor overlap (0.35 * 1.0) + partial action overlap (0.2 * 2/4) + semantic boost (0.1)
-        # Expected: 0.45 + 0.35 + 0.1 + 0.1 = 1.0
-        assert 0.95 <= similarity <= 1.05
-    
+
+        # New weights: nucleus (0.30) + focus (0.35) + actors (0.20) + actions (0.15) + boost (0.10)
+        # Same nucleus: 0.30
+        # Same focus: 1.0 * 0.35 = 0.35
+        # Full actor overlap: 1.0 * 0.20 = 0.20
+        # Partial action overlap: 2/4 * 0.15 = 0.075
+        # Semantic boost: 0.10
+        # Expected: 0.30 + 0.35 + 0.20 + 0.075 + 0.10 = 1.025
+        assert 0.95 <= similarity <= 1.10
+
     def test_weighted_scoring(self):
-        """Test that weights are applied correctly (actors > nucleus > actions)."""
-        # Test 1: High actor overlap, different nucleus
+        """Test that weights are applied correctly (focus > nucleus > actors > actions)."""
+        # Test 1: High actor overlap, different nucleus, different focus
         fp1 = {
             'nucleus_entity': 'EntityA',
+            'narrative_focus': 'focus one',
             'top_actors': ['A', 'B', 'C', 'D', 'E'],
             'key_actions': ['action1']
         }
         fp2 = {
             'nucleus_entity': 'EntityB',
+            'narrative_focus': 'focus two',
             'top_actors': ['A', 'B', 'C', 'D', 'E'],
             'key_actions': ['action2']
         }
-        
+
         similarity_actors = calculate_fingerprint_similarity(fp1, fp2)
-        
-        # Test 2: Same nucleus, no actor overlap
+
+        # Test 2: Same nucleus, same focus, no actor overlap
         fp3 = {
             'nucleus_entity': 'EntityA',
+            'narrative_focus': 'same focus',
             'top_actors': ['A', 'B', 'C'],
             'key_actions': ['action1']
         }
         fp4 = {
             'nucleus_entity': 'EntityA',
+            'narrative_focus': 'same focus',
             'top_actors': ['X', 'Y', 'Z'],
             'key_actions': ['action2']
         }
-        
-        similarity_nucleus = calculate_fingerprint_similarity(fp3, fp4)
-        
-        # Actor overlap (weight 0.35) + no boost vs nucleus match (weight 0.45) + boost (0.1)
-        # similarity_actors = 0.35 * 1.0 = 0.35
-        # similarity_nucleus = 0.45 + 0.1 = 0.55
-        # With semantic boost, nucleus match should now be higher
-        assert similarity_nucleus > similarity_actors
-    
+
+        similarity_nucleus_focus = calculate_fingerprint_similarity(fp3, fp4)
+
+        # similarity_actors: 0.0 + 0.35*0 + 0.20*1.0 + 0.0 = 0.20
+        # similarity_nucleus_focus: 0.30 + 0.35*1.0 + 0.0 + 0.0 + 0.10 = 0.75
+        # Nucleus+focus match should be much higher than actor overlap alone
+        assert similarity_nucleus_focus > similarity_actors
+
     def test_jaccard_similarity_calculation(self):
         """Test that Jaccard similarity is calculated correctly for actors."""
         fp1 = {
             'nucleus_entity': 'Test',
+            'narrative_focus': 'same focus',
             'top_actors': ['A', 'B', 'C'],
             'key_actions': []
         }
         fp2 = {
             'nucleus_entity': 'Test',
+            'narrative_focus': 'same focus',
             'top_actors': ['B', 'C', 'D'],
             'key_actions': []
         }
-        
+
         similarity = calculate_fingerprint_similarity(fp1, fp2)
-        
-        # Nucleus match: 0.45
+
+        # Nucleus match: 0.30
+        # Focus match: 1.0 * 0.35 = 0.35
         # Actor Jaccard: intersection={B,C}=2, union={A,B,C,D}=4, jaccard=2/4=0.5
-        # Actor score: 0.35 * 0.5 = 0.175
-        # Semantic boost: 0.1
-        # Total: 0.45 + 0.175 + 0.1 = 0.725
-        assert 0.68 <= similarity <= 0.78
+        # Actor score: 0.20 * 0.5 = 0.10
+        # Semantic boost: 0.10
+        # Total: 0.30 + 0.35 + 0.10 + 0.10 = 0.85
+        assert 0.80 <= similarity <= 0.90
     
     def test_case_insensitive_nucleus_matching(self):
-        """Test that nucleus entity matching is case-insensitive with semantic boost."""
+        """Test that nucleus entity matching is case-insensitive."""
         fp1 = {
             'nucleus_entity': 'SEC',
+            'narrative_focus': 'enforcement action',
             'top_actors': ['SEC', 'Binance'],
             'key_actions': ['lawsuit']
         }
         fp2 = {
             'nucleus_entity': 'sec',  # lowercase
+            'narrative_focus': 'enforcement action',
             'top_actors': ['sec', 'binance'],  # lowercase
             'key_actions': ['lawsuit']
         }
-        
+
         similarity = calculate_fingerprint_similarity(fp1, fp2)
-        
-        # Nucleus match (case-insensitive): 0.0 (exact match fails) but semantic boost applies: +0.1
+
+        # Nucleus match (case-insensitive): 0.30
+        # Focus match: 1.0 * 0.35 = 0.35
         # No actor overlap (actors are case-sensitive): 0.0
-        # Action overlap: 0.2 * (1/1) = 0.2
-        # Total: 0.0 + 0.0 + 0.2 + 0.1 = 0.3
-        assert 0.25 <= similarity <= 0.35
-    
+        # Action overlap: 0.15 * 1.0 = 0.15
+        # Semantic boost: 0.10
+        # Total: 0.30 + 0.35 + 0.0 + 0.15 + 0.10 = 0.90
+        assert 0.85 <= similarity <= 0.95
+
     def test_semantic_boost_applied(self):
-        """Test that semantic boost is applied when nucleus entities match (case-insensitive)."""
-        # Test 1: Exact case match
+        """Test that semantic boost is applied when nucleus AND focus match well."""
+        # Test 1: Same nucleus, same focus - boost applied
         fp1 = {
             'nucleus_entity': 'Bitcoin',
+            'narrative_focus': 'institutional adoption',
             'top_actors': ['MicroStrategy'],
             'key_actions': ['buying']
         }
         fp2 = {
             'nucleus_entity': 'Bitcoin',
+            'narrative_focus': 'institutional adoption',
             'top_actors': ['Tesla'],
             'key_actions': ['selling']
         }
-        
-        similarity_exact = calculate_fingerprint_similarity(fp1, fp2)
-        
-        # Nucleus match: 0.45 + semantic boost: 0.1 = 0.55
+
+        similarity_with_boost = calculate_fingerprint_similarity(fp1, fp2)
+
+        # Nucleus match: 0.30
+        # Focus match: 1.0 * 0.35 = 0.35
         # No actor overlap: 0.0
         # No action overlap: 0.0
-        # Total: 0.55
-        assert 0.50 <= similarity_exact <= 0.60
-        
-        # Test 2: Case-insensitive match
+        # Semantic boost: 0.10 (nucleus matches + focus >= 0.5)
+        # Total: 0.75
+        assert 0.70 <= similarity_with_boost <= 0.80
+
+        # Test 2: Same nucleus, different focus - no boost (focus < 0.5)
         fp3 = {
-            'nucleus_entity': 'BITCOIN',
+            'nucleus_entity': 'Bitcoin',
+            'narrative_focus': 'institutional adoption',
             'top_actors': ['Grayscale'],
             'key_actions': ['accumulating']
         }
         fp4 = {
-            'nucleus_entity': 'bitcoin',
+            'nucleus_entity': 'Bitcoin',
+            'narrative_focus': 'retail selling pressure',
             'top_actors': ['BlackRock'],
             'key_actions': ['launching ETF']
         }
-        
-        similarity_case_insensitive = calculate_fingerprint_similarity(fp3, fp4)
-        
-        # Nucleus match fails (case mismatch): 0.0, but semantic boost applies: 0.1
+
+        similarity_no_boost = calculate_fingerprint_similarity(fp3, fp4)
+
+        # Nucleus match: 0.30
+        # Focus match: 0/4 words overlap = 0.0
         # No actor overlap: 0.0
         # No action overlap: 0.0
-        # Total: 0.1
-        assert 0.08 <= similarity_case_insensitive <= 0.12
-        
+        # No semantic boost (focus < 0.5)
+        # Total: 0.30
+        assert 0.25 <= similarity_no_boost <= 0.35
+
         # Test 3: No nucleus match - no boost
         fp5 = {
             'nucleus_entity': 'Ethereum',
+            'narrative_focus': 'protocol upgrade',
             'top_actors': ['Vitalik'],
             'key_actions': ['upgrade']
         }
         fp6 = {
             'nucleus_entity': 'Bitcoin',
+            'narrative_focus': 'mining difficulty',
             'top_actors': ['Satoshi'],
             'key_actions': ['mining']
         }
-        
+
         similarity_no_match = calculate_fingerprint_similarity(fp5, fp6)
-        
-        # No nucleus match: 0.0, no semantic boost
+
+        # No nucleus match: 0.0
+        # No focus overlap: 0.0
         # No actor overlap: 0.0
         # No action overlap: 0.0
         # Total: 0.0

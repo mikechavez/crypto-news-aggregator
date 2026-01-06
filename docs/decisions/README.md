@@ -4,6 +4,7 @@ This directory contains records of architectural decisions made during developme
 
 ## Active Decisions
 
+- [004. Add Narrative Focus Field for Story Identity](./004-narrative-focus-identity.md) - 2026-01-06
 - [003. Signal Scoring: Compute on Read](./003-signal-scoring-compute-on-read.md) - 2026-01-05
 - [002. Rule-Based Article Relevance Classification](./002-rule-based-relevance-classification.md) - 2026-01-02
 - [001. Use Claude Sonnet 4.5 for Briefing Generation](./001-sonnet-vs-haiku-for-briefing.md) - 2025-12-29

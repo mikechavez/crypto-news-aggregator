@@ -10,6 +10,28 @@
 
 ## In Progress
 
+- [x] [FEATURE-009] Add Narrative Focus Extraction - **COMPLETE**
+  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-009-narrative-focus-extraction.md`
+  - Priority: High
+  - Complexity: Medium
+  - Started: 2026-01-06
+  - Completed: 2026-01-06
+  - Branch: `feature/narrative-focus-extraction`
+  - **Summary:**
+    - ✅ Updated LLM prompt in `discover_narrative_from_article()` with narrative_focus field
+    - ✅ Added two examples showing focus extraction
+    - ✅ Updated `validate_narrative_json()` with narrative_focus validation
+    - ✅ Updated `compute_narrative_fingerprint()` to include focus
+    - ✅ Revised `calculate_fingerprint_similarity()` with new weights:
+      - Focus: 0.35 (new key differentiator)
+      - Nucleus: 0.30 (reduced from 0.45)
+      - Actors: 0.20 (reduced from 0.35)
+      - Actions: 0.15 (reduced from 0.20)
+    - ✅ Updated Article model with narrative_focus field
+    - ✅ Updated narrative_service.py cluster aggregation
+    - ✅ Updated backfill scripts (backfill_narratives.py, process_missing_narratives.py)
+    - ✅ All 68 tests pass (including 3 new narrative_focus tests)
+
 - [x] [FEATURE-008] Fix Theme vs Title in UI - **COMPLETE**
   - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-008-fix-theme-vs-title-ui.md`
   - Priority: High
@@ -48,11 +70,9 @@
 
 New tickets created to fix narrative duplication problem:
 
-- [ ] [FEATURE-009] Add Narrative Focus Extraction
-  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-009-narrative-focus-extraction.md`
-  - Priority: High
-  - Complexity: Medium
-  - Core fix - add focus field to distinguish parallel stories about same entity
+- [x] [FEATURE-009] Add Narrative Focus Extraction - **COMPLETE** (2026-01-06)
+  - Core fix - added focus field to distinguish parallel stories about same entity
+  - See "In Progress" section for full summary
 
 - [ ] [FEATURE-010] Revise Similarity Matching to Prioritize Focus
   - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-010-narrative-focus-matching.md`

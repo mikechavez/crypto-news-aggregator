@@ -28,30 +28,43 @@ MAX_RELEVANCE_TIER = 2
 def validate_narrative_json(data: Dict) -> Tuple[bool, Optional[str]]:
     """
     Validate LLM-extracted narrative data.
-    
+
     Returns: (is_valid, error_message)
     """
     # Check required fields
-    required_fields = ['actors', 'actor_salience', 'nucleus_entity', 
-                       'actions', 'tensions', 'narrative_summary']
-    
+    required_fields = ['actors', 'actor_salience', 'nucleus_entity',
+                       'narrative_focus', 'actions', 'tensions', 'narrative_summary']
+
     for field in required_fields:
         if field not in data:
             return False, f"Missing required field: {field}"
-    
+
     # Validate actors is non-empty list
     if not isinstance(data['actors'], list) or len(data['actors']) == 0:
         return False, "actors must be non-empty list"
-    
+
     # Cap actors at 20 (prevent bloat)
     if len(data['actors']) > 20:
         logger.debug(f"Capping actors list from {len(data['actors'])} to 20")
         data['actors'] = data['actors'][:20]
-    
+
     # Validate nucleus_entity exists and is a string
     if not isinstance(data['nucleus_entity'], str) or not data['nucleus_entity']:
         return False, "nucleus_entity must be non-empty string"
-    
+
+    # Validate narrative_focus exists and is a reasonable phrase (2-10 words)
+    focus = data.get('narrative_focus', '')
+    if not isinstance(focus, str) or not focus.strip():
+        return False, "narrative_focus must be non-empty string"
+
+    # Count words in focus (allow 1-10 words for flexibility)
+    word_count = len(focus.strip().split())
+    if word_count < 1 or word_count > 10:
+        return False, f"narrative_focus should be 2-5 words, got {word_count} words: '{focus}'"
+
+    # Auto-fix: Normalize focus to lowercase for consistency
+    data['narrative_focus'] = focus.strip().lower()
+
     # Auto-fix: Ensure nucleus_entity is in actors list
     if data['nucleus_entity'] not in data['actors']:
         logger.debug(f"Adding nucleus_entity {data['nucleus_entity']} to actors list")
@@ -81,29 +94,37 @@ def validate_narrative_json(data: Dict) -> Tuple[bool, Optional[str]]:
 def compute_narrative_fingerprint(cluster: Dict[str, Any]) -> Dict[str, Any]:
     """
     Compute a composite fingerprint for a narrative cluster to enable intelligent matching.
-    
+
     The fingerprint captures the structural components of a narrative:
     - Nucleus entity (the central protagonist)
+    - Narrative focus (what is happening - the key differentiator for parallel stories)
     - Top actors by salience (key participants)
     - Key actions (main events)
     - Timestamp (when fingerprint was computed)
-    
+
     Args:
         cluster: Dict containing:
             - nucleus_entity: str, the primary entity the narrative is about
+            - narrative_focus: str, 2-5 word phrase describing what's happening
             - actors: dict with entity names as keys and salience scores as values
             - actions: list of action/event strings
-    
+
     Returns:
         Dict with fingerprint components:
             - nucleus_entity: str
+            - narrative_focus: str (normalized to lowercase)
             - top_actors: list of top 5 actors sorted by salience (descending)
             - key_actions: list of top 3 actions
             - timestamp: datetime when fingerprint was computed
     """
     # Extract nucleus entity
     nucleus_entity = cluster.get('nucleus_entity', '')
-    
+
+    # Extract narrative focus (normalize to lowercase)
+    narrative_focus = cluster.get('narrative_focus', '')
+    if narrative_focus:
+        narrative_focus = narrative_focus.strip().lower()
+
     # Extract and sort actors by salience
     actors_dict = cluster.get('actors', {})
     if isinstance(actors_dict, dict):
@@ -117,19 +138,20 @@ def compute_narrative_fingerprint(cluster: Dict[str, Any]) -> Dict[str, Any]:
     else:
         # Handle case where actors might be a list instead of dict
         top_actors = list(actors_dict)[:5] if actors_dict else []
-    
+
     # Extract key actions (top 3)
     actions = cluster.get('actions', [])
     key_actions = actions[:3] if actions else []
-    
+
     # Create fingerprint
     fingerprint = {
         'nucleus_entity': nucleus_entity,
+        'narrative_focus': narrative_focus,
         'top_actors': top_actors,
         'key_actions': key_actions,
         'timestamp': datetime.now(timezone.utc)
     }
-    
+
     return fingerprint
 
 
@@ -139,84 +161,116 @@ def calculate_fingerprint_similarity(
 ) -> float:
     """
     Calculate similarity between two narrative fingerprints.
-    
+
     Uses weighted scoring to determine if two narratives should be merged:
-    - Nucleus match (exact match of nucleus_entity): weight 0.45
-    - Actor overlap (Jaccard similarity of top_actors): weight 0.35
-    - Action overlap (Jaccard similarity of key_actions): weight 0.2
-    
+    - Nucleus match (exact match of nucleus_entity): weight 0.30
+    - Focus match (word overlap in narrative_focus): weight 0.35 (key differentiator)
+    - Actor overlap (Jaccard similarity of top_actors): weight 0.20
+    - Action overlap (Jaccard similarity of key_actions): weight 0.15
+
+    The narrative_focus is the PRIMARY differentiator for parallel stories about
+    the same entity. E.g., "Dogecoin price surge" vs "Dogecoin governance dispute"
+    should NOT merge even though they share the same nucleus_entity.
+
     Args:
-        fingerprint1: First fingerprint dict with nucleus_entity, top_actors, key_actions
-        fingerprint2: Second fingerprint dict with nucleus_entity, top_actors, key_actions
-    
+        fingerprint1: First fingerprint dict with nucleus_entity, narrative_focus, top_actors, key_actions
+        fingerprint2: Second fingerprint dict with nucleus_entity, narrative_focus, top_actors, key_actions
+
     Returns:
         Similarity score between 0.0 and 1.0, where 1.0 is identical
-    
+
     Example:
         >>> fp1 = {
         ...     'nucleus_entity': 'SEC',
+        ...     'narrative_focus': 'regulatory enforcement action',
         ...     'top_actors': ['SEC', 'Binance', 'Coinbase'],
         ...     'key_actions': ['filed lawsuit', 'regulatory enforcement']
         ... }
         >>> fp2 = {
         ...     'nucleus_entity': 'SEC',
+        ...     'narrative_focus': 'regulatory enforcement',
         ...     'top_actors': ['SEC', 'Binance', 'Kraken'],
         ...     'key_actions': ['filed lawsuit', 'compliance review']
         ... }
         >>> calculate_fingerprint_similarity(fp1, fp2)
-        0.75  # High similarity: same nucleus, 2/4 actors overlap, 1/3 actions overlap
+        0.80  # High similarity: same nucleus, similar focus, overlapping actors
     """
     # Extract components from fingerprints
     nucleus1 = fingerprint1.get('nucleus_entity', '')
     nucleus2 = fingerprint2.get('nucleus_entity', '')
-    
+
+    focus1 = fingerprint1.get('narrative_focus', '')
+    focus2 = fingerprint2.get('narrative_focus', '')
+
     actors1 = set(fingerprint1.get('top_actors', []))
     actors2 = set(fingerprint2.get('top_actors', []))
-    
+
     actions1 = set(fingerprint1.get('key_actions', []))
     actions2 = set(fingerprint2.get('key_actions', []))
-    
+
     # Calculate nucleus match score (binary: 1.0 or 0.0)
-    nucleus_match_score = 1.0 if nucleus1 and nucleus2 and nucleus1 == nucleus2 else 0.0
-    
+    nucleus_match_score = 1.0 if nucleus1 and nucleus2 and nucleus1.lower() == nucleus2.lower() else 0.0
+
+    # Calculate focus match score (Jaccard similarity of words in focus phrases)
+    # This is the key differentiator for parallel stories about the same entity
+    focus_match_score = 0.0
+    if focus1 and focus2:
+        # Tokenize focus phrases into words (lowercase, normalized)
+        focus_words1 = set(focus1.lower().split())
+        focus_words2 = set(focus2.lower().split())
+
+        if focus_words1 and focus_words2:
+            focus_overlap = len(focus_words1 & focus_words2)
+            focus_union = len(focus_words1 | focus_words2)
+            focus_match_score = focus_overlap / focus_union if focus_union > 0 else 0.0
+
+            # Exact match bonus: if focus phrases are identical, add extra weight
+            if focus1.lower() == focus2.lower():
+                focus_match_score = 1.0
+    elif not focus1 and not focus2:
+        # Both missing focus - neutral (legacy data compatibility)
+        focus_match_score = 0.5
+
     # Calculate actor overlap score (Jaccard similarity)
+    actor_overlap_score = 0.0
     if actors1 or actors2:
         actor_overlap = len(actors1 & actors2)
         actor_union = len(actors1 | actors2)
         actor_overlap_score = actor_overlap / actor_union if actor_union > 0 else 0.0
-    else:
-        actor_overlap_score = 0.0
-    
+
     # Calculate action overlap score (Jaccard similarity)
+    action_overlap_score = 0.0
     if actions1 or actions2:
         action_overlap = len(actions1 & actions2)
         action_union = len(actions1 | actions2)
         action_overlap_score = action_overlap / action_union if action_union > 0 else 0.0
-    else:
-        action_overlap_score = 0.0
-    
+
     # Weighted sum of components
+    # Focus is now the key differentiator (0.35 weight)
     similarity = (
-        nucleus_match_score * 0.45 +
-        actor_overlap_score * 0.35 +
-        action_overlap_score * 0.2
+        nucleus_match_score * 0.30 +
+        focus_match_score * 0.35 +
+        actor_overlap_score * 0.20 +
+        action_overlap_score * 0.15
     )
-    
-    # Semantic boost: if both fingerprints have the exact same nucleus_entity (case-insensitive),
-    # add 0.1 bonus to help narratives about the same core entity merge even with minimal actor overlap
+
+    # Semantic boost: if both nucleus AND focus match well, add bonus
+    # This helps narratives with the same core story merge more easily
     semantic_boost = 0.0
-    if nucleus1 and nucleus2 and nucleus1.lower() == nucleus2.lower():
+    if nucleus_match_score == 1.0 and focus_match_score >= 0.5:
         semantic_boost = 0.1
         similarity += semantic_boost
         logger.info(
-            f"Applied semantic boost (+{semantic_boost:.1f}) for matching nucleus entity: '{nucleus1}' == '{nucleus2}'"
+            f"Applied semantic boost (+{semantic_boost:.1f}) for matching nucleus+focus: "
+            f"'{nucleus1}' + '{focus1}' ~ '{focus2}'"
         )
-    
+
     logger.debug(
         f"Fingerprint similarity: {similarity:.3f} "
-        f"(nucleus={nucleus_match_score:.1f}, actors={actor_overlap_score:.3f}, actions={action_overlap_score:.3f}, boost={semantic_boost:.1f})"
+        f"(nucleus={nucleus_match_score:.1f}, focus={focus_match_score:.3f}, "
+        f"actors={actor_overlap_score:.3f}, actions={action_overlap_score:.3f}, boost={semantic_boost:.1f})"
     )
-    
+
     return similarity
 
 
@@ -513,11 +567,22 @@ Given the following article, describe:
 2. **Nucleus entity** (required): The ONE entity this article is primarily about.
    This is the anchor of the story - if you had to summarize in one word, which entity?
 
-3. The main *actions or events* (what happened)
+3. **Narrative focus** (required): A 2-5 word phrase describing WHAT IS HAPPENING.
+   This captures the core development/claim of the story, NOT the entity itself.
+   Examples: "price surge", "regulatory enforcement", "protocol upgrade", "governance dispute",
+   "ETF approval", "hack investigation", "partnership announcement", "market manipulation probe"
 
-4. The *forces or tensions* at play (e.g., regulation vs innovation, centralization vs decentralization)
+   The focus should be:
+   - Verb-driven (captures action/development)
+   - Specific enough to distinguish parallel stories about the same entity
+   - General enough to merge related articles
+   - NOT just the entity name or topic label (avoid "Dogecoin news" or "Bitcoin update")
 
-5. The *implications* or *stakes* (why it matters)
+5. The main *actions or events* (what happened)
+
+6. The *forces or tensions* at play (e.g., regulation vs innovation, centralization vs decentralization)
+
+7. The *implications* or *stakes* (why it matters)
 
 Then summarize in 2-3 sentences what broader narrative this article contributes to.
 
@@ -574,6 +639,7 @@ Required JSON format:
     "AnotherEntity": 3
   }},
   "nucleus_entity": "PrimaryEntityName",
+  "narrative_focus": "2-5 word phrase describing what is happening",
   "actions": ["list of key events"],
   "tensions": ["list of forces or tensions"],
   "implications": "why this matters",
@@ -589,10 +655,26 @@ Example for "SEC sues Binance for regulatory violations":
     "Coinbase": 2
   }},
   "nucleus_entity": "SEC",
+  "narrative_focus": "regulatory enforcement action",
   "actions": ["SEC filed lawsuit against Binance"],
   "tensions": ["Regulation vs Innovation", "Compliance vs Growth"],
   "implications": "Signals escalation in regulatory enforcement",
   "narrative_summary": "Regulators are intensifying enforcement against major exchanges as the SEC targets Binance for alleged securities violations, with implications for the broader industry."
+}}
+
+Example for "Dogecoin surges 40% as retail traders pile in":
+{{
+  "actors": ["Dogecoin", "retail traders"],
+  "actor_salience": {{
+    "Dogecoin": 5,
+    "retail traders": 3
+  }},
+  "nucleus_entity": "Dogecoin",
+  "narrative_focus": "price surge momentum",
+  "actions": ["Dogecoin price increased 40%", "retail traders increased positions"],
+  "tensions": ["Speculation vs Fundamentals", "Retail vs Institutional"],
+  "implications": "Renewed meme coin interest signals risk appetite returning",
+  "narrative_summary": "Dogecoin is experiencing a significant price surge driven by retail trader enthusiasm, marking a potential return of speculative momentum in the meme coin sector."
 }}
 
 Your JSON response:"""
@@ -948,6 +1030,7 @@ async def backfill_narratives_for_recent_articles(hours: int = 48, limit: int = 
                     "actors": narrative_data.get("actors", []),
                     "actor_salience": narrative_data.get("actor_salience", {}),
                     "nucleus_entity": narrative_data.get("nucleus_entity", ""),
+                    "narrative_focus": narrative_data.get("narrative_focus", ""),
                     "actions": narrative_data.get("actions", []),
                     "tensions": narrative_data.get("tensions", []),
                     "implications": narrative_data.get("implications", ""),
@@ -980,13 +1063,14 @@ async def generate_narrative_from_cluster(cluster: List[Dict[str, Any]]) -> Opti
         return None
     
     logger.info(f"Generating narrative for cluster of {len(cluster)} articles")
-    
+
     # Aggregate data from cluster
     all_actors = []
     all_tensions = []
     article_ids = []
     nucleus_entities = []
-    
+    narrative_focuses = []
+
     for article in cluster:
         all_actors.extend(article.get("actors", []))
         all_tensions.extend(article.get("tensions", []))
@@ -994,16 +1078,24 @@ async def generate_narrative_from_cluster(cluster: List[Dict[str, Any]]) -> Opti
         nucleus = article.get("nucleus_entity")
         if nucleus:
             nucleus_entities.append(nucleus)
-    
+        focus = article.get("narrative_focus")
+        if focus:
+            narrative_focuses.append(focus.lower().strip())
+
     # Get unique actors and tensions
     unique_actors = list(set(all_actors))
     unique_tensions = list(set(all_tensions))
-    
+
     # Determine primary nucleus entity (most common)
     nucleus_counts = Counter(nucleus_entities)
     primary_nucleus = nucleus_counts.most_common(1)[0][0] if nucleus_counts else ""
-    
+
+    # Determine primary narrative focus (most common)
+    focus_counts = Counter(narrative_focuses)
+    primary_focus = focus_counts.most_common(1)[0][0] if focus_counts else ""
+
     logger.info(f"  Primary nucleus: {primary_nucleus}")
+    logger.info(f"  Primary focus: {primary_focus}")
     logger.info(f"  Unique actors ({len(unique_actors)}): {unique_actors[:10]}")
     logger.info(f"  Unique tensions ({len(unique_tensions)}): {unique_tensions[:5]}")
     
@@ -1090,6 +1182,7 @@ Return valid JSON with no newlines in string values: {{"title": "...", "summary"
             "actors": unique_actors[:20],  # Limit to top 20 actors
             "tensions": unique_tensions[:10],  # Limit to top 10 tensions
             "nucleus_entity": primary_nucleus,
+            "narrative_focus": primary_focus,
             "article_ids": article_ids,
             "article_count": len(cluster),
             "entity_relationships": entity_relationships
