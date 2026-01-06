@@ -107,12 +107,23 @@ Implemented article-level relevance classification to filter noise from signals 
    - Signal scores need recalculation (background task will handle)
 
 4. ~~**Deploy to Railway** - COMPLETE (2026-01-04)~~
-   - PR #124 merged to main
-   - Railway auto-deploy triggered
-   - Monitoring deployment progress
+   - PR #124 merged to main (relevance filtering)
+   - Hit loguru dependency issue - fixed via PR #125
+   - Railway deployment successful - API responding
+   - Background tasks running (RSS, narratives, alerts)
 
-5. **Review tier distribution** in prod and tune patterns (CHORE-001)
-   - Monitor signal scores recalculation (every 2 minutes)
+5. **Signal scoring: Compute on Read** - COMPLETE (2026-01-05)
+   - Discovered: signal scores were 3 months old due to architectural flaw
+   - Solution: Implemented compute-on-read pattern (ADR-003)
+   - Changes:
+     - Worker signal task disabled (compute on demand instead)
+     - API endpoints compute signals fresh with 60s cache
+     - Alert service updated to use compute_trending_signals
+     - Removed unused imports
+   - Backfill scripts no longer needed (data computed fresh)
+
+6. **Review tier distribution** in prod and tune patterns (CHORE-001)
+   - Monitor signal scores after backfill completes
    - Check production tier distribution
    - Tune patterns if needed
 

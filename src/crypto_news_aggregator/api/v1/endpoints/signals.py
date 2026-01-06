@@ -11,9 +11,9 @@ from fastapi import APIRouter, Query, HTTPException
 from typing import List, Dict, Any, Optional
 from bson import ObjectId
 
-from ....db.operations.signal_scores import get_trending_entities
 from ....core.redis_rest_client import redis_client
 from ....db.mongodb import mongo_manager
+from ....services.signal_service import compute_trending_signals
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 _memory_cache: Dict[str, tuple[Any, datetime]] = {}
 _cache_duration = timedelta(seconds=60)  # Cache for 60 seconds
 
-# In-memory cache for pre-computed signal data
+# In-memory cache for computed signal data (60 second TTL for compute-on-read)
 _signals_cache: Dict[str, tuple[Any, datetime]] = {}
-_signals_cache_ttl = timedelta(minutes=5)  # 5 minute TTL
+_signals_cache_ttl = timedelta(seconds=60)  # 60 second TTL for freshness
 
 
 def get_from_cache(cache_key: str) -> Optional[Any]:
@@ -207,93 +207,89 @@ async def get_recent_articles_for_entity(entity: str, limit: int = 5) -> List[Di
 async def get_signals() -> Dict[str, Any]:
     """
     Get top 20 trending signals sorted by score descending.
-    
-    Results are cached in-memory for 5 minutes to reduce database load.
-    
+
+    Signals are computed on-demand from entity_mentions data.
+    Results are cached for 60 seconds.
+
     Returns:
         List of top 20 signals with entity, score, and metadata
     """
-    cache_key = "signals:top20"
-    
-    # Check in-memory cache
+    cache_key = "signals:top20:v2"
+
+    # Check in-memory cache (60 second TTL)
     if cache_key in _signals_cache:
         cached_data, cached_time = _signals_cache[cache_key]
-        if datetime.now() - cached_time < _signals_cache_ttl:
+        if datetime.now() - cached_time < timedelta(seconds=60):
+            cached_data["cached"] = True
             return cached_data
         else:
             # Remove expired entry
             del _signals_cache[cache_key]
-    
-    # Cache miss - fetch from database
+
+    # Cache miss - compute on demand
     try:
-        db = await mongo_manager.get_async_database()
-        collection = db.signal_scores
-        
-        # Define async function to fetch signals
-        async def fetch_signals():
-            cursor = collection.find({}).sort("score", -1).limit(20)
-            signals = []
-            async for signal in cursor:
-                signals.append({
-                    "entity": signal.get("entity", ""),
-                    "entity_type": signal.get("entity_type", ""),
-                    "score": signal.get("score", 0.0),
-                    "velocity": signal.get("velocity", 0.0),
-                    "source_count": signal.get("source_count", 0),
-                    "sentiment": signal.get("sentiment", {}),
-                    "is_emerging": signal.get("is_emerging", False),
-                    "narrative_ids": signal.get("narrative_ids", []),
-                    "first_seen": signal.get("first_seen").isoformat() if signal.get("first_seen") else None,
-                    "last_updated": signal.get("last_updated").isoformat() if signal.get("last_updated") else None,
-                })
-            return signals
-        
-        # Define async function to count narratives for entities
-        async def fetch_narrative_counts(entity_list):
-            narrative_counts = await db.narratives.aggregate([
-                {"$match": {"entities": {"$in": entity_list}}},
-                {"$unwind": "$entities"},
-                {"$match": {"entities": {"$in": entity_list}}},
-                {"$group": {"_id": "$entities", "count": {"$sum": 1}}}
-            ]).to_list(length=None)
-            
-            counts = {}
-            for doc in narrative_counts:
-                counts[doc["_id"]] = doc["count"]
-            return counts
-        
-        # First, get entity list from top 20 signals (lightweight query)
-        cursor = collection.find({}, {"entity": 1}).sort("score", -1).limit(20)
-        entity_list = []
-        async for doc in cursor:
-            entity_list.append(doc.get("entity", ""))
-        
-        # Fetch signals and narrative counts in parallel using asyncio.gather
-        signals, narrative_counts = await asyncio.gather(
-            fetch_signals(),
-            fetch_narrative_counts(entity_list)
+        start_time = time.time()
+
+        # Compute trending signals on-demand (default 7d timeframe, top 20)
+        trending = await compute_trending_signals(
+            timeframe="7d",
+            limit=20,
+            min_score=0.0,
         )
-        
-        # Merge narrative_count into each signal
-        for signal in signals:
+
+        compute_time = time.time() - start_time
+        logger.info(f"[Signals] Computed top 20 signals in {compute_time:.3f}s")
+
+        # Get narrative counts for each entity
+        db = await mongo_manager.get_async_database()
+        entity_list = [s["entity"] for s in trending]
+
+        narrative_counts = await db.narratives.aggregate([
+            {"$match": {"entities": {"$in": entity_list}}},
+            {"$unwind": "$entities"},
+            {"$match": {"entities": {"$in": entity_list}}},
+            {"$group": {"_id": "$entities", "count": {"$sum": 1}}}
+        ]).to_list(length=None)
+
+        counts = {doc["_id"]: doc["count"] for doc in narrative_counts}
+
+        # Build response
+        signals = []
+        for signal in trending:
             entity = signal["entity"]
-            signal["narrative_count"] = narrative_counts.get(entity, 0)
-        
+            signals.append({
+                "entity": entity,
+                "entity_type": signal.get("entity_type", ""),
+                "score": signal.get("score", 0.0),
+                "velocity": signal.get("velocity", 0.0),
+                "mentions": signal.get("mentions", 0),
+                "source_count": signal.get("source_count", 0),
+                "sentiment": signal.get("sentiment", {}),
+                "is_emerging": signal.get("is_emerging", False),
+                "narrative_ids": signal.get("narrative_ids", []),
+                "narrative_count": counts.get(entity, 0),
+            })
+
         response = {
             "count": len(signals),
             "signals": signals,
-            "cached_at": datetime.now().isoformat(),
+            "cached": False,
+            "computed_at": datetime.now().isoformat(),
+            "performance": {
+                "compute_time_seconds": round(compute_time, 3),
+            }
         }
-        
+
         # Store in cache with current timestamp
         _signals_cache[cache_key] = (response, datetime.now())
-        
+
         return response
-        
+
     except Exception as e:
+        logger.error(f"[Signals] Failed to compute signals: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to fetch signals: {str(e)}"
+            detail=f"Failed to compute signals: {str(e)}"
         )
 
 
@@ -332,22 +328,23 @@ async def get_trending_signals(
 ) -> Dict[str, Any]:
     """
     Get trending entities based on signal scores for a specific timeframe.
-    
-    Signal scores are calculated based on:
-    - Velocity: Rate of mentions over time
+
+    Signal scores are computed on-demand from entity_mentions data:
+    - Velocity: Rate of mentions over time (growth percentage)
     - Source diversity: Number of unique sources
+    - Recency: Proportion of recent mentions
     - Sentiment: Average sentiment and divergence
-    
-    Results are cached for 2 minutes.
-    
+
+    Results are cached for 60 seconds for performance.
+
     Args:
         limit: Maximum number of results (1-100, default 50)
         min_score: Minimum signal score threshold (0-10, default 0)
         entity_type: Filter by entity type (optional)
         timeframe: Time window for scoring (24h, 7d, or 30d, default 7d)
-    
+
     Returns:
-        List of trending entities with signal scores for the specified timeframe
+        List of trending entities with freshly computed signal scores
     """
     # Validate entity_type if provided
     if entity_type and entity_type not in ["ticker", "project", "event"]:
@@ -355,45 +352,39 @@ async def get_trending_signals(
             status_code=400,
             detail="entity_type must be one of: ticker, project, event"
         )
-    
+
     # Validate timeframe
     if timeframe not in ["24h", "7d", "30d"]:
         raise HTTPException(
             status_code=400,
             detail="timeframe must be one of: 24h, 7d, 30d"
         )
-    
+
     # Build cache key including timeframe
-    cache_key = f"signals:trending:{limit}:{min_score}:{entity_type or 'all'}:{timeframe}"
-    
-    # Try to get from cache (Redis or in-memory)
+    cache_key = f"signals:trending:v2:{limit}:{min_score}:{entity_type or 'all'}:{timeframe}"
+
+    # Try to get from cache (Redis or in-memory) - 60 second TTL
     cached_result = get_from_cache(cache_key)
     if cached_result is not None:
+        # Add cache hit indicator
+        cached_result["cached"] = True
         return cached_result
-    
-    # Map timeframe to field names
-    field_map = {
-        "24h": {"score": "score_24h", "velocity": "velocity_24h"},
-        "7d": {"score": "score_7d", "velocity": "velocity_7d"},
-        "30d": {"score": "score_30d", "velocity": "velocity_30d"},
-    }
-    
-    # Fetch trending entities
+
+    # Compute signals on-demand
     try:
         start_time = time.time()
-        query_count = 0
-        
-        # Query 1: Get trending entities
-        trending = await get_trending_entities(
+
+        # Compute trending signals using the new on-demand approach
+        trending = await compute_trending_signals(
+            timeframe=timeframe,
             limit=limit,
             min_score=min_score,
             entity_type=entity_type,
-            timeframe=timeframe,
         )
-        query_count += 1
-        fetch_time = time.time() - start_time
-        logger.info(f"[Signals] Fetched {len(trending)} trending entities in {fetch_time:.3f}s")
-        
+
+        compute_time = time.time() - start_time
+        logger.info(f"[Signals] Computed {len(trending)} trending signals in {compute_time:.3f}s")
+
         # Collect all unique narrative IDs and entities for batch fetching
         all_narrative_ids = set()
         entities = []
@@ -401,52 +392,46 @@ async def get_trending_signals(
             narrative_ids = signal.get("narrative_ids", [])
             all_narrative_ids.update(narrative_ids)
             entities.append(signal["entity"])
-        
-        # Query 2: Batch fetch all narratives in one query
+
+        # Batch fetch all narratives in one query
         batch_start = time.time()
         narratives_list = await get_narrative_details(list(all_narrative_ids))
         narratives_by_id = {n["id"]: n for n in narratives_list}
-        query_count += 1
         logger.info(f"[Signals] Batch fetched {len(narratives_list)} narratives in {time.time() - batch_start:.3f}s")
-        
-        # Query 3: Batch fetch all articles in one query
+
+        # Batch fetch all articles in one query
         batch_start = time.time()
         articles_by_entity = await get_recent_articles_batch(entities, limit_per_entity=5)
-        query_count += 1
         total_articles = sum(len(articles) for articles in articles_by_entity.values())
         logger.info(f"[Signals] Batch fetched {total_articles} articles for {len(entities)} entities in {time.time() - batch_start:.3f}s")
-        
+
         # Build response with pre-fetched data
         signals_with_narratives = []
         for signal in trending:
             narrative_ids = signal.get("narrative_ids", [])
             narratives = [narratives_by_id[nid] for nid in narrative_ids if nid in narratives_by_id]
-            
+
             # Get pre-fetched articles for this entity
             recent_articles = articles_by_entity.get(signal["entity"], [])
-            
-            # Get timeframe-specific score and velocity
-            score_field = field_map[timeframe]["score"]
-            velocity_field = field_map[timeframe]["velocity"]
-            
+
             signals_with_narratives.append({
                 "entity": signal["entity"],
                 "entity_type": signal["entity_type"],
-                "signal_score": signal.get(score_field, signal.get("score", 0.0)),
-                "velocity": signal.get(velocity_field, signal.get("velocity", 0.0)),
-                "source_count": signal["source_count"],
-                "sentiment": signal["sentiment"],
+                "signal_score": signal.get("score", 0.0),
+                "velocity": signal.get("velocity", 0.0),
+                "mentions": signal.get("mentions", 0),
+                "source_count": signal.get("source_count", 0),
+                "recency_factor": signal.get("recency_factor", 0.0),
+                "sentiment": signal.get("sentiment", {}),
                 "is_emerging": signal.get("is_emerging", False),
                 "narratives": narratives,
                 "recent_articles": recent_articles,
-                "first_seen": signal["first_seen"].isoformat() if signal.get("first_seen") else None,
-                "last_updated": signal["last_updated"].isoformat() if signal.get("last_updated") else None,
             })
-        
+
         # Format response
         total_time = time.time() - start_time
         payload_size = len(json.dumps(signals_with_narratives)) / 1024  # KB
-        
+
         response = {
             "count": len(trending),
             "filters": {
@@ -456,22 +441,25 @@ async def get_trending_signals(
                 "timeframe": timeframe,
             },
             "signals": signals_with_narratives,
+            "cached": False,
+            "computed_at": datetime.now().isoformat(),
             "performance": {
                 "total_time_seconds": round(total_time, 3),
-                "query_count": query_count,
+                "compute_time_seconds": round(compute_time, 3),
                 "payload_size_kb": round(payload_size, 2),
             }
         }
-        
-        logger.info(f"[Signals] Total request time: {total_time:.3f}s, Queries: {query_count}, Payload: {payload_size:.2f}KB")
-        
-        # Cache for 2 minutes (120 seconds) using Redis or in-memory fallback
-        set_in_cache(cache_key, response, ttl_seconds=120)
-        
+
+        logger.info(f"[Signals] Total request time: {total_time:.3f}s, Payload: {payload_size:.2f}KB")
+
+        # Cache for 60 seconds using Redis or in-memory fallback
+        set_in_cache(cache_key, response, ttl_seconds=60)
+
         return response
-        
+
     except Exception as e:
+        logger.error(f"[Signals] Failed to compute trending signals: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to fetch trending signals: {str(e)}"
+            detail=f"Failed to compute trending signals: {str(e)}"
         )
