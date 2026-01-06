@@ -531,7 +531,23 @@ export function Narratives() {
       <div className="space-y-6">
         {narratives.map((narrative, index) => {
           // Handle both old and new field names for backward compatibility
-          const displayTitle = narrative.title || narrative.theme;
+          // Use title if it exists and is distinct from theme (not just entity name)
+          // Otherwise fall back to a better display value
+          const displayTitle = (() => {
+            // Use title if it exists, isn't empty, and isn't just the theme/entity
+            if (narrative.title && narrative.title.trim() && narrative.title !== narrative.theme) {
+              return narrative.title;
+            }
+            // Fallback: Use first sentence of summary if available and concise
+            if (narrative.summary) {
+              const firstSentence = narrative.summary.split('.')[0] + '.';
+              if (firstSentence.length > 0 && firstSentence.length < 100) {
+                return firstSentence;
+              }
+            }
+            // Last resort: use theme or entity name
+            return narrative.title || narrative.theme || 'Untitled Narrative';
+          })();
           const displaySummary = narrative.summary || narrative.story;
           
           // IMPORTANT: Use last_article_at as primary timestamp for "Updated X ago"

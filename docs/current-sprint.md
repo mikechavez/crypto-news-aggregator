@@ -10,6 +10,19 @@
 
 ## In Progress
 
+- [ ] [FEATURE-008] Fix Theme vs Title in UI
+  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-008-fix-theme-vs-title-ui.md`
+  - Priority: High
+  - Complexity: Small
+  - Started: 2026-01-06
+  - **Progress:**
+    - ✅ Analyzed root cause: `theme` being set to `nucleus_entity` instead of category
+    - ✅ Identified UI fallback issue: when `title` = `theme`, narratives look identical
+    - ✅ Implemented smart title fallback in Narratives.tsx
+    - ✅ New logic: uses title if distinct from theme, else uses summary first sentence
+    - ✅ Frontend build passes
+  - **Next:** Test in browser, verify distinct narrative titles display correctly
+
 - [x] [FEATURE-008] Signals & Narratives Redesign - **Phase 1: Relevance Filtering COMPLETE**
   - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/feature-signals-narratives-redesign.md`
   - Priority: High
@@ -26,6 +39,36 @@
 ---
 
 ## Backlog
+
+### Narrative Deduplication Initiative (2026-01-06)
+
+New tickets created to fix narrative duplication problem:
+
+- [ ] [FEATURE-009] Add Narrative Focus Extraction
+  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-009-narrative-focus-extraction.md`
+  - Priority: High
+  - Complexity: Medium
+  - Core fix - add focus field to distinguish parallel stories about same entity
+
+- [ ] [FEATURE-010] Revise Similarity Matching to Prioritize Focus
+  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-010-narrative-focus-matching.md`
+  - Priority: High
+  - Complexity: Large
+  - Rewrite matching logic to use focus as primary signal
+
+- [ ] [FEATURE-011] Add Post-Detection Consolidation Safety Pass
+  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-011-narrative-consolidation.md`
+  - Priority: Medium
+  - Complexity: Medium
+  - Lightweight cleanup task to catch edge cases
+
+- [ ] [FEATURE-012] Implement Time-Based Narrative Reactivation
+  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-012-narrative-reactivation.md`
+  - Priority: Medium
+  - Complexity: Medium
+  - Revive dormant narratives when story re-emerges
+
+### Other Backlog
 
 - [ ] [CHORE-001] Tune Relevance Classifier Rules
   - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/chore-tune-relevance-classifier.md`
@@ -52,6 +95,30 @@
 ---
 
 ## Completed This Sprint
+
+### 2026-01-06: Narrative Focus Architecture Planning
+
+Designed comprehensive solution for narrative duplication problem:
+
+**Root Cause Identified:**
+- Current system uses `nucleus_entity` as primary narrative identity
+- Problem: Entities are not narratives - they are ingredients of narratives
+- Same entity can have multiple parallel stories (e.g., "Dogecoin price surge" vs "Dogecoin governance dispute")
+
+**Solution Designed:**
+- Add `narrative_focus` field capturing "what is happening" (2-5 word phrase)
+- Revise similarity matching to prioritize focus over entity
+- Examples: "price surge", "regulatory enforcement", "protocol upgrade"
+
+**Deliverables:**
+- **ADR 004:** `docs/decisions/004-narrative-focus-identity.md` - Architectural decision record
+- **FEATURE-008:** Fix theme vs title in UI (quick win)
+- **FEATURE-009:** Add narrative_focus extraction to LLM pipeline
+- **FEATURE-010:** Revise similarity matching logic
+- **FEATURE-011:** Add consolidation safety pass
+- **FEATURE-012:** Implement narrative reactivation logic
+
+**Next:** Start implementation with FEATURE-008 (UI fix)
 
 ### 2026-01-02: Relevance Filtering Implementation
 
