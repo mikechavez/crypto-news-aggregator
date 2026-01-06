@@ -545,3 +545,258 @@ async def calculate_signal_score(
             "narrative_ids": narrative_ids,
             "is_emerging": is_emerging,
         }
+
+
+async def get_top_entities_by_mentions(
+    timeframe_hours: int,
+    limit: int = 100,
+    entity_type: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Get top entities ranked by mention count within a timeframe.
+
+    This is an efficient first-pass query to identify which entities
+    are worth computing full signal scores for.
+
+    Uses aggregation pipeline with $lookup to filter by article relevance_tier
+    without loading all article IDs into memory.
+
+    Args:
+        timeframe_hours: Timeframe in hours (24, 168, 720)
+        limit: Maximum number of entities to return
+        entity_type: Optional filter by entity type
+
+    Returns:
+        List of dicts with entity, entity_type, and mention_count
+    """
+    db = await mongo_manager.get_async_database()
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    cutoff = now - timedelta(hours=timeframe_hours)
+
+    # Build base match criteria
+    match_criteria = {
+        "is_primary": True,
+        "created_at": {"$gte": cutoff},
+    }
+    if entity_type:
+        match_criteria["entity_type"] = entity_type
+
+    # Use aggregation pipeline with $lookup to join with articles
+    # and filter by relevance_tier - more efficient than loading all article IDs
+    pipeline = [
+        {"$match": match_criteria},
+        # Convert article_id string to ObjectId for lookup
+        {
+            "$addFields": {
+                "article_oid": {
+                    "$cond": [
+                        {"$eq": [{"$type": "$article_id"}, "string"]},
+                        {"$toObjectId": "$article_id"},
+                        "$article_id"
+                    ]
+                }
+            }
+        },
+        # Join with articles collection
+        {
+            "$lookup": {
+                "from": "articles",
+                "localField": "article_oid",
+                "foreignField": "_id",
+                "as": "article"
+            }
+        },
+        # Unwind the article array
+        {"$unwind": "$article"},
+        # Filter to high/medium signal articles only (tier <= 2)
+        {
+            "$match": {
+                "$or": [
+                    {"article.relevance_tier": {"$lte": MAX_RELEVANCE_TIER}},
+                    {"article.relevance_tier": {"$exists": False}},
+                    {"article.relevance_tier": None},
+                ]
+            }
+        },
+        # Group by entity
+        {
+            "$group": {
+                "_id": "$entity",
+                "entity_type": {"$first": "$entity_type"},
+                "mention_count": {"$sum": 1},
+                "sources": {"$addToSet": "$source"},
+            }
+        },
+        {"$sort": {"mention_count": -1}},
+        {"$limit": limit},
+    ]
+
+    results = await db.entity_mentions.aggregate(pipeline).to_list(length=limit)
+
+    return [
+        {
+            "entity": doc["_id"],
+            "entity_type": doc.get("entity_type", "unknown"),
+            "mention_count": doc["mention_count"],
+            "source_count": len(doc["sources"]),
+        }
+        for doc in results
+    ]
+
+
+async def compute_trending_signals(
+    timeframe: str = "24h",
+    limit: int = 50,
+    min_score: float = 0.0,
+    entity_type: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Compute trending signals on-demand (no pre-computation required).
+
+    This function uses a fast aggregation-based approach:
+    1. Aggregates entity_mentions to find top entities by mention count
+    2. Calculates velocity (current vs previous period growth)
+    3. Returns results sorted by a lightweight score
+
+    This is optimized for speed over full signal score accuracy.
+    Full signal scores with sentiment/recency can be computed per-entity
+    if detailed analysis is needed.
+
+    Args:
+        timeframe: Time window for scoring (24h, 7d, or 30d)
+        limit: Maximum number of results
+        min_score: Minimum signal score threshold
+        entity_type: Filter by entity type (optional)
+
+    Returns:
+        List of signal score dicts sorted by score descending
+    """
+    db = await mongo_manager.get_async_database()
+
+    # Map timeframe to hours
+    timeframe_hours_map = {
+        "24h": 24,
+        "7d": 168,
+        "30d": 720,
+    }
+
+    hours = timeframe_hours_map.get(timeframe, 24)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    current_period_start = now - timedelta(hours=hours)
+    previous_period_start = now - timedelta(hours=hours * 2)
+
+    # Build base match criteria
+    match_criteria = {
+        "is_primary": True,
+        "created_at": {"$gte": previous_period_start},  # Include both periods
+    }
+    if entity_type:
+        match_criteria["entity_type"] = entity_type
+
+    # Single aggregation to get all metrics we need
+    pipeline = [
+        {"$match": match_criteria},
+        # Group by entity with period-based counts
+        {
+            "$group": {
+                "_id": "$entity",
+                "entity_type": {"$first": "$entity_type"},
+                "total_mentions": {"$sum": 1},
+                "current_mentions": {
+                    "$sum": {
+                        "$cond": [
+                            {"$gte": ["$created_at", current_period_start]},
+                            1,
+                            0
+                        ]
+                    }
+                },
+                "previous_mentions": {
+                    "$sum": {
+                        "$cond": [
+                            {"$lt": ["$created_at", current_period_start]},
+                            1,
+                            0
+                        ]
+                    }
+                },
+                "sources": {"$addToSet": "$source"},
+                "latest_mention": {"$max": "$created_at"},
+                "first_seen": {"$min": "$created_at"},
+            }
+        },
+        # Only include entities with current period mentions
+        {"$match": {"current_mentions": {"$gte": 1}}},
+        # Sort by current mentions descending
+        {"$sort": {"current_mentions": -1}},
+        {"$limit": limit * 2},  # Fetch extra to account for min_score filtering
+    ]
+
+    results = await db.entity_mentions.aggregate(pipeline).to_list(length=limit * 2)
+
+    if not results:
+        return []
+
+    # Get narrative info for all entities in batch
+    entities = [doc["_id"] for doc in results]
+    narrative_counts = await db.narratives.aggregate([
+        {"$match": {"entities": {"$in": entities}}},
+        {"$unwind": "$entities"},
+        {"$match": {"entities": {"$in": entities}}},
+        {"$group": {"_id": "$entities", "count": {"$sum": 1}, "narrative_ids": {"$push": {"$toString": "$_id"}}}}
+    ]).to_list(length=None)
+
+    narrative_map = {doc["_id"]: doc for doc in narrative_counts}
+
+    # Calculate scores and build response
+    signals = []
+    for doc in results:
+        entity = doc["_id"]
+        current = doc["current_mentions"]
+        previous = doc["previous_mentions"]
+        source_count = len(doc["sources"])
+
+        # Calculate velocity as growth percentage
+        if previous == 0:
+            velocity = 100.0 if current > 0 else 0.0
+        else:
+            velocity = ((current - previous) / previous) * 100
+
+        # Simple score formula:
+        # - Mentions weighted at 40%
+        # - Velocity weighted at 40% (capped at 300%)
+        # - Source diversity weighted at 20%
+        mentions_score = min(current / 10, 1.0) * 4.0  # Max 4 points
+        velocity_score = min(velocity / 100, 3.0) * 4.0 / 3.0  # Max ~4 points
+        diversity_score = min(source_count / 5, 1.0) * 2.0  # Max 2 points
+
+        score = mentions_score + velocity_score + diversity_score
+
+        if score < min_score:
+            continue
+
+        # Get narrative info
+        narr_info = narrative_map.get(entity, {"count": 0, "narrative_ids": []})
+
+        signals.append({
+            "entity": entity,
+            "entity_type": doc.get("entity_type", "unknown"),
+            "score": round(score, 2),
+            "velocity": round(velocity, 2),
+            "mentions": current,
+            "source_count": source_count,
+            "recency_factor": 0.0,  # Simplified - not computing full recency
+            "sentiment": {"avg": 0.0, "min": 0.0, "max": 0.0, "divergence": 0.0},
+            "narrative_ids": narr_info.get("narrative_ids", [])[:5],  # Limit to 5
+            "is_emerging": narr_info.get("count", 0) == 0,
+            "first_seen": doc.get("first_seen"),  # For alert detection
+        })
+
+        if len(signals) >= limit:
+            break
+
+    # Sort by score descending
+    signals.sort(key=lambda x: x["score"], reverse=True)
+
+    return signals[:limit]

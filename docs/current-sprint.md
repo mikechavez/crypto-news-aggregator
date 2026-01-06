@@ -112,12 +112,15 @@ Implemented article-level relevance classification to filter noise from signals 
    - Railway deployment successful - API responding
    - Background tasks running (RSS, narratives, alerts)
 
-5. **Backfill signal scores** - IN PROGRESS (2026-01-04)
-   - Discovered: signal scores are 3 months old
-   - Issue: update_signal_scores only looks at last 30 minutes
-   - Created scripts/backfill_signal_scores.py
-   - Running backfill for entities from last 7 days
-   - Branch: fix/add-loguru-dependency (needs cleanup after backfill)
+5. **Signal scoring: Compute on Read** - COMPLETE (2026-01-05)
+   - Discovered: signal scores were 3 months old due to architectural flaw
+   - Solution: Implemented compute-on-read pattern (ADR-003)
+   - Changes:
+     - Worker signal task disabled (compute on demand instead)
+     - API endpoints compute signals fresh with 60s cache
+     - Alert service updated to use compute_trending_signals
+     - Removed unused imports
+   - Backfill scripts no longer needed (data computed fresh)
 
 6. **Review tier distribution** in prod and tune patterns (CHORE-001)
    - Monitor signal scores after backfill completes

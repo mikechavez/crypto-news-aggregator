@@ -11,7 +11,7 @@ import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
 
-from ..db.operations.signal_scores import get_trending_entities
+from ..services.signal_service import compute_trending_signals
 from ..db.operations.entity_alerts import (
     create_alert,
     get_recent_alerts,
@@ -191,8 +191,12 @@ async def detect_alerts() -> List[Dict[str, Any]]:
     try:
         logger.info("Starting alert detection cycle...")
         
-        # Get trending entities with score >= 5.0
-        trending_entities = await get_trending_entities(limit=50, min_score=5.0)
+        # Get trending entities with score >= 5.0 (computed on-demand)
+        trending_entities = await compute_trending_signals(
+            timeframe="24h",
+            limit=50,
+            min_score=5.0
+        )
         
         if not trending_entities:
             logger.info("No trending entities found for alert detection")
