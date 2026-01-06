@@ -10,18 +10,22 @@
 
 ## In Progress
 
-- [ ] [FEATURE-008] Fix Theme vs Title in UI
+- [x] [FEATURE-008] Fix Theme vs Title in UI - **COMPLETE**
   - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-008-fix-theme-vs-title-ui.md`
   - Priority: High
   - Complexity: Small
   - Started: 2026-01-06
-  - **Progress:**
+  - Completed: 2026-01-06
+  - **Summary:**
     - ✅ Analyzed root cause: `theme` being set to `nucleus_entity` instead of category
     - ✅ Identified UI fallback issue: when `title` = `theme`, narratives look identical
     - ✅ Implemented smart title fallback in Narratives.tsx
     - ✅ New logic: uses title if distinct from theme, else uses summary first sentence
     - ✅ Frontend build passes
-  - **Next:** Test in browser, verify distinct narrative titles display correctly
+    - ✅ Tested locally - backend returning good titles already
+    - ✅ Committed to `feature/narrative-title-display` branch
+    - ✅ Pushed to remote - PR ready
+  - **Branch:** `feature/narrative-title-display`
 
 - [x] [FEATURE-008] Signals & Narratives Redesign - **Phase 1: Relevance Filtering COMPLETE**
   - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/feature-signals-narratives-redesign.md`
