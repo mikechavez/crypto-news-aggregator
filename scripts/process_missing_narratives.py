@@ -134,6 +134,7 @@ async def process_missing_narratives():
                     "actors": narrative_data.get("actors", []),
                     "actor_salience": narrative_data.get("actor_salience", {}),
                     "nucleus_entity": narrative_data.get("nucleus_entity", ""),
+                    "narrative_focus": narrative_data.get("narrative_focus", ""),
                     "actions": narrative_data.get("actions", []),
                     "tensions": narrative_data.get("tensions", []),
                     "implications": narrative_data.get("implications", ""),
@@ -148,6 +149,7 @@ async def process_missing_narratives():
             # Step 2: Compute fingerprint for matching
             cluster_data = {
                 "nucleus_entity": narrative_data.get("nucleus_entity", ""),
+                "narrative_focus": narrative_data.get("narrative_focus", ""),
                 "actors": narrative_data.get("actor_salience", {}),
                 "actions": narrative_data.get("actions", [])
             }

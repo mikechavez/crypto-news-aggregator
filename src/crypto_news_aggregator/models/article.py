@@ -86,6 +86,7 @@ class ArticleBase(BaseModel):
     actors: Optional[List[str]] = None
     actor_salience: Optional[Dict[str, int]] = None  # {"EntityName": 5, ...}
     nucleus_entity: Optional[str] = None  # Primary entity article is about
+    narrative_focus: Optional[str] = None  # 2-5 word phrase describing what's happening (e.g., "price surge", "regulatory enforcement")
     actions: Optional[List[str]] = None
     tensions: Optional[List[str]] = None
     implications: Optional[str] = None

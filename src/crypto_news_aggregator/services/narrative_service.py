@@ -635,45 +635,56 @@ async def detect_narratives(
             
             for cluster in clusters:
                 # Build cluster data dict for fingerprint computation
-                # Aggregate nucleus entities, actors, and actions from cluster articles
+                # Aggregate nucleus entities, narrative focuses, actors, and actions from cluster articles
                 nucleus_entities = []
+                narrative_focuses = []
                 all_actors = {}
                 all_actions = []
-                
+
                 for article in cluster:
                     # Skip if article is not a dict (defensive programming)
                     if not isinstance(article, dict):
                         logger.warning(f"Skipping non-dict article in cluster: {type(article)}")
                         continue
-                    
+
                     nucleus = article.get('nucleus_entity')
                     if nucleus:
                         nucleus_entities.append(nucleus)
-                    
+
+                    # Aggregate narrative focus
+                    focus = article.get('narrative_focus')
+                    if focus:
+                        narrative_focuses.append(focus.lower().strip())
+
                     # Aggregate actors with salience
                     actors = article.get('actors', [])
                     actor_salience = article.get('actor_salience', {})
-                    
+
                     # Handle actors as list or dict
                     if isinstance(actors, list):
                         for actor in actors:
                             salience = actor_salience.get(actor, 3) if isinstance(actor_salience, dict) else 3
                             all_actors[actor] = max(all_actors.get(actor, 0), salience)
-                    
+
                     # Aggregate actions
                     narrative_summary = article.get('narrative_summary', {})
                     if isinstance(narrative_summary, dict):
                         actions = narrative_summary.get('actions', [])
                         if isinstance(actions, list):
                             all_actions.extend(actions)
-                
+
                 # Determine primary nucleus (most common)
                 nucleus_counts = Counter(nucleus_entities)
                 primary_nucleus = nucleus_counts.most_common(1)[0][0] if nucleus_counts else ''
-                
+
+                # Determine primary focus (most common)
+                focus_counts = Counter(narrative_focuses)
+                primary_focus = focus_counts.most_common(1)[0][0] if focus_counts else ''
+
                 # Build cluster dict for fingerprint
                 cluster_data = {
                     'nucleus_entity': primary_nucleus,
+                    'narrative_focus': primary_focus,
                     'actors': all_actors,
                     'actions': list(set(all_actions))[:5]  # Unique actions, top 5
                 }

@@ -134,6 +134,7 @@ async def backfill_with_rate_limiting(hours: int, limit: int, batch_size: int = 
                         "actors": narrative_data.get("actors", []),
                         "actor_salience": narrative_data.get("actor_salience", {}),
                         "nucleus_entity": narrative_data.get("nucleus_entity", ""),
+                        "narrative_focus": narrative_data.get("narrative_focus", ""),
                         "actions": narrative_data.get("actions", []),
                         "tensions": narrative_data.get("tensions", []),
                         "implications": narrative_data.get("implications", ""),
