@@ -155,6 +155,65 @@ def compute_narrative_fingerprint(cluster: Dict[str, Any]) -> Dict[str, Any]:
     return fingerprint
 
 
+def _compute_focus_similarity(focus1: str, focus2: str) -> float:
+    """
+    Token-based similarity for narrative focus phrases.
+
+    Compares focus phrases by word overlap, with graduated scoring:
+    - 1.0: Exact match (identical focus phrases)
+    - 0.9: High similarity (>80% word overlap)
+    - 0.7: Partial similarity (>50% word overlap)
+    - 0.0: Different focus phrases
+    - 0.5: Neutral (at least one focus is missing - legacy data compatibility)
+
+    Args:
+        focus1: First narrative focus phrase (or empty string)
+        focus2: Second narrative focus phrase (or empty string)
+
+    Returns:
+        Similarity score between 0.0 and 1.0
+
+    Example:
+        >>> _compute_focus_similarity("price surge", "price surge")
+        1.0
+        >>> _compute_focus_similarity("price surge", "price rally")
+        0.7
+        >>> _compute_focus_similarity("price surge", "governance")
+        0.0
+    """
+    # Handle missing focus (legacy data compatibility)
+    if not focus1 or not focus2:
+        return 0.5  # Neutral for missing focus
+
+    # Normalize to lowercase and handle exact match
+    focus1_lower = focus1.lower().strip()
+    focus2_lower = focus2.lower().strip()
+
+    if focus1_lower == focus2_lower:
+        return 1.0
+
+    # Tokenize into words
+    tokens1 = set(focus1_lower.split())
+    tokens2 = set(focus2_lower.split())
+
+    # Calculate Jaccard similarity (intersection / union)
+    overlap = len(tokens1 & tokens2)
+    total = len(tokens1 | tokens2)
+
+    if total == 0:
+        return 0.0
+
+    ratio = overlap / total
+
+    # Graduated scoring based on overlap ratio
+    if ratio > 0.8:
+        return 0.9
+    elif ratio > 0.5:
+        return 0.7
+    else:
+        return 0.0
+
+
 def calculate_fingerprint_similarity(
     fingerprint1: Dict[str, Any],
     fingerprint2: Dict[str, Any]
@@ -163,10 +222,14 @@ def calculate_fingerprint_similarity(
     Calculate similarity between two narrative fingerprints.
 
     Uses weighted scoring to determine if two narratives should be merged:
-    - Nucleus match (exact match of nucleus_entity): weight 0.30
-    - Focus match (word overlap in narrative_focus): weight 0.35 (key differentiator)
-    - Actor overlap (Jaccard similarity of top_actors): weight 0.20
-    - Action overlap (Jaccard similarity of key_actions): weight 0.15
+    - Focus match (narrative_focus token overlap): weight 0.5 (primary discriminator)
+    - Nucleus match (exact match of nucleus_entity): weight 0.3
+    - Actor overlap (Jaccard similarity of top_actors): weight 0.1
+    - Action overlap (Jaccard similarity of key_actions): weight 0.1
+
+    IMPORTANT: Uses hard gate logic to prevent unrelated narratives from merging.
+    Two fingerprints must have EITHER a focus match OR nucleus match to proceed
+    with weighted scoring. If neither matches, returns 0.0 immediately.
 
     The narrative_focus is the PRIMARY differentiator for parallel stories about
     the same entity. E.g., "Dogecoin price surge" vs "Dogecoin governance dispute"
@@ -193,7 +256,7 @@ def calculate_fingerprint_similarity(
         ...     'key_actions': ['filed lawsuit', 'compliance review']
         ... }
         >>> calculate_fingerprint_similarity(fp1, fp2)
-        0.80  # High similarity: same nucleus, similar focus, overlapping actors
+        0.85  # High similarity: matching focus (0.5) + matching nucleus (0.3) + actor overlap (0.05)
     """
     # Extract components from fingerprints
     nucleus1 = fingerprint1.get('nucleus_entity', '')
@@ -208,67 +271,53 @@ def calculate_fingerprint_similarity(
     actions1 = set(fingerprint1.get('key_actions', []))
     actions2 = set(fingerprint2.get('key_actions', []))
 
+    # HARD GATE: Require either focus match or entity match to proceed
+    # This prevents unrelated stories from merging
+    has_focus_match = focus1 and focus2 and focus1.lower() == focus2.lower()
+    has_entity_match = nucleus1 and nucleus2 and nucleus1.lower() == nucleus2.lower()
+
+    if not (has_focus_match or has_entity_match):
+        logger.debug(
+            f"Hard gate: Blocking similarity - no focus or entity match. "
+            f"Focus: '{focus1}' vs '{focus2}', Entity: '{nucleus1}' vs '{nucleus2}'"
+        )
+        return 0.0
+
+    # Calculate focus match score using token-based similarity (primary signal)
+    focus_match_score = _compute_focus_similarity(focus1, focus2)
+
     # Calculate nucleus match score (binary: 1.0 or 0.0)
-    nucleus_match_score = 1.0 if nucleus1 and nucleus2 and nucleus1.lower() == nucleus2.lower() else 0.0
-
-    # Calculate focus match score (Jaccard similarity of words in focus phrases)
-    # This is the key differentiator for parallel stories about the same entity
-    focus_match_score = 0.0
-    if focus1 and focus2:
-        # Tokenize focus phrases into words (lowercase, normalized)
-        focus_words1 = set(focus1.lower().split())
-        focus_words2 = set(focus2.lower().split())
-
-        if focus_words1 and focus_words2:
-            focus_overlap = len(focus_words1 & focus_words2)
-            focus_union = len(focus_words1 | focus_words2)
-            focus_match_score = focus_overlap / focus_union if focus_union > 0 else 0.0
-
-            # Exact match bonus: if focus phrases are identical, add extra weight
-            if focus1.lower() == focus2.lower():
-                focus_match_score = 1.0
-    elif not focus1 and not focus2:
-        # Both missing focus - neutral (legacy data compatibility)
-        focus_match_score = 0.5
+    nucleus_match_score = 1.0 if has_entity_match else 0.0
 
     # Calculate actor overlap score (Jaccard similarity)
     actor_overlap_score = 0.0
-    if actors1 or actors2:
+    if actors1 and actors2:
         actor_overlap = len(actors1 & actors2)
         actor_union = len(actors1 | actors2)
         actor_overlap_score = actor_overlap / actor_union if actor_union > 0 else 0.0
 
     # Calculate action overlap score (Jaccard similarity)
     action_overlap_score = 0.0
-    if actions1 or actions2:
+    if actions1 and actions2:
         action_overlap = len(actions1 & actions2)
         action_union = len(actions1 | actions2)
         action_overlap_score = action_overlap / action_union if action_union > 0 else 0.0
 
-    # Weighted sum of components
-    # Focus is now the key differentiator (0.35 weight)
+    # Weighted sum of components (weights sum to 1.0)
+    # Focus is now the primary signal with 0.5 weight
     similarity = (
-        nucleus_match_score * 0.30 +
-        focus_match_score * 0.35 +
-        actor_overlap_score * 0.20 +
-        action_overlap_score * 0.15
+        focus_match_score * 0.5 +
+        nucleus_match_score * 0.3 +
+        actor_overlap_score * 0.1 +
+        action_overlap_score * 0.1
     )
-
-    # Semantic boost: if both nucleus AND focus match well, add bonus
-    # This helps narratives with the same core story merge more easily
-    semantic_boost = 0.0
-    if nucleus_match_score == 1.0 and focus_match_score >= 0.5:
-        semantic_boost = 0.1
-        similarity += semantic_boost
-        logger.info(
-            f"Applied semantic boost (+{semantic_boost:.1f}) for matching nucleus+focus: "
-            f"'{nucleus1}' + '{focus1}' ~ '{focus2}'"
-        )
 
     logger.debug(
         f"Fingerprint similarity: {similarity:.3f} "
-        f"(nucleus={nucleus_match_score:.1f}, focus={focus_match_score:.3f}, "
-        f"actors={actor_overlap_score:.3f}, actions={action_overlap_score:.3f}, boost={semantic_boost:.1f})"
+        f"(focus={focus_match_score:.1f}*0.5={focus_match_score*0.5:.3f}, "
+        f"nucleus={nucleus_match_score:.1f}*0.3={nucleus_match_score*0.3:.3f}, "
+        f"actors={actor_overlap_score:.3f}*0.1={actor_overlap_score*0.1:.3f}, "
+        f"actions={action_overlap_score:.3f}*0.1={action_overlap_score*0.1:.3f})"
     )
 
     return similarity

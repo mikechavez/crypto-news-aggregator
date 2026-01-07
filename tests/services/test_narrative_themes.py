@@ -18,6 +18,7 @@ from crypto_news_aggregator.services.narrative_themes import (
     validate_narrative_json,
     compute_narrative_fingerprint,
     calculate_fingerprint_similarity,
+    _compute_focus_similarity,
     THEME_CATEGORIES
 )
 
@@ -1075,6 +1076,92 @@ class TestValidateNarrativeJsonIntegration:
 
 
 # ============================================================================
+# FOCUS SIMILARITY TESTS (NEW FOR FEATURE-010)
+# ============================================================================
+
+class TestComputeFocusSimilarity:
+    """Unit tests for _compute_focus_similarity function."""
+
+    def test_focus_similarity_exact_match(self):
+        """Test that exact focus match returns 1.0."""
+        similarity = _compute_focus_similarity("price surge", "price surge")
+        assert similarity == 1.0
+
+    def test_focus_similarity_exact_match_case_insensitive(self):
+        """Test that exact match is case-insensitive."""
+        similarity = _compute_focus_similarity("Price Surge", "price surge")
+        assert similarity == 1.0
+
+    def test_focus_similarity_exact_match_with_whitespace(self):
+        """Test that exact match handles extra whitespace."""
+        similarity = _compute_focus_similarity("  price surge  ", "price surge")
+        assert similarity == 1.0
+
+    def test_focus_similarity_high_similarity(self):
+        """Test high similarity (>80% word overlap) returns 0.9."""
+        # Need >80%: "word1 word2 word3 word4 word5 extra" vs "word1 word2 word3 word4 word5"
+        # = 5 overlapping out of 6 union = 83%, which passes 0.8 threshold, so 0.9
+        similarity = _compute_focus_similarity("word1 word2 word3 word4 word5 extra", "word1 word2 word3 word4 word5")
+        assert similarity == 0.9
+
+    def test_focus_similarity_partial_match(self):
+        """Test partial similarity (50-80% word overlap) returns 0.7."""
+        # "price surge momentum" vs "price surge rally" = 2 overlap {price, surge}, union {price, surge, momentum, rally} = 4
+        # 2/4 = 50%, which is not > 0.5, so let's use: "regulatory enforcement action" vs "regulatory enforcement"
+        # overlap {regulatory, enforcement} = 2, union {regulatory, enforcement, action} = 3
+        # 2/3 = 66.7%, which is > 0.5 and < 0.8, so returns 0.7
+        similarity = _compute_focus_similarity("regulatory enforcement action", "regulatory enforcement")
+        assert similarity == 0.7
+
+    def test_focus_similarity_no_match(self):
+        """Test no overlap returns 0.0."""
+        similarity = _compute_focus_similarity("price surge", "governance dispute")
+        assert similarity == 0.0
+
+    def test_focus_similarity_empty_strings(self):
+        """Test empty strings return neutral 0.5."""
+        similarity = _compute_focus_similarity("", "")
+        assert similarity == 0.5
+
+    def test_focus_similarity_one_empty(self):
+        """Test one empty string returns neutral 0.5."""
+        similarity = _compute_focus_similarity("price surge", "")
+        assert similarity == 0.5
+
+        similarity = _compute_focus_similarity("", "governance")
+        assert similarity == 0.5
+
+    def test_focus_similarity_single_word_exact_match(self):
+        """Test single word exact match."""
+        similarity = _compute_focus_similarity("surge", "surge")
+        assert similarity == 1.0
+
+    def test_focus_similarity_single_word_no_match(self):
+        """Test single word with no match."""
+        similarity = _compute_focus_similarity("surge", "decline")
+        assert similarity == 0.0
+
+    def test_focus_similarity_multi_word_phrases(self):
+        """Test multi-word phrases."""
+        # "regulatory enforcement action" vs "regulatory enforcement"
+        # overlap: {regulatory, enforcement} = 2
+        # union: {regulatory, enforcement, action} = 3
+        # 2/3 = 66.7%, which is > 50%, so 0.7
+        similarity = _compute_focus_similarity("regulatory enforcement action", "regulatory enforcement")
+        assert similarity == 0.7
+
+    def test_focus_similarity_dogecoin_example_from_ticket(self):
+        """Test Dogecoin example from FEATURE-010 ticket."""
+        # Same focus should return 1.0
+        similarity1 = _compute_focus_similarity("price surge", "price surge")
+        assert similarity1 == 1.0
+
+        # Different focus should return 0.0
+        similarity2 = _compute_focus_similarity("price surge", "governance dispute")
+        assert similarity2 == 0.0
+
+
+# ============================================================================
 # NARRATIVE FINGERPRINT TESTS
 # ============================================================================
 
@@ -1321,7 +1408,7 @@ class TestComputeNarrativeFingerprint:
 # ============================================================================
 
 class TestCalculateFingerprintSimilarity:
-    """Unit tests for calculate_fingerprint_similarity function."""
+    """Unit tests for calculate_fingerprint_similarity function with FEATURE-010 weights."""
 
     @pytest.fixture
     def fingerprint_sec_binance(self):
@@ -1352,46 +1439,125 @@ class TestCalculateFingerprintSimilarity:
             'top_actors': ['Uniswap', 'Aave', 'Compound', 'MakerDAO', 'Curve'],
             'key_actions': ['TVL increase', 'new protocol launch', 'yield farming']
         }
-    
+
     def test_identical_fingerprints(self, fingerprint_sec_binance):
-        """Test similarity of identical fingerprints returns 1.0 + semantic boost."""
+        """Test similarity of identical fingerprints returns 1.0 (no semantic boost with FEATURE-010)."""
         similarity = calculate_fingerprint_similarity(
             fingerprint_sec_binance,
             fingerprint_sec_binance
         )
 
-        # Identical fingerprints should have similarity 1.0 + 0.1 semantic boost = 1.1
-        assert 1.09 <= similarity <= 1.11  # Account for floating point precision
+        # Identical fingerprints with new weights:
+        # focus: 1.0 * 0.5 = 0.5
+        # nucleus: 1.0 * 0.3 = 0.3
+        # actors: 1.0 * 0.1 = 0.1
+        # actions: 1.0 * 0.1 = 0.1
+        # Total: 1.0 (no semantic boost)
+        assert 0.99 <= similarity <= 1.01  # Account for floating point precision
 
-    def test_same_nucleus_high_actor_overlap(self, fingerprint_sec_binance, fingerprint_sec_coinbase):
-        """Test high similarity when nucleus matches and actors overlap significantly."""
+    def test_same_nucleus_same_focus_similar_actors(self, fingerprint_sec_binance, fingerprint_sec_coinbase):
+        """Test high similarity when nucleus matches and focus is similar."""
         similarity = calculate_fingerprint_similarity(
             fingerprint_sec_binance,
             fingerprint_sec_coinbase
         )
 
-        # New weights: nucleus (0.30) + focus (0.35) + actors (0.20) + actions (0.15) + boost (0.10)
-        # Same nucleus: 0.30
-        # Focus: "regulatory enforcement action" vs "regulatory enforcement" -> 2/3 word overlap = 0.67 * 0.35 = 0.23
-        # Actors overlap: {SEC, Coinbase, Kraken, Gemini} = 4, union = 7 -> 4/7 * 0.20 = 0.11
-        # Actions overlap: {filed lawsuit} = 1, union = 5 -> 1/5 * 0.15 = 0.03
-        # Semantic boost: nucleus matches + focus >= 0.5 -> 0.10
-        # Expected: 0.30 + 0.23 + 0.11 + 0.03 + 0.10 = ~0.77
-        assert 0.70 <= similarity <= 0.85
+        # New weights (FEATURE-010): focus (0.5), nucleus (0.3), actors (0.1), actions (0.1)
+        # Focus: "regulatory enforcement action" vs "regulatory enforcement"
+        #   -> overlap {regulatory, enforcement} = 2, union {regulatory, enforcement, action} = 3
+        #   -> 2/3 = 66.7% > 50%, so _compute_focus_similarity returns 0.7
+        # Nucleus: 1.0 (both SEC)
+        # Actors overlap: {SEC, Coinbase, Kraken, Gemini} = 4, union {SEC, Binance, Coinbase, Kraken, FTX, Gemini} = 6
+        #   -> 4/6 = 0.667
+        # Actions overlap: {filed lawsuit, enforcement action} = 0 (no exact match), union = 5
+        #   -> 0/5 = 0.0
+        # Expected: (0.7*0.5) + (1.0*0.3) + (0.667*0.1) + (0.0*0.1) = 0.35 + 0.3 + 0.067 + 0.0 = 0.717
+        assert 0.70 <= similarity <= 0.75
 
-    def test_different_nucleus_different_actors(self, fingerprint_sec_binance, fingerprint_defi_growth):
-        """Test low similarity when nucleus and actors are different."""
+    def test_hard_gate_different_nucleus_different_focus(self):
+        """Test hard gate blocks similarity when nucleus AND focus don't match."""
+        fp1 = {
+            'nucleus_entity': 'SEC',
+            'narrative_focus': 'regulatory enforcement',
+            'top_actors': ['SEC', 'Binance'],
+            'key_actions': ['lawsuit']
+        }
+        fp2 = {
+            'nucleus_entity': 'Ethereum',
+            'narrative_focus': 'protocol upgrade',
+            'top_actors': ['Ethereum', 'Vitalik'],
+            'key_actions': ['upgrade']
+        }
+
+        similarity = calculate_fingerprint_similarity(fp1, fp2)
+
+        # Hard gate blocks: no focus match AND no nucleus match
+        # Expected: 0.0
+        assert similarity == 0.0
+
+    def test_hard_gate_same_nucleus_different_focus(self):
+        """Test that same nucleus allows similarity calculation despite different focus."""
+        fp1 = {
+            'nucleus_entity': 'Dogecoin',
+            'narrative_focus': 'price surge',
+            'top_actors': ['Dogecoin', 'Elon Musk'],
+            'key_actions': ['price surge']
+        }
+        fp2 = {
+            'nucleus_entity': 'Dogecoin',
+            'narrative_focus': 'governance dispute',
+            'top_actors': ['Dogecoin', 'core team'],
+            'key_actions': ['governance vote']
+        }
+
+        similarity = calculate_fingerprint_similarity(fp1, fp2)
+
+        # Hard gate passes: same nucleus (Dogecoin)
+        # Focus match: "price surge" vs "governance dispute" -> 0% overlap -> 0.0
+        # Nucleus: 1.0
+        # Actors overlap: {Dogecoin} = 1, union = 3 -> 1/3 = 0.333
+        # Actions overlap: 0
+        # Expected: (0.0*0.5) + (1.0*0.3) + (0.333*0.1) + (0.0*0.1) = 0.0 + 0.3 + 0.033 + 0.0 = 0.333
+        assert 0.30 <= similarity <= 0.35
+
+    def test_hard_gate_same_focus_different_nucleus(self):
+        """Test that same focus allows similarity calculation despite different nucleus."""
+        fp1 = {
+            'nucleus_entity': 'Bitcoin',
+            'narrative_focus': 'institutional adoption',
+            'top_actors': ['Bitcoin', 'MicroStrategy'],
+            'key_actions': ['buying']
+        }
+        fp2 = {
+            'nucleus_entity': 'Ethereum',
+            'narrative_focus': 'institutional adoption',
+            'top_actors': ['Ethereum', 'Grayscale'],
+            'key_actions': ['buying']
+        }
+
+        similarity = calculate_fingerprint_similarity(fp1, fp2)
+
+        # Hard gate passes: same focus (institutional adoption)
+        # Focus match: 1.0 (exact match)
+        # Nucleus: 0.0 (different entities)
+        # Actors overlap: 0
+        # Actions overlap: 1
+        # Expected: (1.0*0.5) + (0.0*0.3) + (0.0*0.1) + (1.0*0.1) = 0.5 + 0.0 + 0.0 + 0.1 = 0.6
+        assert 0.55 <= similarity <= 0.65
+
+    def test_different_nucleus_different_focus_different_actors(self, fingerprint_sec_binance, fingerprint_defi_growth):
+        """Test hard gate blocks similarity when nucleus and focus are different."""
         similarity = calculate_fingerprint_similarity(
             fingerprint_sec_binance,
             fingerprint_defi_growth
         )
 
-        # Different nucleus (0.0) + no focus overlap (0.0) + no actor overlap (0.0) + no action overlap (0.0)
-        # Expected: ~0.0
-        assert similarity < 0.1
+        # Hard gate blocks: no focus match AND no nucleus match
+        # Expected: 0.0
+        assert similarity == 0.0
     
     def test_same_nucleus_no_actor_overlap(self):
-        """Test moderate similarity when nucleus matches but actors don't overlap."""
+        """Test that different focus prevents high similarity even with same nucleus."""
         fp1 = {
             'nucleus_entity': 'Bitcoin',
             'narrative_focus': 'institutional buying momentum',
@@ -1407,17 +1573,17 @@ class TestCalculateFingerprintSimilarity:
 
         similarity = calculate_fingerprint_similarity(fp1, fp2)
 
-        # New weights: nucleus (0.30) + focus (0.35) + actors (0.20) + actions (0.15) + boost (0.10)
-        # Same nucleus: 0.30
+        # New weights (FEATURE-010): focus (0.5), nucleus (0.3), actors (0.1), actions (0.1)
+        # Hard gate passes: same nucleus (Bitcoin)
         # Focus: "institutional buying momentum" vs "nation-state adoption" -> 0/5 word overlap = 0.0
-        # Actor overlap: {Bitcoin} = 1, union = 5 -> 1/5 * 0.20 = 0.04
-        # Action overlap: 0
-        # No semantic boost (focus < 0.5)
-        # Expected: 0.30 + 0.0 + 0.04 + 0.0 = ~0.34
-        assert 0.30 <= similarity <= 0.40
+        # Nucleus: 1.0
+        # Actors overlap: {Bitcoin} = 1, union = 5 -> 1/5 = 0.2
+        # Actions overlap: 0
+        # Expected: (0.0*0.5) + (1.0*0.3) + (0.2*0.1) + (0.0*0.1) = 0.0 + 0.3 + 0.02 + 0.0 = 0.32
+        assert 0.30 <= similarity <= 0.35
 
-    def test_different_nucleus_high_actor_overlap(self):
-        """Test similarity when nucleus differs but actors overlap significantly."""
+    def test_different_nucleus_high_actor_overlap_blocked_by_hard_gate(self):
+        """Test that hard gate blocks high actor overlap when nucleus and focus differ."""
         fp1 = {
             'nucleus_entity': 'SEC',
             'narrative_focus': 'regulatory enforcement',
@@ -1433,12 +1599,12 @@ class TestCalculateFingerprintSimilarity:
 
         similarity = calculate_fingerprint_similarity(fp1, fp2)
 
-        # Different nucleus (0.0) + no focus overlap (0.0) + high actor overlap (4/4 = 1.0 * 0.20) + no action overlap
-        # Expected: 0.0 + 0.0 + 0.20 + 0.0 = 0.20
-        assert 0.15 <= similarity <= 0.25
-    
-    def test_empty_fingerprints(self):
-        """Test similarity of empty fingerprints."""
+        # Hard gate blocks: no focus match (different phrases) AND no nucleus match (SEC vs Binance)
+        # Expected: 0.0
+        assert similarity == 0.0
+
+    def test_empty_fingerprints_blocked_by_hard_gate(self):
+        """Test that hard gate blocks empty fingerprints (no focus, no nucleus)."""
         fp1 = {
             'nucleus_entity': '',
             'narrative_focus': '',
@@ -1454,12 +1620,12 @@ class TestCalculateFingerprintSimilarity:
 
         similarity = calculate_fingerprint_similarity(fp1, fp2)
 
-        # Empty fingerprints: both missing focus gives 0.5 focus score (legacy compatibility)
-        # 0.0 + 0.5*0.35 + 0.0 + 0.0 = 0.175
-        assert 0.15 <= similarity <= 0.20
+        # Hard gate blocks: no focus match AND no nucleus match
+        # Expected: 0.0
+        assert similarity == 0.0
 
-    def test_one_empty_fingerprint(self, fingerprint_sec_binance):
-        """Test similarity when one fingerprint is empty."""
+    def test_one_empty_fingerprint_blocks_hard_gate(self, fingerprint_sec_binance):
+        """Test that one empty fingerprint is blocked by hard gate."""
         empty_fp = {
             'nucleus_entity': '',
             'narrative_focus': '',
@@ -1472,12 +1638,12 @@ class TestCalculateFingerprintSimilarity:
             empty_fp
         )
 
-        # One has focus, one doesn't -> focus_match = 0.0
-        # Should have low similarity
-        assert similarity < 0.1
+        # Hard gate blocks: no focus match AND no nucleus match
+        # Expected: 0.0
+        assert similarity == 0.0
 
     def test_missing_fields_handled_gracefully(self):
-        """Test that missing fields are handled gracefully."""
+        """Test that missing fields are handled gracefully with same nucleus."""
         fp1 = {'nucleus_entity': 'SEC'}  # Missing narrative_focus, actors and actions
         fp2 = {
             'nucleus_entity': 'SEC',
@@ -1488,12 +1654,16 @@ class TestCalculateFingerprintSimilarity:
 
         similarity = calculate_fingerprint_similarity(fp1, fp2)
 
-        # Same nucleus (0.30) + one missing focus (0.0) + no actors in fp1 (0.0) + no actions in fp1 (0.0)
-        # No semantic boost (focus < 0.5)
-        # Expected: 0.30
-        assert 0.25 <= similarity <= 0.35
-    
-    def test_action_overlap_contribution(self):
+        # Hard gate passes: same nucleus (SEC)
+        # Focus: missing in fp1 -> 0.5 (neutral for legacy)
+        # Focus score: 0.5 * 0.5 = 0.25
+        # Nucleus: 1.0 * 0.3 = 0.3
+        # Actors: no actors in fp1 -> 0.0
+        # Actions: no actions in fp1 -> 0.0
+        # Expected: 0.25 + 0.3 + 0.0 + 0.0 = 0.55
+        assert 0.50 <= similarity <= 0.60
+
+    def test_action_overlap_contribution_with_same_nucleus_focus(self):
         """Test that action overlap contributes to similarity score."""
         fp1 = {
             'nucleus_entity': 'DeFi',
@@ -1510,14 +1680,14 @@ class TestCalculateFingerprintSimilarity:
 
         similarity = calculate_fingerprint_similarity(fp1, fp2)
 
-        # New weights: nucleus (0.30) + focus (0.35) + actors (0.20) + actions (0.15) + boost (0.10)
-        # Same nucleus: 0.30
-        # Same focus: 1.0 * 0.35 = 0.35
-        # Full actor overlap: 1.0 * 0.20 = 0.20
-        # Partial action overlap: 2/4 * 0.15 = 0.075
-        # Semantic boost: 0.10
-        # Expected: 0.30 + 0.35 + 0.20 + 0.075 + 0.10 = 1.025
-        assert 0.95 <= similarity <= 1.10
+        # New weights (FEATURE-010): focus (0.5), nucleus (0.3), actors (0.1), actions (0.1)
+        # Hard gate passes: same nucleus (DeFi) and same focus
+        # Focus: exact match -> 1.0 * 0.5 = 0.5
+        # Nucleus: 1.0 * 0.3 = 0.3
+        # Actors: full overlap -> 1.0 * 0.1 = 0.1
+        # Actions: 2 overlap {TVL growth, new protocol}, union = 4 -> 2/4 * 0.1 = 0.05
+        # Expected: 0.5 + 0.3 + 0.1 + 0.05 = 0.95
+        assert 0.90 <= similarity <= 1.00
 
     def test_weighted_scoring(self):
         """Test that weights are applied correctly (focus > nucleus > actors > actions)."""
