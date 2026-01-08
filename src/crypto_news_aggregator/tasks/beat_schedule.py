@@ -90,4 +90,13 @@ def get_schedule():
                 "time_limit": 300,  # 5 minutes
             },
         },
+        # Consolidate duplicate narratives every hour
+        "consolidate-narratives": {
+            "task": "consolidate_narratives",
+            "schedule": crontab(minute=0),  # Every hour at :00
+            "options": {
+                "expires": 3600,  # 1 hour timeout
+                "time_limit": 3600,  # 1 hour
+            },
+        },
     }

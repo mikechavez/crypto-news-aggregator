@@ -8,230 +8,288 @@
 
 ---
 
-## In Progress
+## Current Status
 
-- [x] [FEATURE-009] Add Narrative Focus Extraction - **COMPLETE**
-  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-009-narrative-focus-extraction.md`
-  - Priority: High
-  - Complexity: Medium
-  - Started: 2026-01-06
-  - Completed: 2026-01-06
+### ✅ FEATURE-013 Backfill Complete
+- **[FEATURE-013] Execute Backfill** - ✅ **COMPLETE**
+  - Status: Successfully executed 2026-01-07 23:11-23:24
+  - Result: 435/436 narratives backfilled with narrative_focus field
+  - Failures: 1 (timeout on ObjectId('68f1ba31fdcae8c027f50d19'))
+  - Cost: $0.09 (much cheaper than estimated $1-2)
+  - Duration: ~13 minutes
+  - Ready for FEATURE-011 implementation
+
+---
+
+## Completed This Session
+
+### ✅ FEATURE-011-IMPLEMENTATION Complete
+
+**[FEATURE-011-IMPLEMENTATION] Consolidation Safety Pass - Implementation**
+- Priority: P1 (blocks narrative quality improvements)
+- Complexity: Medium (2-3 hours)
+- Status: ✅ **COMPLETE** (2026-01-08)
+- Ticket: `docs/tickets/feature-011-add-post-detection-consolidation`
+- Implementation summary:
+  - Added `consolidate_duplicate_narratives()` to NarrativeService
+  - Added `_merge_narratives()` with comprehensive data merging logic
+  - Created Celery task: `narrative_consolidation.py`
+  - Scheduled to run every hour via Celery Beat
+  - All imports verified and code compiles successfully
+- Files created:
+  - ✅ `src/crypto_news_aggregator/tasks/narrative_consolidation.py` (45 lines)
+- Files modified:
+  - ✅ `src/crypto_news_aggregator/services/narrative_service.py` (added 200 lines)
+  - ✅ `src/crypto_news_aggregator/tasks/beat_schedule.py` (added schedule entry)
+  - ✅ `src/crypto_news_aggregator/tasks/__init__.py` (added import)
+- Next: FEATURE-011-TESTS (comprehensive test suite)
+
+## Ready for Implementation
+
+### Priority 1 - Critical Path (After FEATURE-011)
+
+**[FEATURE-011-TESTS] Consolidation Safety Pass - Testing**
+- Priority: P1 (completes FEATURE-011)
+- Complexity: Medium (2-3 hours)
+- Status: ✅ Ready for Claude Code (after implementation)
+- Ticket: `FEATURE-011-TESTS.md` (in outputs folder)
+- Blocked by: FEATURE-011-IMPLEMENTATION must be complete
+- Files to create:
+  - CREATE: `tests/services/test_narrative_service_consolidation.py` (10+ unit tests)
+  - CREATE: `tests/tasks/test_narrative_consolidation.py` (3+ integration tests)
+- Deliverable: Comprehensive test suite, ready for production deployment
+
+### Priority 2 - Optimizations
+
+**[CHORE-001] Tune Relevance Classifier Rules**
+- Priority: P2
+- Complexity: Small (1-2 hours)
+- Status: ✅ Ready for immediate implementation
+- Location: `backlog/chore-tune-relevance-classifier.md`
+- Files: `src/crypto_news_aggregator/services/relevance_classifier.py`
+- No blockers - can implement anytime
+
+**[FEATURE-012] Time-Based Narrative Reactivation**
+- Priority: P2
+- Complexity: Medium (2-3 hours)
+- Status: Backlog (implement after FEATURE-011-TESTS)
+- Location: `backlog/FEATURE-012-narrative-reactivation.md`
+- Dependencies: FEATURE-011-IMPLEMENTATION + FEATURE-011-TESTS complete
+
+---
+
+## Completed
+
+### 2026-01-07 (Today)
+
+#### Evening (Late) - Backfill Execution
+- **[FEATURE-013] Execute Backfill Script** - ✅ COMPLETE
+  - Executed 2026-01-07 23:11-23:24 (~13 minutes)
+  - Result: 435/436 narratives successfully backfilled
+  - Single failure: Timeout on one narrative (ObjectId('68f1ba31fdcae8c027f50d19'))
+  - Tokens used: 54093 input, 11104 output
+  - Cost: $0.09 (excellent - well under estimate)
+  - **FEATURE-011 now unblocked and ready for implementation**
+
+#### Evening - Ticket Preparation & Enhancement
+- **[FEATURE-011] Consolidation Tickets Created** - ✅ READY FOR CLAUDE CODE
+  - Split into two comprehensive tickets for implementation and testing
+  - **FEATURE-011-IMPLEMENTATION**: Core consolidation logic (2-3 hours)
+    - Complete method implementations provided
+    - Database query patterns with examples
+    - Step-by-step implementation guide
+    - Basic smoke test checklist
+  - **FEATURE-011-TESTS**: Comprehensive test suite (2-3 hours)
+    - 10+ unit tests fully implemented
+    - 3+ integration tests fully implemented
+    - Edge case coverage
+    - Test fixtures and helpers
+  - Both tickets ready in outputs folder
+  - Follows FEATURE-013 comprehensive template model
+  - Time: ~1 hour of enhancement work
+
+#### Afternoon - Database Investigation & Fix
+- **[FEATURE-014] Investigate Missing Narratives** - ✅ COMPLETE
+  - Root cause: Scripts connecting to `backdrop` database instead of `crypto_news`
+  - Created diagnostic tool: `scripts/diagnose_database.py`
+  - Fixed FEATURE-013 script database name and query filter
+  - Validated: 436 narratives ready for backfill
+  - Time: ~1 hour
+  - Files created: `scripts/diagnose_database.py`
+  - Files modified: `scripts/backfill_narrative_focus.py`
+
+- **[FEATURE-013] Backfill Script Creation** - ✅ READY TO EXECUTE
+  - Created comprehensive backfill script with:
+    - Batch processing (50 narratives per batch)
+    - Cost tracking and progress logging
+    - Dry-run mode for validation
+    - Error handling and failure tracking
+  - Database issue fixed (was `backdrop`, now `crypto_news`)
+  - Query filter updated (backfills ALL narratives, not just Dec 1+)
+  - Dry-run validated: Found 436 narratives to process
+  - Ready for execution: Waiting for Mike to run manually
+  - Time: ~2 hours total (creation + fixes)
+
+#### Morning - Focus-First Matching
+- **[FEATURE-010] Revise Similarity Matching** - ✅ DEPLOYED
+  - Rewrote `calculate_fingerprint_similarity()` with new weights:
+    - Focus: 0.5 (primary discriminator, was 0.35)
+    - Nucleus: 0.3 (secondary, was 0.30)
+    - Actors: 0.1 (was 0.20)
+    - Actions: 0.1 (was 0.15)
+  - Added hard gate logic: Requires focus OR nucleus match
+  - Added `_compute_focus_similarity()` for token-based matching
+  - All 83 tests passing (12 new focus tests, 71 existing updated)
+  - Result: Prevents unrelated narrative merges
+  - Time: ~3 hours
+  - Deployed: Merged to main, live in Railway production
+
+### 2026-01-06
+
+- **[FEATURE-009] Add Narrative Focus Extraction** - ✅ DEPLOYED
+  - Added narrative_focus field to LLM extraction pipeline
+  - Updated fingerprint calculation to include focus
+  - Added validation and tests
+  - All 68 tests passing
+  - Time: ~4 hours
   - Branch: `feature/narrative-focus-extraction`
-  - **Summary:**
-    - ✅ Updated LLM prompt in `discover_narrative_from_article()` with narrative_focus field
-    - ✅ Added two examples showing focus extraction
-    - ✅ Updated `validate_narrative_json()` with narrative_focus validation
-    - ✅ Updated `compute_narrative_fingerprint()` to include focus
-    - ✅ Revised `calculate_fingerprint_similarity()` with new weights:
-      - Focus: 0.35 (new key differentiator)
-      - Nucleus: 0.30 (reduced from 0.45)
-      - Actors: 0.20 (reduced from 0.35)
-      - Actions: 0.15 (reduced from 0.20)
-    - ✅ Updated Article model with narrative_focus field
-    - ✅ Updated narrative_service.py cluster aggregation
-    - ✅ Updated backfill scripts (backfill_narratives.py, process_missing_narratives.py)
-    - ✅ All 68 tests pass (including 3 new narrative_focus tests)
 
-- [x] [FEATURE-008] Fix Theme vs Title in UI - **COMPLETE**
-  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-008-fix-theme-vs-title-ui.md`
-  - Priority: High
-  - Complexity: Small
-  - Started: 2026-01-06
-  - Completed: 2026-01-06
-  - **Summary:**
-    - ✅ Analyzed root cause: `theme` being set to `nucleus_entity` instead of category
-    - ✅ Identified UI fallback issue: when `title` = `theme`, narratives look identical
-    - ✅ Implemented smart title fallback in Narratives.tsx
-    - ✅ New logic: uses title if distinct from theme, else uses summary first sentence
-    - ✅ Frontend build passes
-    - ✅ Tested locally - backend returning good titles already
-    - ✅ Committed to `feature/narrative-title-display` branch
-    - ✅ Pushed to remote - PR ready
-  - **Branch:** `feature/narrative-title-display`
+- **[FEATURE-008] Fix Theme vs Title UI** - ✅ DEPLOYED
+  - Implemented smart title fallback in Narratives.tsx
+  - Fixed UI issue where narratives showed identical titles
+  - Time: ~1 hour
+  - Branch: `feature/narrative-title-display`
 
-- [x] [FEATURE-008] Signals & Narratives Redesign - **Phase 1: Relevance Filtering COMPLETE**
-  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/feature-signals-narratives-redesign.md`
-  - Priority: High
-  - Complexity: Large
-  - **Progress:**
-    - Implemented article relevance classifier (Tier 1/2/3)
-    - Signals now filter by relevance tier
-    - Narratives now filter by relevance tier
-    - Backfill complete: ~22k articles classified
-    - Distribution: ~15% Tier 1, ~83% Tier 2, ~2% Tier 3
-    - Committed to `feature/briefing-agent` branch
-  - **Next:** Test locally, deploy to Railway, tune patterns
+### 2026-01-05
+
+- **Signal Scoring: Compute on Read** - ✅ DEPLOYED
+  - Implemented ADR-003: Compute signals on demand instead of background task
+  - Disabled worker signal task
+  - Added 60s cache to API endpoints
+  - Time: ~2 hours
+
+### 2026-01-04
+
+- **Deployment & Testing** - ✅ COMPLETE
+  - PR #124 merged (relevance filtering)
+  - Fixed loguru dependency issue (PR #125)
+  - Railway deployment successful
+  - Verified background tasks running
+
+### 2026-01-02
+
+- **[FEATURE-008 Phase 1] Relevance Filtering** - ✅ DEPLOYED
+  - Implemented article relevance classifier (Tier 1/2/3)
+  - Backfilled ~22k articles
+  - Distribution: ~15% Tier 1, ~83% Tier 2, ~2% Tier 3
+  - Files modified: Multiple services, article model, RSS fetcher
+  - Time: ~6 hours
+  - Branch: `feature/briefing-agent`
 
 ---
 
-## Backlog
+## Architecture Decisions
 
-### Narrative Deduplication Initiative (2026-01-06)
+### Active ADRs
+- **ADR-004**: Narrative Focus Identity
+  - Status: ~95% implemented
+  - FEATURE-009: Focus extraction ✅
+  - FEATURE-010: Focus-first matching ✅
+  - FEATURE-013: Backfill ready ✅ (waiting for execution)
+  - FEATURE-011-IMPLEMENTATION: Ready ✅
+  - FEATURE-011-TESTS: Ready ✅
 
-New tickets created to fix narrative duplication problem:
-
-- [x] [FEATURE-009] Add Narrative Focus Extraction - **COMPLETE** (2026-01-06)
-  - Core fix - added focus field to distinguish parallel stories about same entity
-  - See "In Progress" section for full summary
-
-- [x] [FEATURE-010] Revise Similarity Matching to Prioritize Focus - **COMPLETE**
-  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-010-narrative-focus-matching.md`
-  - Priority: High
-  - Complexity: Large
-  - **Summary (2026-01-07):**
-    - ✅ Added `_compute_focus_similarity()` function for token-based focus matching
-    - ✅ Implemented hard gate logic: blocks similarity if no focus OR nucleus match
-    - ✅ Reweighted components: Focus (0.5), Nucleus (0.3), Actors (0.1), Actions (0.1)
-    - ✅ Removed semantic boost (weights now sum to 1.0)
-    - ✅ Added 12 comprehensive focus similarity tests
-    - ✅ Updated 16 fingerprint similarity tests with new weights and hard gate logic
-    - ✅ All 83 tests pass ✅
-  - **Result:** Prevents narrative over-merging - "Dogecoin price surge" now stays separate from "Dogecoin governance dispute"
-  - **Branch:** `feature/narrative-title-display`
-
-- [ ] [FEATURE-011] Add Post-Detection Consolidation Safety Pass
-  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-011-narrative-consolidation.md`
-  - Priority: Medium
-  - Complexity: Medium
-  - Lightweight cleanup task to catch edge cases
-
-- [ ] [FEATURE-012] Implement Time-Based Narrative Reactivation
-  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-012-narrative-reactivation.md`
-  - Priority: Medium
-  - Complexity: Medium
-  - Revive dormant narratives when story re-emerges
-
-### Other Backlog
-
-- [ ] [CHORE-001] Tune Relevance Classifier Rules
-  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/chore-tune-relevance-classifier.md`
-  - Priority: Medium
-  - Complexity: Small
-  - Created this session - tune patterns after seeing prod data
-
-- [ ] [FEATURE-003] Briefing prompt engineering
-  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/in-progress/feature-briefing-prompt-engineering.md`
-  - Priority: High
-  - Complexity: Medium
-  - Blocked by: FEATURE-008 (partially unblocked now)
-
-- [ ] [FEATURE-007] Celery Beat on Railway
-  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/feature-celery-beat-railway.md`
-  - Priority: Medium
-  - Complexity: Medium
-
-- [ ] [BUG-003] Narrative deep-links
-  - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/bug-narrative-deep-links.md`
-  - Priority: Low
-  - Complexity: Small
+- **ADR-003**: Signal Compute-on-Read
+  - Status: ✅ Implemented and deployed
+  - Background signal task disabled
+  - API endpoints compute fresh with cache
 
 ---
 
-## Completed This Sprint
+## Metrics & Progress
 
-### 2026-01-06: Narrative Focus Architecture Planning
+### Sprint 2 Velocity
+- **Completed tickets:** 6 (FEATURE-008 Phase 1, FEATURE-009, FEATURE-010, FEATURE-013 script, FEATURE-014, Signal compute-on-read)
+- **In progress:** 1 (FEATURE-013 execution - manual)
+- **Ready:** 4 (FEATURE-011-IMPLEMENTATION, FEATURE-011-TESTS, CHORE-001, FEATURE-012)
+- **Estimated remaining effort:** ~8-10 hours (implementation + testing + tuning)
 
-Designed comprehensive solution for narrative duplication problem:
+### Narrative Quality Improvements
+**Before (Sprint 1):**
+- Multiple duplicate narratives per entity (5-8 duplicates common)
+- Unclear identity (nucleus_entity was primary signal)
+- No distinction between parallel stories
 
-**Root Cause Identified:**
-- Current system uses `nucleus_entity` as primary narrative identity
-- Problem: Entities are not narratives - they are ingredients of narratives
-- Same entity can have multiple parallel stories (e.g., "Dogecoin price surge" vs "Dogecoin governance dispute")
-
-**Solution Designed:**
-- Add `narrative_focus` field capturing "what is happening" (2-5 word phrase)
-- Revise similarity matching to prioritize focus over entity
-- Examples: "price surge", "regulatory enforcement", "protocol upgrade"
-
-**Deliverables:**
-- **ADR 004:** `docs/decisions/004-narrative-focus-identity.md` - Architectural decision record
-- **FEATURE-008:** Fix theme vs title in UI (quick win)
-- **FEATURE-009:** Add narrative_focus extraction to LLM pipeline
-- **FEATURE-010:** Revise similarity matching logic
-- **FEATURE-011:** Add consolidation safety pass
-- **FEATURE-012:** Implement narrative reactivation logic
-
-**Next:** Start implementation with FEATURE-008 (UI fix)
-
-### 2026-01-02: Relevance Filtering Implementation
-
-Implemented article-level relevance classification to filter noise from signals and narratives:
-
-**Files Created:**
-- `src/crypto_news_aggregator/services/relevance_classifier.py` - Rule-based classifier
-- `scripts/backfill_relevance_tiers.py` - Backfill script for existing articles
-- `scripts/test_classifier.py` - Test script
-
-**Files Modified:**
-- `src/crypto_news_aggregator/models/article.py` - Added `relevance_tier`, `relevance_reason`
-- `src/crypto_news_aggregator/background/rss_fetcher.py` - Classify on ingestion
-- `src/crypto_news_aggregator/services/signal_service.py` - Filter by tier
-- `src/crypto_news_aggregator/services/narrative_service.py` - Filter by tier
-- `src/crypto_news_aggregator/services/narrative_themes.py` - Filter by tier
-
-**Classification Tiers:**
-- Tier 1 (High): SEC, hacks, ETF flows, institutional moves
-- Tier 2 (Medium): Standard crypto news
-- Tier 3 (Low): Gaming, speculation, price predictions - EXCLUDED
+**After ADR-004 Implementation:**
+- Focus-first matching prevents duplicates ✅
+- Clear narrative identity via focus field ✅
+- Parallel stories stay distinct (e.g., "Dogecoin price surge" vs "Dogecoin governance") ✅
+- Awaiting: Backfill + consolidation pass for full effect
 
 ---
 
-## Blocked
+## Blocked Items
 
-- [FEATURE-003] Briefing prompt engineering
-  - Was blocked by: FEATURE-008 (upstream data quality)
-  - Status: Partially unblocked - relevance filtering in place
+None currently - FEATURE-013 is ready to execute (manual step)
 
 ---
 
-## Notes
+## Next Actions
 
-- Sprint 1 closed with 3/4 tickets complete
-- Major discovery: signals/narratives need redesign before briefings can improve
-- See Sprint 1 retro: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/sprints/sprint-1-retro.md`
+### Immediate (Next Session)
+1. ✅ **FEATURE-013 backfill** - COMPLETE (435/436 narratives done)
+2. **Claude Code (Session 1):** Implement FEATURE-011-IMPLEMENTATION
+3. **Claude Code (Session 2):** Implement FEATURE-011-TESTS
 
----
+### This Week
+1. Complete FEATURE-011 (implementation + testing)
+2. Optional: Implement CHORE-001 (tune relevance classifier)
+3. Test narrative quality improvements in production
+4. Plan FEATURE-012 implementation
 
-## Next Session Checklist
-
-1. ~~**Run backfill** - COMPLETE (2026-01-02)~~
-   - Classified ~22k articles
-   - Distribution: ~15% Tier 1, ~83% Tier 2, ~2% Tier 3
-
-2. ~~**Commit changes** - COMPLETE (2026-01-02)~~
-
-3. ~~**Test locally** - COMPLETE (2026-01-04)~~
-   - Verified relevance tier filtering works correctly
-   - Bitcoin test: 29 mentions in last 24h (7 Tier 1, 22 Tier 2, 0 Tier 3)
-   - Confirmed Tier 3 articles properly excluded from signals
-   - Signal scores need recalculation (background task will handle)
-
-4. ~~**Deploy to Railway** - COMPLETE (2026-01-04)~~
-   - PR #124 merged to main (relevance filtering)
-   - Hit loguru dependency issue - fixed via PR #125
-   - Railway deployment successful - API responding
-   - Background tasks running (RSS, narratives, alerts)
-
-5. **Signal scoring: Compute on Read** - COMPLETE (2026-01-05)
-   - Discovered: signal scores were 3 months old due to architectural flaw
-   - Solution: Implemented compute-on-read pattern (ADR-003)
-   - Changes:
-     - Worker signal task disabled (compute on demand instead)
-     - API endpoints compute signals fresh with 60s cache
-     - Alert service updated to use compute_trending_signals
-     - Removed unused imports
-   - Backfill scripts no longer needed (data computed fresh)
-
-6. **Review tier distribution** in prod and tune patterns (CHORE-001)
-   - Monitor signal scores after backfill completes
-   - Check production tier distribution
-   - Tune patterns if needed
+### Next Week
+1. Implement FEATURE-012 (narrative reactivation)
+2. Resume FEATURE-003 (briefing prompt engineering)
+3. Monitor narrative deduplication metrics
 
 ---
 
 ## External References
 
-- **Full sprint plan:** `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/SPRINTS.md`
-- **All tickets:** `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/`
-- **Product vision:** `/Users/mc/Documents/claude-vault/projects/app-backdrop/planning/vision.md`
-- **Roadmap:** `/Users/mc/Documents/claude-vault/projects/app-backdrop/planning/roadmap.md`
+**Project Structure:**
+- Sprint plans: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/SPRINTS.md`
+- Backlog: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/`
+- In Progress: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/in-progress/`
+- Completed: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/done/`
+
+**Key Documents:**
+- Vision: `/Users/mc/Documents/claude-vault/projects/app-backdrop/planning/vision.md`
+- Roadmap: `/Users/mc/Documents/claude-vault/projects/app-backdrop/planning/roadmap.md`
+- Architecture: `/Users/mc/dev-projects/crypto-news-aggregator/docs/decisions/`
+
+---
+
+## Sprint Health
+
+**Status:** 🟢 Healthy
+
+**Completed this sprint:**
+- ✅ Relevance filtering system
+- ✅ Narrative focus extraction (ADR-004)
+- ✅ Focus-first matching logic
+- ✅ Database diagnostic tooling
+- ✅ Backfill script preparation
+
+**Remaining work:**
+- ⏳ Execute backfill (manual step)
+- 📋 FEATURE-011-IMPLEMENTATION (consolidation logic)
+- 📋 FEATURE-011-TESTS (comprehensive test suite)
+- 📋 Classifier tuning (optional)
+
+**Risks:**
+- None identified - good progress on critical path
+
+**Notes:**
+- Good momentum on narrative quality improvements
+- ADR-004 implementation nearly complete (just needs backfill execution + consolidation)
+- Ready to move to optimization phase after FEATURE-011

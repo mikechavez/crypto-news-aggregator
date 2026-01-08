@@ -1,0 +1,581 @@
+feature-011-add-post-detection-consolidation
+
+**STATUS:** ✅ **IMPLEMENTATION COMPLETE** (2026-01-08 Claude Code Session 1)
+
+## Context
+
+**ADR:** `docs/decisions/004-narrative-focus-identity.md`
+**Sprint:** Sprint 2 (Intelligence Layer)
+**Priority:** P1 (critical for narrative quality)
+**Estimate:** 2-3 hours (implementation only, testing separate)
+**Complexity:** Medium
+
+**Background:**
+Even with focus-based matching (FEATURE-010), edge cases may cause duplicate narratives:
+- LLM extracts slightly different focus phrases for the same story
+- Timing issues cause narratives to form separately before merging threshold met
+- Two narratives slip through detection with just-under-threshold similarity
+
+This ticket adds a **lightweight consolidation pass** as a safety net to catch obvious duplicates after they've been created. This should be boring and obvious—only merge when unambiguous.
+
+**Dependencies:**
+- ✅ FEATURE-010: Focus-first matching deployed
+- ✅ **FEATURE-013: Backfill narrative_focus - COMPLETE**
+  - Executed 2026-01-07 23:11-23:24
+  - Result: 435/436 narratives successfully backfilled
+  - Ready for consolidation implementation
+
+## What to Build
+
+A scheduled background task that:
+1. Groups active narratives by `nucleus_entity`
+2. Finds pairs with very high similarity (≥0.9)
+3. Merges them together (combine article_ids, metrics, timeline_data)
+4. Marks merged narrative with `merged_into` field and lifecycle="merged"
+5. Logs all merge operations for monitoring
+
+**Key constraint:** High similarity threshold (0.9+) ensures we only merge clear duplicates. If this task merges >5% of narratives, that signals FEATURE-010 matching is too permissive and needs tuning.
+
+## Files to Modify
+
+**CREATE:**
+- `src/crypto_news_aggregator/tasks/narrative_consolidation.py` (105 lines)
+
+**MODIFY:**
+- `src/crypto_news_aggregator/services/narrative_service.py` (add ~150 lines)
+- `src/crypto_news_aggregator/db/operations/narrative_ops.py` (add ~80 lines, if needed)
+- `src/crypto_news_aggregator/tasks/celery_config.py` (add 8 lines)
+
+## Implementation Details
+
+### Step 1: Add Consolidation Methods to NarrativeService
+
+**File:** `src/crypto_news_aggregator/services/narrative_service.py`
+
+Add these methods to the `NarrativeService` class:
+
+```python
+async def consolidate_duplicate_narratives(self) -> Dict[str, Any]:
+    """
+    Find and merge duplicate narratives (similarity ≥0.9).
+    
+    Returns:
+        Dict with merge_count, merged_pairs, errors
+    """
+    logger.info("Starting narrative consolidation pass")
+    
+    # Only consolidate active narratives (not dormant or merged)
+    active_states = ["emerging", "rising", "hot", "cooling"]
+    narratives = await self.db.narratives.find({
+        "lifecycle_state": {"$in": active_states}
+    }).to_list(length=None)
+    
+    logger.info(f"Found {len(narratives)} active narratives to check")
+    
+    # Group by nucleus_entity
+    narratives_by_entity = {}
+    for narrative in narratives:
+        entity = narrative.get("nucleus_entity")
+        if not entity:
+            continue
+        if entity not in narratives_by_entity:
+            narratives_by_entity[entity] = []
+        narratives_by_entity[entity].append(narrative)
+    
+    # Find high-similarity pairs within each entity group
+    merge_count = 0
+    merged_pairs = []
+    errors = []
+    
+    for entity, entity_narratives in narratives_by_entity.items():
+        if len(entity_narratives) < 2:
+            continue
+            
+        logger.info(f"Checking {len(entity_narratives)} narratives for {entity}")
+        
+        # Check all pairs
+        from itertools import combinations
+        for n1, n2 in combinations(entity_narratives, 2):
+            try:
+                # Compute similarity using existing fingerprint method
+                fp1 = n1.get("fingerprint", {})
+                fp2 = n2.get("fingerprint", {})
+                
+                # IMPORTANT: Requires narrative_focus in fingerprint
+                if not fp1.get("narrative_focus") or not fp2.get("narrative_focus"):
+                    logger.warning(f"Skipping merge check - missing narrative_focus: {n1['_id']} or {n2['_id']}")
+                    continue
+                
+                similarity = self.theme_service.calculate_fingerprint_similarity(fp1, fp2)
+                
+                if similarity >= 0.9:
+                    logger.info(f"High similarity ({similarity:.3f}) between {n1['_id']} and {n2['_id']}")
+                    
+                    # Merge n2 into n1 (keep larger narrative)
+                    if n2.get("article_count", 0) > n1.get("article_count", 0):
+                        n1, n2 = n2, n1  # Swap so n1 is larger
+                    
+                    await self._merge_narratives(n1, n2, similarity)
+                    merge_count += 1
+                    merged_pairs.append({
+                        "survivor": str(n1["_id"]),
+                        "merged": str(n2["_id"]),
+                        "similarity": similarity
+                    })
+                    
+            except Exception as e:
+                logger.error(f"Error merging {n1['_id']} and {n2['_id']}: {e}")
+                errors.append({
+                    "n1": str(n1["_id"]),
+                    "n2": str(n2["_id"]),
+                    "error": str(e)
+                })
+    
+    logger.info(f"Consolidation complete: {merge_count} merges, {len(errors)} errors")
+    
+    return {
+        "merge_count": merge_count,
+        "merged_pairs": merged_pairs,
+        "errors": errors
+    }
+
+
+async def _merge_narratives(self, survivor: Dict, merged: Dict, similarity: float):
+    """
+    Merge two narratives: combine data into survivor, mark merged as merged.
+    
+    Args:
+        survivor: Narrative to keep (larger article count)
+        merged: Narrative to merge in (will be marked merged)
+        similarity: Similarity score for logging
+    """
+    survivor_id = survivor["_id"]
+    merged_id = merged["_id"]
+    
+    logger.info(f"Merging {merged_id} into {survivor_id} (similarity={similarity:.3f})")
+    
+    # 1. Combine article_ids (deduplicate)
+    survivor_articles = set(survivor.get("article_ids", []))
+    merged_articles = set(merged.get("article_ids", []))
+    combined_articles = list(survivor_articles | merged_articles)
+    
+    # 2. Recalculate metrics
+    combined_article_count = len(combined_articles)
+    
+    # Take weighted average of sentiment (by article count)
+    survivor_sentiment = survivor.get("avg_sentiment", 0.0)
+    merged_sentiment = merged.get("avg_sentiment", 0.0)
+    survivor_weight = len(survivor_articles)
+    merged_weight = len(merged_articles)
+    total_weight = survivor_weight + merged_weight
+    
+    if total_weight > 0:
+        combined_sentiment = (
+            (survivor_sentiment * survivor_weight + merged_sentiment * merged_weight)
+            / total_weight
+        )
+    else:
+        combined_sentiment = 0.0
+    
+    # 3. Merge timeline_data (combine and sum overlapping dates)
+    survivor_timeline = {t["date"]: t for t in survivor.get("timeline_data", [])}
+    merged_timeline = merged.get("timeline_data", [])
+    
+    for entry in merged_timeline:
+        date = entry["date"]
+        if date in survivor_timeline:
+            # Sum metrics for overlapping dates
+            survivor_timeline[date]["article_count"] += entry.get("article_count", 0)
+            survivor_timeline[date]["velocity"] += entry.get("velocity", 0.0)
+            
+            # Combine entities (deduplicate)
+            survivor_entities = set(survivor_timeline[date].get("entities", []))
+            merged_entities = set(entry.get("entities", []))
+            survivor_timeline[date]["entities"] = list(survivor_entities | merged_entities)
+        else:
+            # Add new date entry
+            survivor_timeline[date] = entry
+    
+    combined_timeline = sorted(survivor_timeline.values(), key=lambda x: x["date"])
+    
+    # 4. Lifecycle state - take most advanced
+    state_precedence = {
+        "emerging": 1,
+        "rising": 2,
+        "hot": 3,
+        "cooling": 4,
+        "dormant": 5
+    }
+    survivor_state = survivor.get("lifecycle_state", "emerging")
+    merged_state = merged.get("lifecycle_state", "emerging")
+    
+    if state_precedence.get(merged_state, 0) > state_precedence.get(survivor_state, 0):
+        combined_state = merged_state
+    else:
+        combined_state = survivor_state
+    
+    # 5. Update survivor narrative
+    await self.db.narratives.update_one(
+        {"_id": survivor_id},
+        {
+            "$set": {
+                "article_ids": combined_articles,
+                "article_count": combined_article_count,
+                "avg_sentiment": combined_sentiment,
+                "timeline_data": combined_timeline,
+                "lifecycle_state": combined_state,
+                "last_updated": datetime.now(timezone.utc)
+            }
+        }
+    )
+    
+    # 6. Mark merged narrative
+    await self.db.narratives.update_one(
+        {"_id": merged_id},
+        {
+            "$set": {
+                "merged_into": survivor_id,
+                "lifecycle_state": "merged",
+                "last_updated": datetime.now(timezone.utc)
+            }
+        }
+    )
+    
+    # 7. Update article references
+    await self.db.articles.update_many(
+        {"narrative_id": merged_id},
+        {"$set": {"narrative_id": survivor_id}}
+    )
+    
+    logger.info(f"Merge complete: {merged_id} → {survivor_id} ({combined_article_count} articles)")
+```
+
+### Step 2: Add Database Operation (Optional)
+
+**File:** `src/crypto_news_aggregator/db/operations/narrative_ops.py`
+
+If you prefer to separate database operations, add this function:
+
+```python
+async def mark_narrative_merged(db, narrative_id: ObjectId, merged_into: ObjectId):
+    """Mark a narrative as merged into another."""
+    await db.narratives.update_one(
+        {"_id": narrative_id},
+        {
+            "$set": {
+                "merged_into": merged_into,
+                "lifecycle_state": "merged",
+                "last_updated": datetime.now(timezone.utc)
+            }
+        }
+    )
+```
+
+**Note:** The implementation in Step 1 already includes all database operations inline, so this is optional.
+
+### Step 3: Create Celery Task
+
+**File:** `src/crypto_news_aggregator/tasks/narrative_consolidation.py`
+
+```python
+"""
+Narrative consolidation task - merges duplicate narratives.
+
+Runs every 1 hour to catch edge cases where similar narratives
+slipped through initial detection.
+"""
+
+import asyncio
+from datetime import datetime, timezone
+
+from celery.utils.log import get_task_logger
+from motor.motor_asyncio import AsyncIOMotorClient
+
+from crypto_news_aggregator.core.config import config
+from crypto_news_aggregator.services.narrative_service import NarrativeService
+from crypto_news_aggregator.services.narrative_themes import NarrativeThemeService
+from crypto_news_aggregator.llm.optimized_anthropic import OptimizedAnthropicProvider
+from crypto_news_aggregator.tasks.celery_config import app
+
+logger = get_task_logger(__name__)
+
+
+@app.task(name="consolidate_narratives")
+def consolidate_narratives():
+    """
+    Find and merge duplicate narratives with similarity ≥0.9.
+    
+    Runs every 1 hour as a safety net for edge cases.
+    """
+    logger.info("Starting narrative consolidation task")
+    
+    try:
+        result = asyncio.run(_run_consolidation())
+        
+        logger.info(
+            f"Consolidation complete: {result['merge_count']} merges, "
+            f"{len(result['errors'])} errors"
+        )
+        
+        # Log merged pairs for monitoring
+        for pair in result["merged_pairs"]:
+            logger.info(
+                f"Merged: {pair['merged']} → {pair['survivor']} "
+                f"(similarity={pair['similarity']:.3f})"
+            )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Consolidation task failed: {e}", exc_info=True)
+        raise
+
+
+async def _run_consolidation():
+    """Async wrapper for consolidation logic."""
+    
+    # Connect to MongoDB
+    mongo_uri = config.mongodb_uri
+    client = AsyncIOMotorClient(mongo_uri)
+    db = client[config.mongodb_database]
+    
+    try:
+        # Initialize services
+        llm_provider = OptimizedAnthropicProvider(api_key=config.anthropic_api_key)
+        theme_service = NarrativeThemeService(llm_provider=llm_provider, db=db)
+        narrative_service = NarrativeService(
+            db=db,
+            llm_provider=llm_provider,
+            theme_service=theme_service
+        )
+        
+        # Run consolidation
+        result = await narrative_service.consolidate_duplicate_narratives()
+        
+        return result
+        
+    finally:
+        client.close()
+```
+
+### Step 4: Schedule Task in Celery Beat
+
+**File:** `src/crypto_news_aggregator/tasks/celery_config.py`
+
+Add to the `beat_schedule` dictionary:
+
+```python
+app.conf.beat_schedule = {
+    # ... existing tasks ...
+    
+    "consolidate-narratives": {
+        "task": "consolidate_narratives",
+        "schedule": crontab(minute=0),  # Every hour at :00
+        "options": {
+            "expires": 3600,  # 1 hour timeout
+        },
+    },
+}
+```
+
+## Acceptance Criteria
+
+- [ ] `consolidate_duplicate_narratives()` method added to NarrativeService
+- [ ] `_merge_narratives()` method implemented with proper data combining
+- [ ] Celery task created: `consolidate_narratives` in `narrative_consolidation.py`
+- [ ] Task scheduled to run every 1 hour in Celery Beat config
+- [ ] Only merges narratives with similarity ≥0.9
+- [ ] Merge operation:
+  - [ ] Combines article_ids with deduplication
+  - [ ] Recalculates metrics (mention_count, velocity, sentiment)
+  - [ ] Merges timeline_data (sums overlapping dates)
+  - [ ] Takes most advanced lifecycle state
+  - [ ] Updates all article references to survivor
+  - [ ] Marks merged narrative with `merged_into` field and lifecycle="merged"
+- [ ] Comprehensive logging of all merge operations
+- [ ] Code compiles and imports resolve
+- [ ] Can manually trigger task locally (basic smoke test)
+
+## Out of Scope
+
+- Comprehensive unit and integration tests (FEATURE-011-TESTS)
+- Manual consolidation UI (future: FEATURE-XXX)
+- Undo/rollback of merges (future: FEATURE-XXX)
+- Consolidation across different nucleus_entity values
+- Semantic similarity (using embeddings) - use existing fingerprint logic only
+
+## Dependencies
+
+**Complete:**
+- ✅ FEATURE-009: Narrative focus extraction deployed
+- ✅ FEATURE-010: Focus-first matching deployed
+
+**Blocking this ticket:**
+- ⏳ **FEATURE-013: Backfill narrative_focus** (MUST RUN FIRST)
+  - All narratives need narrative_focus field populated
+  - Consolidation skips narratives missing focus
+  - Script ready at `scripts/backfill_narrative_focus.py`
+  - Estimated cost: $1-2, Duration: 5-10 minutes
+
+## Edge Cases to Handle
+
+**Missing narrative_focus:**
+- Skip pair (log warning)
+- This should not happen after FEATURE-013 backfill
+
+**Different titles:**
+- Keep title from narrative with more article_ids
+
+**Lifecycle states differ:**
+- Take most advanced: dormant > cooling > hot > rising > emerging
+
+**Timeline_data overlaps:**
+- Merge entries by date, sum metrics for same dates
+
+**Already merged narrative:**
+- Skip (lifecycle_state="merged")
+- Don't create merge chains
+
+**No matching nucleus_entity:**
+- Only group by entity first, then check pairs
+
+**Very large narrative groups (>100 narratives per entity):**
+- Pairwise comparison is O(n²) - may be slow
+- Consider batching or limiting to top N narratives per entity if needed
+
+## Success Metrics
+
+**Quantitative:**
+- Consolidation merges <5% of narratives
+  - If >5%, FEATURE-010 matching threshold needs tuning
+- Zero duplicate article_ids after merge
+- All articles point to correct survivor narrative
+- Merge frequency decreases over 1 week (as FEATURE-010 improves)
+
+**Qualitative:**
+- Manually review first 10 merged narratives
+- Verify merges make sense (same story, not different stories)
+- No production errors from consolidation task
+
+**Monitoring:**
+- Track merge_count per run
+- Log similarity scores of merged pairs
+- Alert if merge_count >20 in single run (indicates matching problem)
+
+## Manual Testing Checklist
+
+**Before starting Celery worker:**
+```bash
+# 1. Verify FEATURE-013 backfill complete
+poetry run python -c "
+from motor.motor_asyncio import AsyncIOMotorClient
+import asyncio, os
+async def check():
+    client = AsyncIOMotorClient(os.getenv('MONGODB_URI'))
+    db = client['crypto_news']
+    missing = await db.narratives.count_documents({'narrative_focus': {'$exists': False}})
+    print(f'Missing focus: {missing} (should be 0)')
+    client.close()
+asyncio.run(check())
+"
+
+# 2. Check code compiles
+poetry run python -c "
+from crypto_news_aggregator.services.narrative_service import NarrativeService
+from crypto_news_aggregator.tasks.narrative_consolidation import consolidate_narratives
+print('Imports resolve successfully')
+"
+
+# 3. Start Celery worker
+celery -A src.crypto_news_aggregator.tasks.celery_config worker --loglevel=info
+
+# 4. In another terminal, trigger task manually
+poetry run python -c "
+from crypto_news_aggregator.tasks.narrative_consolidation import consolidate_narratives
+result = consolidate_narratives.delay()
+print(f'Task ID: {result.id}')
+"
+
+# 5. Monitor Celery logs for task execution
+# Look for: "Consolidation complete: X merges, Y errors"
+```
+
+## Git Workflow
+
+```bash
+# Create feature branch
+git checkout -b feature/narrative-consolidation
+
+# Implement and commit incrementally
+git add src/crypto_news_aggregator/services/narrative_service.py
+git commit -m "feat(services): add narrative consolidation methods
+
+- Add consolidate_duplicate_narratives() to find high-similarity pairs
+- Add _merge_narratives() to combine narrative data
+- Group narratives by nucleus_entity for efficient comparison
+- Only merge when similarity >= 0.9"
+
+git add src/crypto_news_aggregator/tasks/narrative_consolidation.py
+git commit -m "feat(tasks): add narrative consolidation Celery task
+
+- Create consolidate_narratives task
+- Schedule to run every hour
+- Log all merge operations and errors"
+
+git add src/crypto_news_aggregator/tasks/celery_config.py
+git commit -m "feat(tasks): schedule narrative consolidation in Celery Beat
+
+- Add consolidate-narratives to beat_schedule
+- Run every hour at :00
+- 1 hour timeout"
+
+# Push and create PR
+git push origin feature/narrative-consolidation
+```
+
+## Post-Implementation Monitoring
+
+**First 24 hours:**
+- Check Celery logs for merge operations
+- Verify merge_count <5% of total narratives
+- Manually review first 10 merged narratives
+
+**First week:**
+- Track merge frequency (should decrease as FEATURE-010 improves)
+- Monitor for errors or exceptions
+- Check article reference integrity
+
+**If merge_count >5%:**
+- Review similarity threshold (may need to increase to 0.95)
+- Check if FEATURE-010 matching needs tuning
+- Investigate common patterns in merged narratives
+
+## Quick Reference
+
+**Database Collections:**
+- `narratives`: Narrative documents with fingerprints, article_ids, timeline_data
+- `articles`: Article documents with narrative_id references
+
+**Key Fields:**
+- `narrative_focus`: 2-5 word focus phrase (from FEATURE-009)
+- `nucleus_entity`: Primary entity (e.g., "Bitcoin", "Ethereum")
+- `fingerprint`: Contains focus, nucleus, actors, actions for similarity
+- `lifecycle_state`: emerging, rising, hot, cooling, dormant, merged
+- `merged_into`: ObjectId of survivor narrative (only on merged narratives)
+
+**Similarity Threshold:**
+- 0.9 minimum for consolidation (very high confidence)
+- Based on FEATURE-010 weights: focus (0.5), nucleus (0.3), actors (0.1), actions (0.1)
+
+**Celery Task:**
+- Name: `consolidate_narratives`
+- Schedule: Every hour (crontab(minute=0))
+- Timeout: 3600 seconds (1 hour)
+
+## Follow-up Ticket
+
+After implementation complete, proceed with:
+- **FEATURE-011-TESTS**: Comprehensive test suite for consolidation logic
+  - Unit tests for merge operations
+  - Integration tests for end-to-end consolidation
+  - Edge case coverage
