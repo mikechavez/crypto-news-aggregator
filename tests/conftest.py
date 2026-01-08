@@ -317,12 +317,8 @@ async def article_service(mongo_db: AsyncIOMotorDatabase):
                 logger.warning(f"Warning: Error closing ArticleService: {e}")
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create an instance of the default event loop for the test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+# Removed session-scoped event_loop fixture to allow pytest-asyncio to manage event loops
+# Using asyncio_mode = "auto" instead for better compatibility
 
 
 # Import the Base and all models to ensure tables are created
@@ -539,7 +535,10 @@ def mock_env_vars(monkeypatch):
 
 
 def pytest_configure(config):
-    """Configure pytest with custom markers."""
+    """Configure pytest with custom markers and asyncio mode."""
+    # Configure asyncio mode for pytest-asyncio
+    config.option.asyncio_mode = "auto"
+
     config.addinivalue_line(
         "markers", "asyncio: mark test as async so it can use async/await"
     )

@@ -5,6 +5,7 @@ from .celery_config import *
 from .news import fetch_news, analyze_sentiment
 from .process_article import process_article, process_new_articles
 from .trends import update_trends, calculate_article_keywords
+from .narrative_consolidation import consolidate_narratives_task
 
 app = Celery("crypto_news_aggregator")
 app.config_from_object("crypto_news_aggregator.tasks.celery_config")

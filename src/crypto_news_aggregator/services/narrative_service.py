@@ -1126,7 +1126,209 @@ async def detect_narratives(
             
             logger.info(f"Generated {len(narratives)} theme-based narratives")
             return narratives
-    
+
     except Exception as e:
         logger.exception(f"Error in detect_narratives: {e}")
         return []
+
+
+async def consolidate_duplicate_narratives() -> Dict[str, Any]:
+    """
+    Find and merge duplicate narratives (similarity ≥0.9).
+
+    Returns:
+        Dict with merge_count, merged_pairs, errors
+    """
+    logger.info("Starting narrative consolidation pass")
+
+    db = await mongo_manager.get_async_database()
+    narratives_collection = db.narratives
+    articles_collection = db.articles
+
+    # Only consolidate active narratives (not dormant or merged)
+    active_states = ["emerging", "rising", "hot", "cooling"]
+    narratives = await narratives_collection.find({
+        "lifecycle_state": {"$in": active_states}
+    }).to_list(length=None)
+
+    logger.info(f"Found {len(narratives)} active narratives to check")
+
+    # Group by nucleus_entity
+    narratives_by_entity = {}
+    for narrative in narratives:
+        entity = narrative.get("nucleus_entity")
+        if not entity:
+            continue
+        if entity not in narratives_by_entity:
+            narratives_by_entity[entity] = []
+        narratives_by_entity[entity].append(narrative)
+
+    # Find high-similarity pairs within each entity group
+    merge_count = 0
+    merged_pairs = []
+    errors = []
+
+    for entity, entity_narratives in narratives_by_entity.items():
+        if len(entity_narratives) < 2:
+            continue
+
+        logger.info(f"Checking {len(entity_narratives)} narratives for {entity}")
+
+        # Check all pairs
+        for n1, n2 in combinations(entity_narratives, 2):
+            try:
+                # Compute similarity using existing fingerprint method
+                fp1 = n1.get("fingerprint", {})
+                fp2 = n2.get("fingerprint", {})
+
+                # IMPORTANT: Requires narrative_focus in fingerprint
+                if not fp1.get("narrative_focus") or not fp2.get("narrative_focus"):
+                    logger.warning(f"Skipping merge check - missing narrative_focus: {n1['_id']} or {n2['_id']}")
+                    continue
+
+                similarity = calculate_fingerprint_similarity(fp1, fp2)
+
+                if similarity >= 0.9:
+                    logger.info(f"High similarity ({similarity:.3f}) between {n1['_id']} and {n2['_id']}")
+
+                    # Merge n2 into n1 (keep larger narrative)
+                    if n2.get("article_count", 0) > n1.get("article_count", 0):
+                        n1, n2 = n2, n1  # Swap so n1 is larger
+
+                    await _merge_narratives(n1, n2, similarity, db)
+                    merge_count += 1
+                    merged_pairs.append({
+                        "survivor": str(n1["_id"]),
+                        "merged": str(n2["_id"]),
+                        "similarity": similarity
+                    })
+
+            except Exception as e:
+                logger.error(f"Error merging {n1['_id']} and {n2['_id']}: {e}")
+                errors.append({
+                    "n1": str(n1["_id"]),
+                    "n2": str(n2["_id"]),
+                    "error": str(e)
+                })
+
+    logger.info(f"Consolidation complete: {merge_count} merges, {len(errors)} errors")
+
+    return {
+        "merge_count": merge_count,
+        "merged_pairs": merged_pairs,
+        "errors": errors
+    }
+
+
+async def _merge_narratives(survivor: Dict, merged: Dict, similarity: float, db) -> None:
+    """
+    Merge two narratives: combine data into survivor, mark merged as merged.
+
+    Args:
+        survivor: Narrative to keep (larger article count)
+        merged: Narrative to merge in (will be marked merged)
+        similarity: Similarity score for logging
+        db: MongoDB database instance
+    """
+    narratives_collection = db.narratives
+    articles_collection = db.articles
+
+    survivor_id = survivor["_id"]
+    merged_id = merged["_id"]
+
+    logger.info(f"Merging {merged_id} into {survivor_id} (similarity={similarity:.3f})")
+
+    # 1. Combine article_ids (deduplicate)
+    survivor_articles = set(survivor.get("article_ids", []))
+    merged_articles = set(merged.get("article_ids", []))
+    combined_articles = list(survivor_articles | merged_articles)
+
+    # 2. Recalculate metrics
+    combined_article_count = len(combined_articles)
+
+    # Take weighted average of sentiment (by article count)
+    survivor_sentiment = survivor.get("avg_sentiment", 0.0)
+    merged_sentiment = merged.get("avg_sentiment", 0.0)
+    survivor_weight = len(survivor_articles)
+    merged_weight = len(merged_articles)
+    total_weight = survivor_weight + merged_weight
+
+    if total_weight > 0:
+        combined_sentiment = (
+            (survivor_sentiment * survivor_weight + merged_sentiment * merged_weight)
+            / total_weight
+        )
+    else:
+        combined_sentiment = 0.0
+
+    # 3. Merge timeline_data (combine and sum overlapping dates)
+    survivor_timeline = {t["date"]: t for t in survivor.get("timeline_data", [])}
+    merged_timeline = merged.get("timeline_data", [])
+
+    for entry in merged_timeline:
+        date = entry["date"]
+        if date in survivor_timeline:
+            # Sum metrics for overlapping dates
+            survivor_timeline[date]["article_count"] = survivor_timeline[date].get("article_count", 0) + entry.get("article_count", 0)
+            survivor_timeline[date]["velocity"] = survivor_timeline[date].get("velocity", 0.0) + entry.get("velocity", 0.0)
+
+            # Combine entities (deduplicate)
+            survivor_entities = set(survivor_timeline[date].get("entities", []))
+            merged_entities = set(entry.get("entities", []))
+            survivor_timeline[date]["entities"] = list(survivor_entities | merged_entities)
+        else:
+            # Add new date entry
+            survivor_timeline[date] = entry
+
+    combined_timeline = sorted(survivor_timeline.values(), key=lambda x: x["date"])
+
+    # 4. Lifecycle state - take most advanced
+    state_precedence = {
+        "emerging": 1,
+        "rising": 2,
+        "hot": 3,
+        "cooling": 4,
+        "dormant": 5
+    }
+    survivor_state = survivor.get("lifecycle_state", "emerging")
+    merged_state = merged.get("lifecycle_state", "emerging")
+
+    if state_precedence.get(merged_state, 0) > state_precedence.get(survivor_state, 0):
+        combined_state = merged_state
+    else:
+        combined_state = survivor_state
+
+    # 5. Update survivor narrative
+    await narratives_collection.update_one(
+        {"_id": survivor_id},
+        {
+            "$set": {
+                "article_ids": combined_articles,
+                "article_count": combined_article_count,
+                "avg_sentiment": combined_sentiment,
+                "timeline_data": combined_timeline,
+                "lifecycle_state": combined_state,
+                "last_updated": datetime.now(timezone.utc)
+            }
+        }
+    )
+
+    # 6. Mark merged narrative
+    await narratives_collection.update_one(
+        {"_id": merged_id},
+        {
+            "$set": {
+                "merged_into": survivor_id,
+                "lifecycle_state": "merged",
+                "last_updated": datetime.now(timezone.utc)
+            }
+        }
+    )
+
+    # 7. Update article references
+    await articles_collection.update_many(
+        {"narrative_id": merged_id},
+        {"$set": {"narrative_id": survivor_id}}
+    )
+
+    logger.info(f"Merge complete: {merged_id} → {survivor_id} ({combined_article_count} articles)")
