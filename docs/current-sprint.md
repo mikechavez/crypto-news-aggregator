@@ -74,11 +74,20 @@ New tickets created to fix narrative duplication problem:
   - Core fix - added focus field to distinguish parallel stories about same entity
   - See "In Progress" section for full summary
 
-- [ ] [FEATURE-010] Revise Similarity Matching to Prioritize Focus
+- [x] [FEATURE-010] Revise Similarity Matching to Prioritize Focus - **COMPLETE**
   - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-010-narrative-focus-matching.md`
   - Priority: High
   - Complexity: Large
-  - Rewrite matching logic to use focus as primary signal
+  - **Summary (2026-01-07):**
+    - ✅ Added `_compute_focus_similarity()` function for token-based focus matching
+    - ✅ Implemented hard gate logic: blocks similarity if no focus OR nucleus match
+    - ✅ Reweighted components: Focus (0.5), Nucleus (0.3), Actors (0.1), Actions (0.1)
+    - ✅ Removed semantic boost (weights now sum to 1.0)
+    - ✅ Added 12 comprehensive focus similarity tests
+    - ✅ Updated 16 fingerprint similarity tests with new weights and hard gate logic
+    - ✅ All 83 tests pass ✅
+  - **Result:** Prevents narrative over-merging - "Dogecoin price surge" now stays separate from "Dogecoin governance dispute"
+  - **Branch:** `feature/narrative-title-display`
 
 - [ ] [FEATURE-011] Add Post-Detection Consolidation Safety Pass
   - Location: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/backlog/FEATURE-011-narrative-consolidation.md`
