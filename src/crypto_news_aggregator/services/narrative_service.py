@@ -171,63 +171,67 @@ def determine_lifecycle_state(
     first_seen: datetime,
     last_updated: datetime,
     previous_state: Optional[str] = None
-) -> str:
+) -> tuple[str, Optional[datetime]]:
     """
     Determine the lifecycle state of a narrative based on activity patterns.
-    
+
     Args:
         article_count: Current number of articles in narrative
         mention_velocity: Articles per day rate
         first_seen: When the narrative was first detected
         last_updated: When the narrative was last updated with new articles
         previous_state: Previous lifecycle state from lifecycle_history (optional)
-    
+
     Returns:
-        Lifecycle state: emerging, rising, hot, cooling, dormant, echo, or reactivated
+        Tuple of (lifecycle_state, dormant_since):
+        - lifecycle_state: emerging, rising, hot, cooling, dormant, echo, or reactivated
+        - dormant_since: Timestamp when narrative entered dormant state (or None if not dormant)
     """
     # Calculate days since last update
     now = datetime.now(timezone.utc)
     days_since_update = (now - last_updated).total_seconds() / 86400  # 86400 seconds in a day
-    
+
     # Calculate recent activity (last 24h and 48h)
     cutoff_24h = now - timedelta(hours=24)
     cutoff_48h = now - timedelta(hours=48)
-    
+
     # Estimate articles in last 24h and 48h based on velocity
     # This is an approximation; in practice, you'd query actual article timestamps
     articles_last_24h = mention_velocity * 1.0  # velocity is articles/day
     articles_last_48h = mention_velocity * 2.0
-    
+
     # Check for reactivated state first: echo or dormant narrative with sustained activity (4+ articles in 48h)
     # This takes priority over echo to handle the transition properly
     if previous_state in ['echo', 'dormant'] and articles_last_48h >= 4:
-        return 'reactivated'
-    
+        return ('reactivated', None)  # Clear dormant_since on reactivation
+
     # Check for echo state: dormant narrative with light activity (1-3 articles in 24h) but NOT sustained (< 4 in 48h)
     # Echo represents a brief "pulse" of activity, not sustained reactivation
     if previous_state == 'dormant' and 1 <= articles_last_24h <= 3 and articles_last_48h < 4:
-        return 'echo'
-    
+        return ('echo', None)
+
     # Check for dormant or cooling states first (based on recency)
     if days_since_update >= 7:
-        return 'dormant'
+        # Set dormant_since when transitioning to dormant
+        dormant_since = now if previous_state != 'dormant' else None  # Only set on transition
+        return ('dormant', dormant_since)
     elif days_since_update >= 3:
-        return 'cooling'
-    
+        return ('cooling', None)
+
     # Check for hot state (high activity)
     if article_count >= 7 or mention_velocity >= 3.0:
-        return 'hot'
-    
+        return ('hot', None)
+
     # Check for rising state (moderate velocity, not yet hot)
     if mention_velocity >= 1.5 and article_count < 7:
-        return 'rising'
-    
+        return ('rising', None)
+
     # Default to emerging for new/small narratives
     if article_count < 4:
-        return 'emerging'
-    
+        return ('emerging', None)
+
     # Fallback for edge cases (4-6 articles, low velocity, recent)
-    return 'emerging'
+    return ('emerging', None)
 
 
 def update_lifecycle_history(
@@ -535,6 +539,235 @@ async def find_matching_narrative(
         return None
 
 
+async def should_reactivate_or_create_new(
+    fingerprint: Dict[str, Any],
+    nucleus_entity: Optional[str] = None
+) -> tuple[str, Optional[Dict[str, Any]]]:
+    """
+    Decide whether to reactivate a dormant narrative or create a new one.
+
+    Checks for dormant narratives with the same nucleus_entity within the 30-day
+    reactivation window and calculates similarity. Returns reactivation decision.
+
+    Args:
+        fingerprint: Current cluster fingerprint with nucleus_entity, narrative_focus, etc.
+        nucleus_entity: Primary nucleus entity (optional, extracted from fingerprint if not provided)
+
+    Returns:
+        Tuple of (decision, matched_narrative):
+        - decision: "reactivate" or "create_new"
+        - matched_narrative: The dormant narrative to reactivate (or None if creating new)
+    """
+    try:
+        # Get nucleus_entity from fingerprint if not provided
+        entity = nucleus_entity or fingerprint.get('nucleus_entity', '')
+        if not entity:
+            logger.warning("Cannot check reactivation - no nucleus_entity in fingerprint")
+            return ("create_new", None)
+
+        # Log reactivation decision process
+        logger.info(f"Checking for narrative reactivation: entity='{entity}'")
+        logger.debug(f"Input fingerprint: {fingerprint}")
+
+        db = await mongo_manager.get_async_database()
+        narratives_collection = db.narratives
+
+        # Query for dormant narratives with same nucleus_entity
+        now = datetime.now(timezone.utc)
+        thirty_days_ago = now - timedelta(days=30)
+
+        dormant_query = {
+            "nucleus_entity": entity,
+            "lifecycle_state": "dormant",
+            "dormant_since": {"$gte": thirty_days_ago}  # Within 30-day reactivation window
+        }
+
+        cursor = narratives_collection.find(dormant_query)
+        dormant_candidates = await cursor.to_list(length=None)
+
+        logger.debug(f"Found {len(dormant_candidates)} dormant narrative(s) within 30-day window")
+
+        if not dormant_candidates:
+            logger.debug(f"No dormant narratives found for entity '{entity}'")
+            return ("create_new", None)
+
+        # Log details of each candidate
+        for i, candidate in enumerate(dormant_candidates):
+            logger.debug(
+                f"  Candidate {i+1}: "
+                f"ID={candidate.get('_id')}, "
+                f"Title={candidate.get('title')}, "
+                f"DormantSince={candidate.get('dormant_since')}"
+            )
+
+        # Calculate similarity for each candidate
+        best_match = None
+        best_similarity = 0.0
+
+        for i, candidate in enumerate(dormant_candidates):
+            candidate_fingerprint = candidate.get('fingerprint', {})
+            if not candidate_fingerprint:
+                logger.warning(f"Candidate {candidate['_id']} missing fingerprint - skipping")
+                continue
+
+            # Calculate similarity
+            similarity = calculate_fingerprint_similarity(fingerprint, candidate_fingerprint)
+
+            logger.debug(
+                f"Candidate {i+1} similarity: {similarity:.3f} "
+                f"(title='{candidate.get('title')}', focus='{candidate_fingerprint.get('narrative_focus')}')"
+            )
+
+            # Track best match
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_match = candidate
+
+        # Decision threshold (calibrated for weighted scoring)
+        # Reactivation is safer than initial matching, so 0.8 threshold is appropriate
+        # - 0.5 weight focus + 0.3 weight nucleus = 0.8 (matches when both aligned)
+        # - Additional actor/action overlap pushes above 0.8
+        REACTIVATION_THRESHOLD = 0.80
+        logger.debug(f"Best similarity: {best_similarity:.3f}, threshold: {REACTIVATION_THRESHOLD}")
+
+        if best_match and best_similarity >= REACTIVATION_THRESHOLD:
+            dormant_since = best_match.get('dormant_since', now)
+            # Handle timezone-aware vs naive datetime comparison
+            if dormant_since.tzinfo is None:
+                dormant_since = dormant_since.replace(tzinfo=timezone.utc)
+            dormant_days = (now - dormant_since).total_seconds() / 86400
+            logger.info(
+                f"REACTIVATING narrative: {best_match['_id']} | "
+                f"similarity={best_similarity:.3f} | dormant_days={dormant_days:.1f}"
+            )
+            return ("reactivate", best_match)
+        else:
+            logger.debug(
+                f"No reactivation match: best_similarity={best_similarity:.3f}, "
+                f"threshold={REACTIVATION_THRESHOLD}, has_match={bool(best_match)}"
+            )
+            return ("create_new", None)
+
+    except Exception as e:
+        logger.exception(f"Error in reactivation check: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return ("create_new", None)
+
+
+async def _reactivate_narrative(
+    dormant_narrative: Dict[str, Any],
+    new_article_ids: List[str],
+    cluster: List[Dict[str, Any]],
+    fingerprint: Dict[str, Any]
+) -> str:
+    """
+    Reactivate a dormant narrative by merging new articles and updating state.
+
+    Args:
+        dormant_narrative: The dormant narrative document to reactivate
+        new_article_ids: Article IDs from the new cluster
+        cluster: The cluster articles for extracting metrics
+        fingerprint: Current cluster fingerprint
+
+    Returns:
+        The ID of the reactivated narrative
+    """
+    from bson import ObjectId
+
+    db = await mongo_manager.get_async_database()
+    narratives_collection = db.narratives
+
+    narrative_id = dormant_narrative["_id"]
+    now = datetime.now(timezone.utc)
+
+    # 1. Deduplicate article IDs
+    existing_articles = set(str(aid) for aid in dormant_narrative.get("article_ids", []))
+    new_articles_set = set(str(aid) for aid in new_article_ids)
+    combined_article_ids = list(existing_articles | new_articles_set)
+
+    # 2. Recalculate sentiment (weighted average)
+    existing_sentiment = dormant_narrative.get("avg_sentiment", 0.0)
+    existing_count = len(existing_articles)
+
+    # Extract sentiment from new articles if available
+    new_sentiment = 0.0
+    for article in cluster:
+        if str(article.get("_id")) in new_articles_set:
+            article_sentiment = article.get("sentiment_score", 0.0)
+            new_sentiment += article_sentiment
+
+    new_count = len(new_articles_set)
+    if new_count > 0:
+        new_sentiment = new_sentiment / new_count
+
+    # Weighted average
+    total_weight = existing_count + new_count
+    if total_weight > 0:
+        combined_sentiment = (existing_sentiment * existing_count + new_sentiment * new_count) / total_weight
+    else:
+        combined_sentiment = 0.0
+
+    # 3. Update lifecycle state to reactivated
+    lifecycle_state = "reactivated"
+
+    # 4. Increment reactivation counter
+    reactivated_count = dormant_narrative.get("reactivated_count", 0) + 1
+
+    # 5. Clear dormant_since timestamp
+    dormant_since_value = None
+
+    # 6. Update lifecycle history
+    lifecycle_history = dormant_narrative.get("lifecycle_history", [])
+
+    # Calculate new velocity for lifecycle history
+    article_dates = []
+    for article in cluster:
+        if str(article.get("_id")) in new_articles_set:
+            pub_date = article.get("published_at")
+            if pub_date:
+                if pub_date.tzinfo is None:
+                    pub_date = pub_date.replace(tzinfo=timezone.utc)
+                article_dates.append(pub_date)
+
+    new_velocity = calculate_recent_velocity(article_dates, lookback_days=7)
+
+    # Add reactivation entry to lifecycle history
+    lifecycle_history.append({
+        "state": lifecycle_state,
+        "timestamp": now,
+        "article_count": len(combined_article_ids),
+        "mention_velocity": round(new_velocity, 2)
+    })
+
+    # 7. Update narrative in database
+    await narratives_collection.update_one(
+        {"_id": narrative_id},
+        {
+            "$set": {
+                "article_ids": combined_article_ids,
+                "article_count": len(combined_article_ids),
+                "avg_sentiment": combined_sentiment,
+                "lifecycle_state": lifecycle_state,
+                "lifecycle_history": lifecycle_history,
+                "reactivated_count": reactivated_count,
+                "dormant_since": dormant_since_value,
+                "last_updated": now,
+                "mention_velocity": round(new_velocity, 2)
+            }
+        }
+    )
+
+    logger.info(
+        f"REACTIVATED narrative {narrative_id}: "
+        f"merged {len(new_articles_set)} articles, "
+        f"total {len(combined_article_ids)} articles, "
+        f"reactivation #{reactivated_count}"
+    )
+
+    return str(narrative_id)
+
+
 async def extract_entities_from_articles(articles: List[Dict[str, Any]]) -> List[str]:
     """
     Extract all unique entities mentioned across a list of articles.
@@ -754,10 +987,10 @@ async def detect_narratives(
                     previous_state = lifecycle_history_existing[-1].get('state') if lifecycle_history_existing else None
                     
                     # Calculate lifecycle_state for updated narrative
-                    lifecycle_state = determine_lifecycle_state(
+                    lifecycle_state, dormant_since = determine_lifecycle_state(
                         updated_article_count, mention_velocity, first_seen, last_updated, previous_state
                     )
-                    
+
                     # Update lifecycle history and get resurrection fields
                     lifecycle_history, resurrection_fields = update_lifecycle_history(
                         matching_narrative,
@@ -809,7 +1042,8 @@ async def detect_narratives(
                             lifecycle_history=lifecycle_history,
                             reawakening_count=resurrection_fields.get('reawakening_count') if resurrection_fields else None,
                             reawakened_from=resurrection_fields.get('reawakened_from') if resurrection_fields else None,
-                            resurrection_velocity=resurrection_fields.get('resurrection_velocity') if resurrection_fields else None
+                            resurrection_velocity=resurrection_fields.get('resurrection_velocity') if resurrection_fields else None,
+                            dormant_since=dormant_since
                         )
                         
                         logger.info(
@@ -834,149 +1068,174 @@ async def detect_narratives(
                         saved_narratives.append(matching_narrative)
                     
                 else:
-                    # No match found - create new narrative
-                    created_count += 1
-                    narrative = await generate_narrative_from_cluster(cluster)
-                    
-                    if not narrative:
-                        logger.warning(f"Failed to generate narrative for cluster with nucleus: {cluster.get('nucleus_entity')}")
-                        continue
-                    
-                    # Add fingerprint to narrative data
-                    narrative['fingerprint'] = fingerprint
-                    narrative['needs_summary_update'] = False  # Fresh summary, no update needed
-                    
-                    narrative_data = narrative
-                    # Calculate mention velocity (articles per day) based on recent activity
-                    article_count = narrative_data.get("article_count", 0)
-                    
-                    # Get articles for this narrative to extract dates
-                    article_ids = narrative_data.get("article_ids", [])
-                    article_dates = []
-                    articles_found = 0
-                    for article in articles:
-                        if str(article.get("_id")) in article_ids:
-                            articles_found += 1
-                            pub_date = article.get("published_at")
-                            if pub_date:
-                                # Ensure timezone-aware
-                                if pub_date.tzinfo is None:
-                                    pub_date = pub_date.replace(tzinfo=timezone.utc)
-                                article_dates.append(pub_date)
-                    
-                    # DEBUG: Log if we're missing articles
-                    if articles_found != len(article_ids):
-                        logger.warning(f"[CREATE NARRATIVE] Only found {articles_found}/{len(article_ids)} articles in articles list!")
-                    
-                    # Use recent velocity calculation (last 7 days) for more accurate current activity
-                    mention_velocity = calculate_recent_velocity(article_dates, lookback_days=7)
-                    
-                    # Calculate momentum from article dates
-                    
-                    # Sort dates and calculate momentum
-                    article_dates.sort()
-                    momentum = calculate_momentum(article_dates)
-                    
-                    # Calculate recency score (0-1, higher = more recent)
-                    newest_article = article_dates[-1] if article_dates else None
-                    if newest_article:
-                        # Ensure newest_article is timezone-aware
-                        if newest_article.tzinfo is None:
-                            newest_article = newest_article.replace(tzinfo=timezone.utc)
-                        hours_since_last_update = (datetime.now(timezone.utc) - newest_article).total_seconds() / 3600
-                        recency_score = exp(-hours_since_last_update / 24)  # 24h half-life
-                    else:
-                        recency_score = 0.0
-                    
-                    # Determine lifecycle stage with momentum awareness (legacy)
-                    lifecycle = determine_lifecycle_stage(article_count, mention_velocity, momentum)
-                    
-                    # Determine lifecycle state (new approach)
-                    # Use article dates for first_seen and last_updated, not now()
-                    if article_dates:
-                        first_seen = min(article_dates)
-                        last_updated = max(article_dates)
-                        logger.info(f"[CREATE NARRATIVE] Using article dates: first_seen={first_seen}, last_updated={last_updated}, article_count={len(article_dates)}")
-                    else:
-                        # Fallback to now() if no article dates available
-                        first_seen = datetime.now(timezone.utc)
-                        last_updated = datetime.now(timezone.utc)
-                        logger.warning(f"[CREATE NARRATIVE] NO ARTICLE DATES! Using now(): first_seen={first_seen}, last_updated={last_updated}")
-                    # No previous state for new narratives
-                    lifecycle_state = determine_lifecycle_state(
-                        article_count, mention_velocity, first_seen, last_updated, previous_state=None
+                    # No match found - check for reactivation before creating new
+                    reactivation_decision, reactivated_candidate = await should_reactivate_or_create_new(
+                        fingerprint, nucleus_entity=primary_nucleus
                     )
-                    
-                    # Initialize lifecycle history for new narrative
-                    lifecycle_history, resurrection_fields = update_lifecycle_history(
-                        {},  # Empty dict for new narrative
-                        lifecycle_state,
-                        article_count,
-                        mention_velocity
-                    )
-                    
-                    # Use nucleus_entity as theme for database compatibility
-                    theme = narrative_data.get("nucleus_entity", "unknown")
-                    
-                    # Enrich narrative_data with computed fields for return value
-                    narrative_data["theme"] = theme
-                    narrative_data["entities"] = narrative_data.get("actors", [])[:10]
-                    narrative_data["mention_velocity"] = round(mention_velocity, 2)
-                    narrative_data["lifecycle"] = lifecycle
-                    narrative_data["lifecycle_state"] = lifecycle_state
-                    narrative_data["lifecycle_history"] = lifecycle_history
-                    narrative_data["momentum"] = momentum
-                    narrative_data["recency_score"] = round(recency_score, 3)
-                    
-                    # DEBUG: Log all article dates and timestamp calculation for new narrative
-                    logger.info(f"[CREATE NARRATIVE DEBUG] ========== CREATE UPSERT START ==========")
-                    logger.info(f"[CREATE NARRATIVE DEBUG] Theme: {theme}")
-                    logger.info(f"[CREATE NARRATIVE DEBUG] Title: {narrative_data.get('title')}")
-                    logger.info(f"[CREATE NARRATIVE DEBUG] Article IDs: {narrative_data['article_ids']}")
-                    logger.info(f"[CREATE NARRATIVE DEBUG] Article dates collected: {len(article_dates)}")
-                    if article_dates:
-                        logger.info(f"[CREATE NARRATIVE DEBUG] Article dates (sorted):")
-                        for i, date in enumerate(sorted(article_dates)):
-                            logger.info(f"[CREATE NARRATIVE DEBUG]   [{i+1}] {date}")
-                        logger.info(f"[CREATE NARRATIVE DEBUG] Earliest article: {min(article_dates)}")
-                        logger.info(f"[CREATE NARRATIVE DEBUG] Latest article: {max(article_dates)}")
-                    else:
-                        logger.warning(f"[CREATE NARRATIVE DEBUG] NO ARTICLE DATES FOUND!")
-                    logger.info(f"[CREATE NARRATIVE DEBUG] Calculated first_seen (now): {first_seen}")
-                    logger.info(f"[CREATE NARRATIVE DEBUG] Calculated last_updated (now): {last_updated}")
-                    logger.info(f"[CREATE NARRATIVE DEBUG] Is first_seen > last_updated? {first_seen > last_updated}")
-                    logger.info(f"[CREATE NARRATIVE DEBUG] Timestamp sources: BOTH from now() - THIS IS THE BUG!")
-                    logger.info(f"[CREATE NARRATIVE DEBUG] Should use: first_seen = min(article_dates), last_updated = max(article_dates)")
-                    logger.info(f"[CREATE NARRATIVE DEBUG] ========== CREATE UPSERT END ==========")
-                    
-                    try:
-                        # Validate fingerprint before creation
-                        if not fingerprint or not fingerprint.get('nucleus_entity'):
-                            logger.error(f"Cannot create narrative - invalid fingerprint: {fingerprint}")
-                            raise ValueError("Narrative fingerprint must have a valid nucleus_entity")
-                        
-                        # Use upsert_narrative to ensure timestamp validation
-                        narrative_id = await upsert_narrative(
-                            theme=theme,
-                            title=narrative_data["title"],
-                            summary=narrative_data["summary"],
-                            entities=narrative_data.get("actors", [])[:10],
-                            article_ids=narrative_data["article_ids"],
-                            article_count=article_count,
-                            mention_velocity=round(mention_velocity, 2),
-                            lifecycle=lifecycle,
-                            momentum=momentum,
-                            recency_score=round(recency_score, 3),
-                            entity_relationships=narrative_data.get("entity_relationships", []),
-                            first_seen=first_seen,
-                            lifecycle_state=lifecycle_state,
-                            lifecycle_history=lifecycle_history
+
+                    if reactivation_decision == "reactivate" and reactivated_candidate:
+                        # Reactivate dormant narrative instead of creating new
+                        logger.info(
+                            f"Reactivating dormant narrative '{reactivated_candidate.get('title')}' "
+                            f"for nucleus entity '{primary_nucleus}'"
                         )
-                        
-                        logger.info(f"Created new narrative {narrative_id}: {narrative_data['title']}")
-                        saved_narratives.append(narrative_data)
-                    except Exception as e:
-                        logger.exception(f"Failed to save narrative '{narrative_data.get('title')}': {e}")
+                        narrative_id = await _reactivate_narrative(
+                            reactivated_candidate,
+                            [str(article.get("_id")) for article in cluster if isinstance(article, dict)],
+                            cluster,
+                            fingerprint
+                        )
+
+                        # Fetch and return the updated narrative
+                        db = await mongo_manager.get_async_database()
+                        updated_narrative = await db.narratives.find_one({"_id": reactivated_candidate["_id"]})
+                        if updated_narrative:
+                            saved_narratives.append(updated_narrative)
+                    else:
+                        # Create new narrative
+                        created_count += 1
+                        narrative = await generate_narrative_from_cluster(cluster)
+
+                        if not narrative:
+                            logger.warning(f"Failed to generate narrative for cluster with nucleus: {cluster.get('nucleus_entity')}")
+                            continue
+
+                        # Add fingerprint to narrative data
+                        narrative['fingerprint'] = fingerprint
+                        narrative['needs_summary_update'] = False  # Fresh summary, no update needed
+
+                        narrative_data = narrative
+                        # Calculate mention velocity (articles per day) based on recent activity
+                        article_count = narrative_data.get("article_count", 0)
+
+                        # Get articles for this narrative to extract dates
+                        article_ids = narrative_data.get("article_ids", [])
+                        article_dates = []
+                        articles_found = 0
+                        for article in articles:
+                            if str(article.get("_id")) in article_ids:
+                                articles_found += 1
+                                pub_date = article.get("published_at")
+                                if pub_date:
+                                    # Ensure timezone-aware
+                                    if pub_date.tzinfo is None:
+                                        pub_date = pub_date.replace(tzinfo=timezone.utc)
+                                    article_dates.append(pub_date)
+
+                        # DEBUG: Log if we're missing articles
+                        if articles_found != len(article_ids):
+                            logger.warning(f"[CREATE NARRATIVE] Only found {articles_found}/{len(article_ids)} articles in articles list!")
+
+                        # Use recent velocity calculation (last 7 days) for more accurate current activity
+                        mention_velocity = calculate_recent_velocity(article_dates, lookback_days=7)
+
+                        # Calculate momentum from article dates
+
+                        # Sort dates and calculate momentum
+                        article_dates.sort()
+                        momentum = calculate_momentum(article_dates)
+
+                        # Calculate recency score (0-1, higher = more recent)
+                        newest_article = article_dates[-1] if article_dates else None
+                        if newest_article:
+                            # Ensure newest_article is timezone-aware
+                            if newest_article.tzinfo is None:
+                                newest_article = newest_article.replace(tzinfo=timezone.utc)
+                            hours_since_last_update = (datetime.now(timezone.utc) - newest_article).total_seconds() / 3600
+                            recency_score = exp(-hours_since_last_update / 24)  # 24h half-life
+                        else:
+                            recency_score = 0.0
+
+                        # Determine lifecycle stage with momentum awareness (legacy)
+                        lifecycle = determine_lifecycle_stage(article_count, mention_velocity, momentum)
+
+                        # Determine lifecycle state (new approach)
+                        # Use article dates for first_seen and last_updated, not now()
+                        if article_dates:
+                            first_seen = min(article_dates)
+                            last_updated = max(article_dates)
+                            logger.info(f"[CREATE NARRATIVE] Using article dates: first_seen={first_seen}, last_updated={last_updated}, article_count={len(article_dates)}")
+                        else:
+                            # Fallback to now() if no article dates available
+                            first_seen = datetime.now(timezone.utc)
+                            last_updated = datetime.now(timezone.utc)
+                            logger.warning(f"[CREATE NARRATIVE] NO ARTICLE DATES! Using now(): first_seen={first_seen}, last_updated={last_updated}")
+                        # No previous state for new narratives
+                        lifecycle_state, dormant_since = determine_lifecycle_state(
+                            article_count, mention_velocity, first_seen, last_updated, previous_state=None
+                        )
+
+                        # Initialize lifecycle history for new narrative
+                        lifecycle_history, resurrection_fields = update_lifecycle_history(
+                            {},  # Empty dict for new narrative
+                            lifecycle_state,
+                            article_count,
+                            mention_velocity
+                        )
+
+                        # Use nucleus_entity as theme for database compatibility
+                        theme = narrative_data.get("nucleus_entity", "unknown")
+
+                        # Enrich narrative_data with computed fields for return value
+                        narrative_data["theme"] = theme
+                        narrative_data["entities"] = narrative_data.get("actors", [])[:10]
+                        narrative_data["mention_velocity"] = round(mention_velocity, 2)
+                        narrative_data["lifecycle"] = lifecycle
+                        narrative_data["lifecycle_state"] = lifecycle_state
+                        narrative_data["lifecycle_history"] = lifecycle_history
+                        narrative_data["momentum"] = momentum
+                        narrative_data["recency_score"] = round(recency_score, 3)
+
+                        # DEBUG: Log all article dates and timestamp calculation for new narrative
+                        logger.info(f"[CREATE NARRATIVE DEBUG] ========== CREATE UPSERT START ==========")
+                        logger.info(f"[CREATE NARRATIVE DEBUG] Theme: {theme}")
+                        logger.info(f"[CREATE NARRATIVE DEBUG] Title: {narrative_data.get('title')}")
+                        logger.info(f"[CREATE NARRATIVE DEBUG] Article IDs: {narrative_data['article_ids']}")
+                        logger.info(f"[CREATE NARRATIVE DEBUG] Article dates collected: {len(article_dates)}")
+                        if article_dates:
+                            logger.info(f"[CREATE NARRATIVE DEBUG] Article dates (sorted):")
+                            for i, date in enumerate(sorted(article_dates)):
+                                logger.info(f"[CREATE NARRATIVE DEBUG]   [{i+1}] {date}")
+                            logger.info(f"[CREATE NARRATIVE DEBUG] Earliest article: {min(article_dates)}")
+                            logger.info(f"[CREATE NARRATIVE DEBUG] Latest article: {max(article_dates)}")
+                        else:
+                            logger.warning(f"[CREATE NARRATIVE DEBUG] NO ARTICLE DATES FOUND!")
+                        logger.info(f"[CREATE NARRATIVE DEBUG] Calculated first_seen (now): {first_seen}")
+                        logger.info(f"[CREATE NARRATIVE DEBUG] Calculated last_updated (now): {last_updated}")
+                        logger.info(f"[CREATE NARRATIVE DEBUG] Is first_seen > last_updated? {first_seen > last_updated}")
+                        logger.info(f"[CREATE NARRATIVE DEBUG] Timestamp sources: BOTH from now() - THIS IS THE BUG!")
+                        logger.info(f"[CREATE NARRATIVE DEBUG] Should use: first_seen = min(article_dates), last_updated = max(article_dates)")
+                        logger.info(f"[CREATE NARRATIVE DEBUG] ========== CREATE UPSERT END ==========")
+
+                        try:
+                            # Validate fingerprint before creation
+                            if not fingerprint or not fingerprint.get('nucleus_entity'):
+                                logger.error(f"Cannot create narrative - invalid fingerprint: {fingerprint}")
+                                raise ValueError("Narrative fingerprint must have a valid nucleus_entity")
+
+                            # Use upsert_narrative to ensure timestamp validation
+                            narrative_id = await upsert_narrative(
+                                theme=theme,
+                                title=narrative_data["title"],
+                                summary=narrative_data["summary"],
+                                entities=narrative_data.get("actors", [])[:10],
+                                article_ids=narrative_data["article_ids"],
+                                article_count=article_count,
+                                mention_velocity=round(mention_velocity, 2),
+                                lifecycle=lifecycle,
+                                momentum=momentum,
+                                recency_score=round(recency_score, 3),
+                                entity_relationships=narrative_data.get("entity_relationships", []),
+                                first_seen=first_seen,
+                                lifecycle_state=lifecycle_state,
+                                lifecycle_history=lifecycle_history,
+                                dormant_since=dormant_since
+                            )
+
+                            logger.info(f"Created new narrative {narrative_id}: {narrative_data['title']}")
+                            saved_narratives.append(narrative_data)
+                        except Exception as e:
+                            logger.exception(f"Failed to save narrative '{narrative_data.get('title')}': {e}")
             
             logger.info(
                 f"Narrative detection complete: {matched_count} merged into existing, "
@@ -1055,10 +1314,10 @@ async def detect_narratives(
                 existing_narrative = existing_narratives.get(theme, {})
                 lifecycle_history_existing = existing_narrative.get('lifecycle_history', [])
                 previous_state = lifecycle_history_existing[-1].get('state') if lifecycle_history_existing else None
-                
+
                 # Determine lifecycle state (new approach)
                 last_updated = datetime.now(timezone.utc)
-                lifecycle_state = determine_lifecycle_state(
+                lifecycle_state, dormant_since = determine_lifecycle_state(
                     article_count, mention_velocity, first_seen, last_updated, previous_state
                 )
                 
@@ -1107,9 +1366,10 @@ async def detect_narratives(
                         "recency_score": narrative["recency_score"],
                         "first_seen": narrative["first_seen"],
                         "lifecycle_state": narrative["lifecycle_state"],
-                        "lifecycle_history": narrative["lifecycle_history"]
+                        "lifecycle_history": narrative["lifecycle_history"],
+                        "dormant_since": dormant_since
                     }
-                    
+
                     # Add resurrection fields if present
                     if resurrection_fields:
                         if "reawakening_count" in resurrection_fields:
@@ -1118,7 +1378,7 @@ async def detect_narratives(
                             upsert_args["reawakened_from"] = resurrection_fields["reawakened_from"]
                         if "resurrection_velocity" in resurrection_fields:
                             upsert_args["resurrection_velocity"] = resurrection_fields["resurrection_velocity"]
-                    
+
                     narrative_id = await upsert_narrative(**upsert_args)
                     logger.info(f"Saved narrative {narrative_id} to database")
                 except Exception as e:

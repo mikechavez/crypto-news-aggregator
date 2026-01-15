@@ -78,14 +78,16 @@ async def upsert_narrative(
     lifecycle_history: Optional[List[Dict[str, Any]]] = None,
     reawakening_count: Optional[int] = None,
     reawakened_from: Optional[datetime] = None,
-    resurrection_velocity: Optional[float] = None
+    resurrection_velocity: Optional[float] = None,
+    dormant_since: Optional[datetime] = None,
+    reactivated_count: Optional[int] = None
 ) -> str:
     """
     Create or update a narrative record with full structure and timeline tracking.
-    
+
     Upserts based on theme to avoid duplicates. Updates all fields
     if the narrative already exists. Appends daily snapshots to timeline_data.
-    
+
     Args:
         theme: Theme category (e.g., "regulatory", "defi_adoption")
         title: Generated narrative title
@@ -104,7 +106,9 @@ async def upsert_narrative(
         reawakening_count: Number of times narrative has been reactivated (optional)
         reawakened_from: Timestamp when narrative went dormant before reactivation (optional)
         resurrection_velocity: Articles per day in last 48 hours during reactivation (optional)
-    
+        dormant_since: Timestamp when narrative transitioned to dormant state (optional)
+        reactivated_count: Number of times narrative has been reactivated from dormancy (optional)
+
     Returns:
         The ID of the upserted narrative
     """
@@ -219,15 +223,15 @@ async def upsert_narrative(
             "peak_activity": peak_activity,
             "days_active": days_active
         }
-        
+
         # Add lifecycle_state if provided
         if lifecycle_state is not None:
             update_data["lifecycle_state"] = lifecycle_state
-        
+
         # Add lifecycle_history if provided
         if lifecycle_history is not None:
             update_data["lifecycle_history"] = lifecycle_history
-        
+
         # Add resurrection tracking fields if provided
         if reawakening_count is not None:
             update_data["reawakening_count"] = reawakening_count
@@ -235,6 +239,12 @@ async def upsert_narrative(
             update_data["reawakened_from"] = reawakened_from
         if resurrection_velocity is not None:
             update_data["resurrection_velocity"] = resurrection_velocity
+
+        # Add dormancy tracking fields if provided
+        if dormant_since is not None:
+            update_data["dormant_since"] = dormant_since
+        if reactivated_count is not None:
+            update_data["reactivated_count"] = reactivated_count
         
         await collection.update_one(
             {"theme": theme},
@@ -267,15 +277,15 @@ async def upsert_narrative(
             },
             "days_active": days_active
         }
-        
+
         # Add lifecycle_state if provided
         if lifecycle_state is not None:
             narrative_data["lifecycle_state"] = lifecycle_state
-        
+
         # Add lifecycle_history if provided
         if lifecycle_history is not None:
             narrative_data["lifecycle_history"] = lifecycle_history
-        
+
         # Add resurrection tracking fields if provided
         if reawakening_count is not None:
             narrative_data["reawakening_count"] = reawakening_count
@@ -283,6 +293,12 @@ async def upsert_narrative(
             narrative_data["reawakened_from"] = reawakened_from
         if resurrection_velocity is not None:
             narrative_data["resurrection_velocity"] = resurrection_velocity
+
+        # Add dormancy tracking fields if provided
+        if dormant_since is not None:
+            narrative_data["dormant_since"] = dormant_since
+        if reactivated_count is not None:
+            narrative_data["reactivated_count"] = reactivated_count
         
         result = await collection.insert_one(narrative_data)
         return str(result.inserted_id)
