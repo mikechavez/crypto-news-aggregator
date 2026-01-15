@@ -565,6 +565,10 @@ async def should_reactivate_or_create_new(
             logger.warning("Cannot check reactivation - no nucleus_entity in fingerprint")
             return ("create_new", None)
 
+        # Log reactivation decision process
+        logger.info(f"Checking for narrative reactivation: entity='{entity}'")
+        logger.debug(f"Input fingerprint: {fingerprint}")
+
         db = await mongo_manager.get_async_database()
         narratives_collection = db.narratives
 
@@ -581,28 +585,37 @@ async def should_reactivate_or_create_new(
         cursor = narratives_collection.find(dormant_query)
         dormant_candidates = await cursor.to_list(length=None)
 
+        logger.debug(f"Found {len(dormant_candidates)} dormant narrative(s) within 30-day window")
+
         if not dormant_candidates:
-            logger.debug(f"No dormant narratives found for entity '{entity}' within 30-day window")
+            logger.debug(f"No dormant narratives found for entity '{entity}'")
             return ("create_new", None)
 
-        logger.info(f"Found {len(dormant_candidates)} dormant narrative(s) for entity '{entity}'")
+        # Log details of each candidate
+        for i, candidate in enumerate(dormant_candidates):
+            logger.debug(
+                f"  Candidate {i+1}: "
+                f"ID={candidate.get('_id')}, "
+                f"Title={candidate.get('title')}, "
+                f"DormantSince={candidate.get('dormant_since')}"
+            )
 
         # Calculate similarity for each candidate
         best_match = None
         best_similarity = 0.0
 
-        for candidate in dormant_candidates:
+        for i, candidate in enumerate(dormant_candidates):
             candidate_fingerprint = candidate.get('fingerprint', {})
             if not candidate_fingerprint:
-                logger.debug(f"Skipping candidate {candidate['_id']} - missing fingerprint")
+                logger.warning(f"Candidate {candidate['_id']} missing fingerprint - skipping")
                 continue
 
             # Calculate similarity
             similarity = calculate_fingerprint_similarity(fingerprint, candidate_fingerprint)
 
             logger.debug(
-                f"Candidate '{candidate.get('title')}' similarity: {similarity:.3f} "
-                f"(focus: {candidate_fingerprint.get('narrative_focus')})"
+                f"Candidate {i+1} similarity: {similarity:.3f} "
+                f"(title='{candidate.get('title')}', focus='{candidate_fingerprint.get('narrative_focus')}')"
             )
 
             # Track best match
@@ -611,26 +624,34 @@ async def should_reactivate_or_create_new(
                 best_match = candidate
 
         # Decision threshold (calibrated for weighted scoring)
-        REACTIVATION_THRESHOLD = 0.85
+        # Reactivation is safer than initial matching, so 0.8 threshold is appropriate
+        # - 0.5 weight focus + 0.3 weight nucleus = 0.8 (matches when both aligned)
+        # - Additional actor/action overlap pushes above 0.8
+        REACTIVATION_THRESHOLD = 0.80
+        logger.debug(f"Best similarity: {best_similarity:.3f}, threshold: {REACTIVATION_THRESHOLD}")
+
         if best_match and best_similarity >= REACTIVATION_THRESHOLD:
-            dormant_days = (now - best_match.get('dormant_since', now)).total_seconds() / 86400
+            dormant_since = best_match.get('dormant_since', now)
+            # Handle timezone-aware vs naive datetime comparison
+            if dormant_since.tzinfo is None:
+                dormant_since = dormant_since.replace(tzinfo=timezone.utc)
+            dormant_days = (now - dormant_since).total_seconds() / 86400
             logger.info(
-                f"REACTIVATE: {best_match['_id']} | similarity={best_similarity:.3f} | "
-                f"dormant_days={dormant_days:.1f}"
+                f"REACTIVATING narrative: {best_match['_id']} | "
+                f"similarity={best_similarity:.3f} | dormant_days={dormant_days:.1f}"
             )
             return ("reactivate", best_match)
         else:
-            if best_match:
-                logger.info(
-                    f"CREATE_NEW: Different focus | best_similarity={best_similarity:.3f} | "
-                    f"threshold={REACTIVATION_THRESHOLD}"
-                )
-            else:
-                logger.info(f"CREATE_NEW: No dormant match | entity={entity}")
+            logger.debug(
+                f"No reactivation match: best_similarity={best_similarity:.3f}, "
+                f"threshold={REACTIVATION_THRESHOLD}, has_match={bool(best_match)}"
+            )
             return ("create_new", None)
 
     except Exception as e:
         logger.exception(f"Error in reactivation check: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return ("create_new", None)
 
 
