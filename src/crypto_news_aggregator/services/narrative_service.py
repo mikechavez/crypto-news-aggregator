@@ -677,6 +677,7 @@ async def _reactivate_narrative(
 
     db = await mongo_manager.get_async_database()
     narratives_collection = db.narratives
+    articles_collection = db.articles
 
     narrative_id = dormant_narrative["_id"]
     now = datetime.now(timezone.utc)
@@ -684,6 +685,16 @@ async def _reactivate_narrative(
     # 1. Deduplicate article IDs
     existing_articles = set(str(aid) for aid in dormant_narrative.get("article_ids", []))
     new_articles_set = set(str(aid) for aid in new_article_ids)
+
+    # Validate that existing articles still exist in the database
+    if existing_articles:
+        valid_existing = await articles_collection.distinct(
+            "_id",
+            {"_id": {"$in": [ObjectId(aid) if aid.isalnum() and len(aid) == 24 else aid for aid in existing_articles]}}
+        )
+        existing_articles = set(str(aid) for aid in valid_existing)
+        logger.info(f"[REACTIVATE VALIDATION] Existing articles: {len(valid_existing)} valid out of {len(dormant_narrative.get('article_ids', []))}")
+
     combined_article_ids = list(existing_articles | new_articles_set)
 
     # 2. Recalculate sentiment (weighted average)
@@ -1501,7 +1512,37 @@ async def _merge_narratives(survivor: Dict, merged: Dict, similarity: float, db)
     # 1. Combine article_ids (deduplicate)
     survivor_articles = set(survivor.get("article_ids", []))
     merged_articles = set(merged.get("article_ids", []))
-    combined_articles = list(survivor_articles | merged_articles)
+
+    # Validate that article IDs exist in the database
+    from bson import ObjectId
+    all_article_ids = survivor_articles | merged_articles
+
+    if all_article_ids:
+        # Filter for valid ObjectId format
+        valid_ids_to_check = []
+        for aid in all_article_ids:
+            try:
+                # Try to convert to ObjectId if it looks like one
+                if isinstance(aid, str) and len(aid) == 24 and aid.isalnum():
+                    valid_ids_to_check.append(ObjectId(aid))
+                else:
+                    valid_ids_to_check.append(aid)
+            except:
+                valid_ids_to_check.append(aid)
+
+        valid_articles = await articles_collection.distinct(
+            "_id",
+            {"_id": {"$in": valid_ids_to_check}}
+        )
+        valid_articles_set = set(str(aid) for aid in valid_articles)
+
+        removed_count = len(all_article_ids) - len(valid_articles_set)
+        if removed_count > 0:
+            logger.warning(f"[MERGE VALIDATION] Removing {removed_count} invalid article references from {len(all_article_ids)} total")
+
+        combined_articles = list(valid_articles_set)
+    else:
+        combined_articles = []
 
     # 2. Recalculate metrics
     combined_article_count = len(combined_articles)
