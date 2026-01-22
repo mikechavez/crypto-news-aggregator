@@ -99,4 +99,28 @@ def get_schedule():
                 "time_limit": 3600,  # 1 hour
             },
         },
+        # Cleanup invalid narrative references nightly at 2 AM EST
+        "cleanup-invalid-narrative-references": {
+            "task": "crypto_news_aggregator.tasks.narrative_cleanup.cleanup_invalid_article_references",
+            "schedule": crontab(
+                hour=2,
+                minute=0,
+            ),
+            "options": {
+                "expires": 3600,  # 1 hour
+                "time_limit": 1800,  # 30 minutes
+            },
+        },
+        # Validate narrative data integrity nightly at 2:30 AM EST
+        "validate-narrative-data-integrity": {
+            "task": "crypto_news_aggregator.tasks.narrative_cleanup.validate_narrative_data_integrity",
+            "schedule": crontab(
+                hour=2,
+                minute=30,
+            ),
+            "options": {
+                "expires": 3600,  # 1 hour
+                "time_limit": 1800,  # 30 minutes
+            },
+        },
     }
