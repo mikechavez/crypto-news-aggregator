@@ -25,6 +25,56 @@ logger = logging.getLogger(__name__)
 MAX_RELEVANCE_TIER = 2
 
 
+def validate_entity_in_text(nucleus_entity: str, article_title: str, article_text: str) -> bool:
+    """
+    Validate that the extracted nucleus entity actually appears in the article text.
+
+    This prevents LLM hallucinations where the model extracts entities not present
+    in the source material (e.g., "Netflix" extracted from "Coinbase earnings" article).
+
+    Args:
+        nucleus_entity: Entity extracted by LLM (e.g., "Netflix", "Coinbase")
+        article_title: Article headline
+        article_text: Full article text
+
+    Returns:
+        True if entity found in title or text, False otherwise
+
+    Example:
+        >>> validate_entity_in_text("Netflix", "Netflix Stock Surges", "Netflix reported...")
+        True
+        >>> validate_entity_in_text("Netflix", "Coinbase Earnings", "Coinbase reported...")
+        False
+    """
+    if not nucleus_entity:
+        return False
+
+    # Normalize for case-insensitive matching
+    entity_lower = nucleus_entity.lower()
+    title_lower = (article_title or "").lower()
+    text_lower = (article_text or "").lower()
+
+    # Check if entity appears in title or text
+    # For simple entities (alphanumeric + spaces), use word boundaries to avoid false positives
+    # For entities with special characters, match the exact string as-is
+
+    # Determine if entity has special characters (anything that's not alphanumeric, space, or hyphen)
+    has_special_chars = bool(re.search(r'[^\w\s\-]', entity_lower))
+
+    if has_special_chars:
+        # For entities like "OpenAI (ChatGPT)" or "U.S. Securities", match the exact string
+        found_in_title = entity_lower in title_lower
+        found_in_text = entity_lower in text_lower
+    else:
+        # For simple entities, use word boundaries to avoid substring matches
+        # e.g., prevent "Bit" from matching in "Bitcoin"
+        pattern = r'\b' + re.escape(entity_lower) + r'\b'
+        found_in_title = bool(re.search(pattern, title_lower))
+        found_in_text = bool(re.search(pattern, text_lower))
+
+    return found_in_title or found_in_text
+
+
 def validate_narrative_json(data: Dict) -> Tuple[bool, Optional[str]]:
     """
     Validate LLM-extracted narrative data.
@@ -744,15 +794,37 @@ Your JSON response:"""
             try:
                 narrative_data = json.loads(response_clean)
                 
-                # VALIDATE before returning
+                # VALIDATE JSON structure before returning
                 is_valid, error = validate_narrative_json(narrative_data)
-                
+
                 if is_valid:
                     logger.debug(f"✓ Validation passed for article {article_id}")
-                    
+
+                    # NEW: Validate that extracted nucleus_entity actually appears in article text
+                    # This prevents LLM hallucinations (e.g., "Netflix" → "Coinbase" errors)
+                    nucleus_entity = narrative_data.get('nucleus_entity', '')
+                    if not validate_entity_in_text(
+                        nucleus_entity=nucleus_entity,
+                        article_title=title,
+                        article_text=summary
+                    ):
+                        logger.warning(
+                            f"✗ Entity validation failed for article {article_id}: "
+                            f"'{nucleus_entity}' not found in text (hallucination detected)"
+                        )
+
+                        # If this is not the last retry, continue to retry
+                        if attempt < max_retries - 1:
+                            logger.info(f"Retrying entity validation (attempt {attempt + 2}/{max_retries})")
+                            await asyncio.sleep(1)
+                            continue
+                        else:
+                            logger.error(f"Max retries exhausted for article {article_id}, entity validation failed")
+                            return None
+
                     # Add content hash to narrative data for caching
                     narrative_data['narrative_hash'] = content_hash
-                    
+
                     return narrative_data
                 else:
                     logger.warning(f"✗ Validation failed for article {article_id}: {error}")

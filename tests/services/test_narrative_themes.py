@@ -16,6 +16,7 @@ from crypto_news_aggregator.services.narrative_themes import (
     generate_narrative_from_theme,
     cluster_by_narrative_salience,
     validate_narrative_json,
+    validate_entity_in_text,
     compute_narrative_fingerprint,
     calculate_fingerprint_similarity,
     _compute_focus_similarity,
@@ -648,6 +649,257 @@ async def test_extract_themes_basic_functionality(sample_article_data):
         # Assertions
         assert themes == ["regulatory"]
         assert mock_provider._get_completion.call_count == 1
+
+
+# ============================================================================
+# ENTITY VALIDATION TESTS (FEATURE-016)
+# ============================================================================
+
+class TestValidateEntityInText:
+    """Unit tests for validate_entity_in_text function (LLM hallucination prevention)."""
+
+    def test_entity_in_title_only(self):
+        """Test validation passes when entity is in title only."""
+        result = validate_entity_in_text(
+            nucleus_entity="Bitcoin",
+            article_title="Bitcoin Price Surges to New High",
+            article_text="Cryptocurrency market rallies today"
+        )
+        assert result is True
+
+    def test_entity_in_body_only(self):
+        """Test validation passes when entity is in body only."""
+        result = validate_entity_in_text(
+            nucleus_entity="Ethereum",
+            article_title="Crypto Market Update",
+            article_text="Ethereum led the gains with 5% increase today"
+        )
+        assert result is True
+
+    def test_entity_in_both_title_and_body(self):
+        """Test validation passes when entity is in both title and body."""
+        result = validate_entity_in_text(
+            nucleus_entity="Bitcoin",
+            article_title="Bitcoin Reaches All-Time High",
+            article_text="Bitcoin has reached an all-time high of $60,000 today"
+        )
+        assert result is True
+
+    def test_entity_not_in_text_hallucination(self):
+        """Test validation fails when entity is hallucinated (not in text)."""
+        result = validate_entity_in_text(
+            nucleus_entity="Netflix",
+            article_title="Coinbase Earnings Beat Expectations",
+            article_text="Coinbase reported strong Q4 earnings today"
+        )
+        assert result is False
+
+    def test_entity_case_insensitive_lowercase_entity(self):
+        """Test validation is case-insensitive with lowercase entity."""
+        result = validate_entity_in_text(
+            nucleus_entity="coinbase",
+            article_title="COINBASE Stock Rises 10%",
+            article_text="Coinbase shares increased significantly"
+        )
+        assert result is True
+
+    def test_entity_case_insensitive_uppercase_entity(self):
+        """Test validation is case-insensitive with uppercase entity."""
+        result = validate_entity_in_text(
+            nucleus_entity="ETHEREUM",
+            article_title="ethereum reaches new milestone",
+            article_text="eth holders celebrate the upgrade"
+        )
+        assert result is True
+
+    def test_entity_case_insensitive_mixed_case(self):
+        """Test validation is case-insensitive with mixed case."""
+        result = validate_entity_in_text(
+            nucleus_entity="Bitcoin",
+            article_title="BITCOIN and ethereum rally together",
+            article_text="bitcoin is trading at $45,000"
+        )
+        assert result is True
+
+    def test_word_boundary_no_false_positive_bit_bitcoin(self):
+        """Test word boundary prevents 'Bit' matching 'Bitcoin'."""
+        result = validate_entity_in_text(
+            nucleus_entity="Bit",
+            article_title="Bitcoin Price Update",
+            article_text="Bitcoin is trading higher today"
+        )
+        assert result is False
+
+    def test_word_boundary_no_false_positive_eth_ethereum(self):
+        """Test word boundary prevents 'ETH' matching 'ETHEREUM'."""
+        result = validate_entity_in_text(
+            nucleus_entity="ETH",
+            article_title="Ethereum Upgrade News",
+            article_text="The Ethereum network upgraded today"
+        )
+        assert result is False
+
+    def test_word_boundary_correct_match(self):
+        """Test word boundary correctly matches complete words."""
+        result = validate_entity_in_text(
+            nucleus_entity="Bitcoin",
+            article_title="Bitcoin Price Update",
+            article_text="Bitcoin is trading higher"
+        )
+        assert result is True
+
+    def test_word_boundary_punctuation_handling(self):
+        """Test word boundary handles punctuation correctly."""
+        result = validate_entity_in_text(
+            nucleus_entity="SEC",
+            article_title="SEC Sues Binance, Others",
+            article_text="The SEC announced enforcement action."
+        )
+        assert result is True
+
+    def test_empty_nucleus_entity(self):
+        """Test validation fails for empty nucleus_entity."""
+        result = validate_entity_in_text(
+            nucleus_entity="",
+            article_title="Some Article",
+            article_text="Some content"
+        )
+        assert result is False
+
+    def test_none_nucleus_entity(self):
+        """Test validation fails for None nucleus_entity."""
+        result = validate_entity_in_text(
+            nucleus_entity=None,
+            article_title="Some Article",
+            article_text="Some content"
+        )
+        assert result is False
+
+    def test_empty_title_and_text(self):
+        """Test validation fails when both title and text are empty."""
+        result = validate_entity_in_text(
+            nucleus_entity="Bitcoin",
+            article_title="",
+            article_text=""
+        )
+        assert result is False
+
+    def test_none_title_and_text(self):
+        """Test validation fails when both title and text are None."""
+        result = validate_entity_in_text(
+            nucleus_entity="Bitcoin",
+            article_title=None,
+            article_text=None
+        )
+        assert result is False
+
+    def test_netflix_coinbase_hallucination_example(self):
+        """Test the known bad case: Netflix hallucinated in Coinbase article."""
+        # This is the real example from BUG-003 investigation
+        result = validate_entity_in_text(
+            nucleus_entity="Netflix",
+            article_title="Coinbase Stock Surges on Earnings",
+            article_text="Coinbase reported strong quarterly earnings as institutional adoption continues"
+        )
+        assert result is False
+
+    def test_multi_word_entity_exact_match(self):
+        """Test multi-word entity matching."""
+        result = validate_entity_in_text(
+            nucleus_entity="Ethereum Foundation",
+            article_title="Ethereum Foundation Announces Grant Program",
+            article_text="The Ethereum Foundation has announced a new grant program for developers"
+        )
+        assert result is True
+
+    def test_multi_word_entity_not_found(self):
+        """Test multi-word entity validation fails when not found."""
+        result = validate_entity_in_text(
+            nucleus_entity="Ethereum Foundation",
+            article_title="Ethereum Upgrades Network",
+            article_text="The Ethereum network has been upgraded"
+        )
+        assert result is False
+
+    def test_entity_with_special_characters(self):
+        """Test entity with special characters (e.g., parentheses, dashes)."""
+        result = validate_entity_in_text(
+            nucleus_entity="OpenAI (ChatGPT)",
+            article_title="OpenAI (ChatGPT) Integration Announced",
+            article_text="OpenAI (ChatGPT) will be integrated into the platform"
+        )
+        assert result is True
+
+    def test_entity_with_hyphen(self):
+        """Test entity with hyphen."""
+        result = validate_entity_in_text(
+            nucleus_entity="U.S. Securities",
+            article_title="U.S. Securities and Exchange Commission Acts",
+            article_text="U.S. Securities regulators take action"
+        )
+        assert result is True
+
+    def test_long_article_text(self):
+        """Test validation with long article text."""
+        long_text = """
+        This is a very long article about cryptocurrency news. The market has been volatile lately.
+        Bitcoin has been on a roller coaster. Many investors are watching Ethereum closely.
+        The regulatory environment is changing. The SEC is watching the market. DeFi protocols
+        are growing. Staking rewards are increasing. NFT markets are recovering.
+        Ethereum validators are earning rewards. The network is secure. Smart contracts are
+        becoming more efficient. Layer 2 solutions are maturing. Cross-chain bridges are improving.
+        """
+        result = validate_entity_in_text(
+            nucleus_entity="Ethereum",
+            article_title="Crypto Markets Update",
+            article_text=long_text
+        )
+        assert result is True
+
+    def test_entity_at_beginning_of_text(self):
+        """Test entity matching at the beginning of text."""
+        result = validate_entity_in_text(
+            nucleus_entity="Bitcoin",
+            article_title="Crypto News",
+            article_text="Bitcoin is the world's largest cryptocurrency by market cap"
+        )
+        assert result is True
+
+    def test_entity_at_end_of_text(self):
+        """Test entity matching at the end of text."""
+        result = validate_entity_in_text(
+            nucleus_entity="Bitcoin",
+            article_title="Crypto News",
+            article_text="Many investors are interested in Bitcoin"
+        )
+        assert result is True
+
+    def test_entity_in_middle_of_text(self):
+        """Test entity matching in the middle of text."""
+        result = validate_entity_in_text(
+            nucleus_entity="Bitcoin",
+            article_title="Crypto News",
+            article_text="Ethereum is popular but Bitcoin remains dominant in the market"
+        )
+        assert result is True
+
+    def test_numbers_in_entity(self):
+        """Test entity with numbers."""
+        result = validate_entity_in_text(
+            nucleus_entity="ERC-20",
+            article_title="ERC-20 Token Standard Explained",
+            article_text="ERC-20 tokens are the most common on Ethereum"
+        )
+        assert result is True
+
+    def test_comma_separated_list_false_positive_prevention(self):
+        """Test that comma-separated list doesn't cause false positives."""
+        result = validate_entity_in_text(
+            nucleus_entity="Bitcoin",
+            article_title="Bitcoin, Ethereum, Dogecoin Rally",
+            article_text="Cryptocurrency markets surging across the board"
+        )
+        assert result is True
 
 
 # ============================================================================
