@@ -35,6 +35,8 @@ import asyncio
 from contextlib import asynccontextmanager
 from bson import ObjectId
 from pydantic import BaseModel, Field
+from urllib.parse import urlparse
+import os
 
 
 from pydantic_core import core_schema
@@ -175,6 +177,58 @@ T = TypeVar("T")
 P = TypeVar("P")
 R = TypeVar("R")
 
+
+def validate_database_connection(uri: Optional[str] = None) -> str:
+    """
+    Validate that MONGODB_URI points to the correct database.
+
+    Args:
+        uri: Optional URI to validate. If not provided, reads from MONGODB_URI env var.
+
+    Returns:
+        str: The validated database name.
+
+    Raises:
+        ValueError: If database name doesn't match expected 'crypto_news'
+    """
+    if uri is None:
+        uri = os.getenv("MONGODB_URI")
+
+    if not uri:
+        raise ValueError("MONGODB_URI environment variable not set")
+
+    # Parse database name from URI
+    parsed = urlparse(uri)
+    db_name = parsed.path.lstrip('/').rstrip('/')
+
+    # Extract db_name from query string if present (e.g., ?authSource=dbname)
+    if '?' in db_name:
+        db_name = db_name.split('?')[0]
+
+    # Validate against expected database
+    EXPECTED_DB = "crypto_news"
+
+    if not db_name:
+        raise ValueError(
+            f"FATAL: Database name missing from MONGODB_URI!\n"
+            f"  Expected: '{EXPECTED_DB}'\n"
+            f"  Got: (empty)\n"
+            f"  Check MONGODB_URI environment variable.\n"
+            f"  URI: {uri[:50]}...{uri[-20:] if len(uri) > 70 else uri}"
+        )
+
+    if db_name != EXPECTED_DB:
+        raise ValueError(
+            f"FATAL: Database name mismatch!\n"
+            f"  Expected: '{EXPECTED_DB}'\n"
+            f"  Got: '{db_name}'\n"
+            f"  Check MONGODB_URI environment variable.\n"
+            f"  URI: {uri[:50]}...{uri[-20:] if len(uri) > 70 else uri}"
+        )
+
+    logger.info(f"✅ Database validation passed: Using '{db_name}'")
+    return db_name
+
 # Collection names
 COLLECTION_ARTICLES = "articles"
 COLLECTION_SOURCES = "sources"
@@ -271,6 +325,13 @@ class MongoManager:
                     logger.error("MongoDB URI is not configured.")
                     return False
 
+                # Validate database name before connecting
+                try:
+                    validate_database_connection(self.settings.MONGODB_URI)
+                except ValueError as e:
+                    logger.error(str(e))
+                    raise
+
                 logger.info(
                     f"Initializing async MongoDB connection to {self._get_masked_uri()}"
                 )
@@ -329,6 +390,9 @@ class MongoManager:
                     self._ensure_settings()
                     if not self.settings.MONGODB_URI:
                         raise ValueError("MongoDB URI is not configured")
+
+                    # Validate database name before connecting
+                    validate_database_connection(self.settings.MONGODB_URI)
 
                     logger.info(
                         f"Creating new sync MongoDB client for URI: {self._get_masked_uri()}"
