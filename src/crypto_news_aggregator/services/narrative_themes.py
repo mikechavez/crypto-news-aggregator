@@ -464,9 +464,9 @@ async def cluster_by_narrative_salience(
             logger.warning(f"Skipping article {idx} - missing nucleus or actors")
             continue
         
-        # Get high-salience actors only (salience >= 4)
+        # Get high-salience actors only (salience >= 4.5)
         # These are the key players, not background mentions
-        core_actors = [a for a in actors if actor_salience.get(a, 0) >= 4]
+        core_actors = [a for a in actors if actor_salience.get(a, 0) >= 4.5]
         
         logger.info(f"Article {idx}/{len(articles)}: {article_title}")
         logger.info(f"  Nucleus: {nucleus}, Core actors: {core_actors}")
@@ -493,7 +493,7 @@ async def cluster_by_narrative_salience(
                 c_actors = cluster_article.get('actors') or []
                 cluster_core_actors.update(
                     a for a in c_actors
-                    if c_salience.get(a, 0) >= 4
+                    if c_salience.get(a, 0) >= 4.5
                 )
             
             # Calculate weighted link strength

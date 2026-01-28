@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 SALIENCE_CLUSTERING_CONFIG = {
     'min_cluster_size': 3,           # Minimum articles per narrative
     'link_strength_threshold': 0.8,  # Threshold for clustering (0.0-2.0+)
-    'core_actor_salience': 4,        # Minimum salience for "core" actor
+    'core_actor_salience': 4.5,      # Minimum salience for "core" actor
     'merge_similarity_threshold': 0.5, # Minimum similarity to merge shallow narratives
     'ubiquitous_entities': {'Bitcoin', 'Ethereum', 'crypto', 'blockchain'},
 }

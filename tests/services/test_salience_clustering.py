@@ -20,21 +20,21 @@ async def test_cluster_by_same_nucleus_entity():
             "id": "1",
             "nucleus_entity": "SEC",
             "actors": ["SEC", "Binance"],
-            "actor_salience": {"SEC": 5, "Binance": 4},
+            "actor_salience": {"SEC": 5, "Binance": 4.5},
             "tensions": ["Regulation vs Innovation"]
         },
         {
             "id": "2",
             "nucleus_entity": "SEC",
             "actors": ["SEC", "Coinbase"],
-            "actor_salience": {"SEC": 5, "Coinbase": 4},
+            "actor_salience": {"SEC": 5, "Coinbase": 4.5},
             "tensions": ["Compliance"]
         },
         {
             "id": "3",
             "nucleus_entity": "SEC",
             "actors": ["SEC", "Ripple"],
-            "actor_salience": {"SEC": 5, "Ripple": 4},
+            "actor_salience": {"SEC": 5, "Ripple": 4.5},
             "tensions": ["Legal Framework"]
         }
     ]
@@ -58,21 +58,21 @@ async def test_cluster_by_high_salience_actors():
             "id": "1",
             "nucleus_entity": "Binance",
             "actors": ["Binance", "Coinbase", "SEC"],
-            "actor_salience": {"Binance": 5, "Coinbase": 4, "SEC": 4},
+            "actor_salience": {"Binance": 5, "Coinbase": 4.6, "SEC": 4.6},
             "tensions": ["Regulation"]
         },
         {
             "id": "2",
             "nucleus_entity": "Coinbase",
             "actors": ["Coinbase", "Binance", "Gary Gensler"],
-            "actor_salience": {"Coinbase": 5, "Binance": 4, "Gary Gensler": 3},
+            "actor_salience": {"Coinbase": 5, "Binance": 4.6, "Gary Gensler": 3},
             "tensions": ["Regulation"]
         },
         {
             "id": "3",
             "nucleus_entity": "Kraken",
             "actors": ["Kraken", "Binance", "Coinbase"],
-            "actor_salience": {"Kraken": 5, "Binance": 4, "Coinbase": 4},
+            "actor_salience": {"Kraken": 5, "Binance": 4.6, "Coinbase": 4.6},
             "tensions": ["Regulation"]  # Changed to match other articles
         }
     ]
@@ -127,14 +127,14 @@ async def test_filter_small_clusters():
             "id": "1",
             "nucleus_entity": "SEC",
             "actors": ["SEC", "Binance"],
-            "actor_salience": {"SEC": 5, "Binance": 4},
+            "actor_salience": {"SEC": 5, "Binance": 4.5},
             "tensions": ["Regulation"]
         },
         {
             "id": "2",
             "nucleus_entity": "SEC",
             "actors": ["SEC", "Coinbase"],
-            "actor_salience": {"SEC": 5, "Coinbase": 4},
+            "actor_salience": {"SEC": 5, "Coinbase": 4.5},
             "tensions": ["Regulation"]
         },
         {
@@ -196,21 +196,21 @@ async def test_one_shared_actor_plus_tension():
             "id": "1",
             "nucleus_entity": "Binance",
             "actors": ["Binance", "SEC"],
-            "actor_salience": {"Binance": 5, "SEC": 4},
+            "actor_salience": {"Binance": 5, "SEC": 4.5},
             "tensions": ["Regulation"]
         },
         {
             "id": "2",
             "nucleus_entity": "Coinbase",
             "actors": ["Coinbase", "SEC"],
-            "actor_salience": {"Coinbase": 5, "SEC": 4},
+            "actor_salience": {"Coinbase": 5, "SEC": 4.5},
             "tensions": ["Regulation"]
         },
         {
             "id": "3",
             "nucleus_entity": "Kraken",
             "actors": ["Kraken", "SEC"],
-            "actor_salience": {"Kraken": 5, "SEC": 4},
+            "actor_salience": {"Kraken": 5, "SEC": 4.5},
             "tensions": ["Regulation"]
         }
     ]
@@ -224,7 +224,7 @@ async def test_one_shared_actor_plus_tension():
 
 @pytest.mark.asyncio
 async def test_low_salience_actors_ignored():
-    """Actors with salience < 4 should not contribute to clustering."""
+    """Actors with salience < 4.5 should not contribute to clustering."""
     articles = [
         {
             "id": "1",
@@ -248,10 +248,10 @@ async def test_low_salience_actors_ignored():
             "tensions": ["Adoption"]
         }
     ]
-    
+
     clusters = await cluster_by_narrative_salience(articles, min_cluster_size=3)
-    
-    # Coinbase and Binance have salience < 4, so they don't count as core actors
+
+    # Coinbase and Binance have salience < 4.5, so they don't count as core actors
     # No shared core actors, different nucleus entities
     # Shared tension = 0.3, below threshold
     assert len(clusters) == 0
@@ -266,21 +266,21 @@ async def test_mixed_clustering():
             "id": "1",
             "nucleus_entity": "SEC",
             "actors": ["SEC", "Binance"],
-            "actor_salience": {"SEC": 5, "Binance": 4},
+            "actor_salience": {"SEC": 5, "Binance": 4.6},
             "tensions": ["Regulation"]
         },
         {
             "id": "2",
             "nucleus_entity": "SEC",
             "actors": ["SEC", "Coinbase"],
-            "actor_salience": {"SEC": 5, "Coinbase": 4},
+            "actor_salience": {"SEC": 5, "Coinbase": 4.6},
             "tensions": ["Regulation"]
         },
         {
             "id": "3",
             "nucleus_entity": "SEC",
             "actors": ["SEC", "Ripple"],
-            "actor_salience": {"SEC": 5, "Ripple": 4},
+            "actor_salience": {"SEC": 5, "Ripple": 4.6},
             "tensions": ["Legal Framework"]
         },
         # DeFi cluster (3 articles)
@@ -288,21 +288,21 @@ async def test_mixed_clustering():
             "id": "4",
             "nucleus_entity": "Uniswap",
             "actors": ["Uniswap", "Aave", "Curve"],
-            "actor_salience": {"Uniswap": 5, "Aave": 4, "Curve": 4},
+            "actor_salience": {"Uniswap": 5, "Aave": 4.6, "Curve": 4.6},
             "tensions": ["DeFi Innovation"]
         },
         {
             "id": "5",
             "nucleus_entity": "Aave",
             "actors": ["Aave", "Uniswap", "Compound"],
-            "actor_salience": {"Aave": 5, "Uniswap": 4, "Compound": 4},
+            "actor_salience": {"Aave": 5, "Uniswap": 4.6, "Compound": 4.6},
             "tensions": ["DeFi Innovation"]
         },
         {
             "id": "6",
             "nucleus_entity": "Curve",
             "actors": ["Curve", "Uniswap", "Aave"],
-            "actor_salience": {"Curve": 5, "Uniswap": 4, "Aave": 4},
+            "actor_salience": {"Curve": 5, "Uniswap": 4.6, "Aave": 4.6},
             "tensions": ["DeFi Innovation"]
         },
         # Isolated articles (below min_cluster_size)
@@ -339,6 +339,51 @@ async def test_mixed_clustering():
     
     # Bitcoin article should not be in any cluster
     assert "7" not in all_cluster_ids
+
+
+@pytest.mark.asyncio
+async def test_tangential_mention_filtered():
+    """Articles with tangential mentions (salience 4.0-4.4) should not cluster.
+
+    This tests the fix for FEATURE-017: articles with an entity mentioned in passing
+    (salience just below the 4.5 threshold) should not contribute to clustering.
+
+    Real example: "Sharps Technology Partners with Solana" article mentions Coinbase
+    once in an analyst quote - should be filtered out even though it has the entity.
+    """
+    articles = [
+        {
+            "id": "1",
+            "nucleus_entity": "Solana",
+            "actors": ["Solana", "Sharps Technology"],
+            "actor_salience": {"Solana": 5, "Sharps Technology": 4.8},
+            "tensions": ["Partnership"]
+        },
+        {
+            "id": "2",
+            "nucleus_entity": "Coinbase",
+            "actors": ["Coinbase"],
+            "actor_salience": {"Coinbase": 5},
+            "tensions": ["Market Analysis"]
+        },
+        {
+            # This is the tangential mention article - mentions Coinbase but only in passing
+            "id": "3",
+            "nucleus_entity": "Sharps Technology",
+            "actors": ["Sharps Technology", "Solana", "Coinbase"],
+            "actor_salience": {"Sharps Technology": 5, "Solana": 4.8, "Coinbase": 4.1},
+            "tensions": ["Partnership"]
+        }
+    ]
+
+    clusters = await cluster_by_narrative_salience(articles, min_cluster_size=3)
+
+    # Articles 1 and 3 should NOT cluster together with article 2
+    # because Coinbase in article 3 has salience 4.1 (below 4.5 threshold)
+    # Article 1 and 3 don't have 2+ shared core actors (Coinbase doesn't count as core in article 3)
+    # Even though all 3 articles are available, they shouldn't form a cluster >= min_cluster_size
+    # because the tangential mention (Coinbase at 4.1) is now filtered out
+    assert len(clusters) == 0
 
 
 @pytest.mark.asyncio
