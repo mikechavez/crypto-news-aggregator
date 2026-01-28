@@ -1,49 +1,62 @@
 # Session Start Guide
-**Last Updated**: 2026-01-07 23:05
+**Last Updated**: 2026-01-27
 
-## Current Sprint: Sprint 2 (Intelligence Layer)
-**Sprint Goal**: Fix narrative duplication via focus-first matching
+## Current Sprint: Sprint 3 (Data Quality & Stability)
+**Sprint Goal**: Fix production data quality issues and stabilize recent features
+**Status**: ✅ **COMPLETE** - All tasks deployed and verified
 
-## What to Work On Next
+## Session 7 Status - All Work Complete ✅
 
-### ✅ FEATURE-011-IMPLEMENTATION COMPLETE
+### FEATURE-012: Narrative Reactivation ✅ **COMPLETE & DEPLOYED**
+- **Deployed:** 2026-01-22 (PR #133 merged to main)
+- **Status:** Live in production
+- **What it does:** Smart 30-day reactivation window for dormant narratives with similarity-based matching
+- **Tests:** 27 comprehensive tests (all passing)
+- **Files deployed:**
+  - `src/crypto_news_aggregator/services/narrative_service.py` (reactivation logic)
+  - `tests/services/test_narrative_reactivation.py` (unit tests)
+  - `tests/services/test_narrative_reactivation_integration.py` (integration tests)
 
-**Consolidation Safety Pass - Implementation** ✅ **COMPLETE**
-- **Completed:** 2026-01-08 (Claude Code Session 1)
-- **Result:** Core consolidation logic fully implemented
-- **Files created:** `src/crypto_news_aggregator/tasks/narrative_consolidation.py`
-- **Files modified:**
-  - `src/crypto_news_aggregator/services/narrative_service.py` (added consolidation methods)
-  - `src/crypto_news_aggregator/tasks/beat_schedule.py` (scheduled task)
-  - `src/crypto_news_aggregator/tasks/__init__.py` (registered import)
-- **Status:** FEATURE-011-TESTS is now ready for implementation
+### BUG-001: Article Reference Validation ✅ **COMPLETE & DEPLOYED**
+- **Deployed:** 2026-01-21 (PR #133)
+- **Status:** Live in production + cleanup executed
+- **What it fixes:** Article count badge now matches dropdown count
+- **Cleanup executed:** 2026-01-22 - All 482 narratives verified with correct counts
+- **Results:** 0 invalid references, 3 count mismatches fixed, data integrity restored
+- **Nightly job:** Scheduled at 2:00 AM EST for ongoing maintenance
+
+### BUG-002: Timeline Feature Removal ✅ **COMPLETE & DEPLOYED**
+- **Deployed:** 2026-01-17 (PR #132)
+- **Status:** Live in production
+- **What it fixes:** Removed timeline visualization to eliminate date inconsistency confusion
+- **Impact:** Cleaner UI, no more misleading timeline data
 
 ---
 
-### READY FOR IMPLEMENTATION
+## What to Work On Next
 
-**Priority 1**: [FEATURE-011-TESTS] Comprehensive Test Suite for Consolidation
-- Status: ✅ **Ready to implement** (core implementation complete)
-- Priority: P1 (completes FEATURE-011)
-- Complexity: Medium (2-3 hours)
-- **Deliverables:**
-  - `tests/services/test_narrative_service_consolidation.py` (10+ unit tests)
-  - `tests/tasks/test_narrative_consolidation.py` (3+ integration tests)
-- Location: Comprehensive test ticket ready at `FEATURE-011-TESTS.md`
+### Next Priority: Monitoring & Optional Enhancements
 
-**Priority 2**: [CHORE-001] Tune Relevance Classifier Rules
-- Status: Ready to implement
+**Priority 1**: [MONITORING] Monitor Production Metrics (Ongoing)
+- **Status:** Active - 24-48 hour monitoring period complete
+- **Metrics to track:**
+  - Article count accuracy (target: 100%)
+  - Invalid reference rate (target: 0)
+  - Consolidation/reactivation execution logs
+  - Nightly cleanup job success
+- **Success criteria:** All metrics green, no regressions
+
+**Priority 2 (Optional)**: [MONITORING] Add Narrative Health Dashboard
+- Status: Backlog (nice-to-have)
 - Priority: P2 (optimization)
-- Complexity: Small (1-2 hours)
-- Files: `src/crypto_news_aggregator/services/relevance_classifier.py`
-- Ready for Claude Code with no dependencies
-
-**Priority 3**: [FEATURE-012] Implement Time-Based Narrative Reactivation
-- Status: Backlog (after FEATURE-011)
-- Priority: P2
 - Complexity: Medium (2-3 hours)
-- Dependencies: FEATURE-011 complete
-- Ticket location: Check backlog
+- Goals: Track data quality metrics over time
+- Not blocking - can implement later
+
+**Priority 3 (Stretch)**: [CHORE-001] Tune Relevance Classifier Rules
+- Status: Ready if needed
+- Priority: P2 (optimization)
+- Files: `src/crypto_news_aggregator/services/relevance_classifier.py`
 
 ---
 
