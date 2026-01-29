@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { motion } from 'framer-motion';
 import { cn } from '../lib/cn';
 
 interface CardProps {
@@ -8,9 +9,19 @@ interface CardProps {
 
 export function Card({ children, className }: CardProps) {
   return (
-    <div className={cn('bg-white rounded-lg shadow-md p-6', className)}>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -4 }}
+      className={cn(
+        'bg-white dark:bg-dark-card rounded-lg shadow-md p-6',
+        'border border-transparent dark:border-dark-border',
+        'hover:shadow-xl dark:hover:shadow-2xl transition-shadow',
+        className
+      )}
+    >
       {children}
-    </div>
+    </motion.div>
   );
 }
 
@@ -34,7 +45,7 @@ interface CardTitleProps {
 
 export function CardTitle({ children, className }: CardTitleProps) {
   return (
-    <h3 className={cn('text-xl font-semibold text-gray-900', className)}>
+    <h3 className={cn('text-xl font-semibold text-gray-900 dark:text-gray-100', className)}>
       {children}
     </h3>
   );
@@ -47,7 +58,7 @@ interface CardContentProps {
 
 export function CardContent({ children, className }: CardContentProps) {
   return (
-    <div className={cn('text-gray-700', className)}>
+    <div className={cn('text-gray-700 dark:text-gray-300', className)}>
       {children}
     </div>
   );

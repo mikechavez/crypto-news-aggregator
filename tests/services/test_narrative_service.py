@@ -11,9 +11,12 @@ from bson import ObjectId
 
 from crypto_news_aggregator.services.narrative_service import (
     determine_lifecycle_stage,
+    determine_lifecycle_state,
     extract_entities_from_articles,
     detect_narratives,
-    validate_article_mentions_entity
+    validate_article_mentions_entity,
+    calculate_grace_period,
+    find_matching_narrative
 )
 
 
@@ -54,7 +57,7 @@ def sample_articles():
 
 def test_determine_lifecycle_stage_emerging():
     """Test lifecycle stage determination for emerging narratives."""
-    lifecycle = determine_lifecycle_stage(article_count=3, mention_velocity=1.5)
+    lifecycle = determine_lifecycle_stage(article_count=3, mention_velocity=0.5)
     assert lifecycle == "emerging"
 
 
@@ -73,11 +76,11 @@ def test_determine_lifecycle_stage_mature():
 def test_determine_lifecycle_stage_declining():
     """Test lifecycle stage determination for declining narratives."""
     lifecycle = determine_lifecycle_stage(
-        article_count=5,
-        mention_velocity=2.5,
-        previous_count=10
+        article_count=10,
+        mention_velocity=6.0,
+        momentum="declining"
     )
-    assert lifecycle == "declining"
+    assert lifecycle == "cooling"
 
 
 @pytest.mark.asyncio
@@ -435,3 +438,423 @@ def test_post_cluster_validation_integration():
     ]
     assert len(rejected) == 1
     assert rejected[0]["id"] == "2"
+
+
+@pytest.mark.asyncio
+async def test_detect_narratives_includes_entity_relationships():
+    """
+    Integration test: verify that detect_narratives includes entity_relationships
+    in the returned narrative data when using salience-based clustering.
+    """
+    with patch("crypto_news_aggregator.services.narrative_service.backfill_narratives_for_recent_articles") as mock_backfill, \
+         patch("crypto_news_aggregator.services.narrative_service.mongo_manager") as mock_mongo, \
+         patch("crypto_news_aggregator.services.narrative_service.cluster_by_narrative_salience") as mock_cluster, \
+         patch("crypto_news_aggregator.services.narrative_service.generate_narrative_from_cluster") as mock_generate, \
+         patch("crypto_news_aggregator.services.narrative_service.upsert_narrative") as mock_upsert:
+        
+        # Mock backfill
+        mock_backfill.return_value = 5
+        
+        # Mock database
+        mock_db = MagicMock()
+        mock_articles_collection = MagicMock()
+        mock_narratives_collection = MagicMock()
+        mock_db.articles = mock_articles_collection
+        mock_db.narratives = mock_narratives_collection
+        mock_mongo.get_async_database = AsyncMock(return_value=mock_db)
+        
+        # Mock narratives collection for find_matching_narrative
+        class MockNarrativesCursor:
+            async def to_list(self, length):
+                return []  # No existing narratives to match
+        
+        mock_narratives_collection.find.return_value = MockNarrativesCursor()
+        mock_narratives_collection.insert_one = AsyncMock(return_value=MagicMock(inserted_id="narrative123"))
+        
+        # Mock articles with narrative data
+        sample_articles = [
+            {
+                "_id": "article1",
+                "title": "Bitcoin and Ethereum Rally",
+                "published_at": datetime.now(timezone.utc),
+                "narrative_summary": "BTC and ETH surge",
+                "actors": ["Bitcoin", "Ethereum"],
+                "nucleus_entity": "Bitcoin"
+            },
+            {
+                "_id": "article2",
+                "title": "Bitcoin Adoption Grows",
+                "published_at": datetime.now(timezone.utc),
+                "narrative_summary": "Institutions adopt BTC",
+                "actors": ["Bitcoin", "MicroStrategy"],
+                "nucleus_entity": "Bitcoin"
+            }
+        ]
+        
+        # Mock cursor
+        class MockCursor:
+            async def to_list(self, length):
+                return sample_articles
+        
+        mock_articles_collection.find.return_value = MockCursor()
+        
+        # Mock clustering - return one cluster
+        mock_cluster.return_value = [sample_articles]
+        
+        # Mock narrative generation with entity_relationships
+        mock_generate.return_value = {
+            "title": "Bitcoin Ecosystem Growth",
+            "summary": "Bitcoin adoption accelerates across institutions.",
+            "actors": ["Bitcoin", "Ethereum", "MicroStrategy"],
+            "tensions": ["institutional_adoption"],
+            "nucleus_entity": "Bitcoin",
+            "article_ids": ["article1", "article2"],
+            "article_count": 2,
+            "entity_relationships": [
+                {"a": "Bitcoin", "b": "Ethereum", "weight": 1},
+                {"a": "Bitcoin", "b": "MicroStrategy", "weight": 1}
+            ]
+        }
+        
+        # Mock upsert
+        mock_upsert.return_value = "narrative123"
+        
+        # Detect narratives with salience clustering
+        narratives = await detect_narratives(hours=48, min_articles=2, use_salience_clustering=True)
+        
+        # Verify results
+        assert len(narratives) > 0
+        narrative = narratives[0]
+        
+        # Verify entity_relationships is included
+        assert "entity_relationships" in narrative
+        assert isinstance(narrative["entity_relationships"], list)
+        assert len(narrative["entity_relationships"]) == 2
+        
+        # Verify relationship structure
+        for rel in narrative["entity_relationships"]:
+            assert "a" in rel
+            assert "b" in rel
+            assert "weight" in rel
+        
+        # Verify insert_one was called with entity_relationships
+        assert mock_narratives_collection.insert_one.called
+        call_args = mock_narratives_collection.insert_one.call_args[0][0]
+        assert "entity_relationships" in call_args
+        assert len(call_args["entity_relationships"]) == 2
+
+
+# ============================================================================
+# Adaptive Grace Period Tests
+# ============================================================================
+
+def test_calculate_grace_period_high_velocity():
+    """Test grace period calculation for high-velocity narratives (>2 articles/day)."""
+    # High velocity: 3.0 articles/day -> 7 days
+    grace_period = calculate_grace_period(3.0)
+    assert grace_period == 7
+    
+    # Very high velocity: 5.0 articles/day -> 7 days (minimum)
+    grace_period = calculate_grace_period(5.0)
+    assert grace_period == 7
+
+
+def test_calculate_grace_period_medium_velocity():
+    """Test grace period calculation for medium-velocity narratives (~1 article/day)."""
+    # Medium velocity: 1.0 articles/day -> 14 days
+    grace_period = calculate_grace_period(1.0)
+    assert grace_period == 14
+    
+    # Slightly higher: 1.5 articles/day -> ~9 days
+    grace_period = calculate_grace_period(1.5)
+    assert grace_period == 9
+
+
+def test_calculate_grace_period_low_velocity():
+    """Test grace period calculation for low-velocity narratives (<0.5 articles/day)."""
+    # Low velocity: 0.3 articles/day -> uses min threshold 0.5 -> 28 days
+    grace_period = calculate_grace_period(0.3)
+    assert grace_period == 28
+    
+    # Very low velocity: 0.1 articles/day -> uses min threshold 0.5 -> 28 days
+    # Note: The formula clamps to 0.5 minimum, so 14/0.5 = 28, not 30
+    grace_period = calculate_grace_period(0.1)
+    assert grace_period == 28
+
+
+def test_calculate_grace_period_edge_cases():
+    """Test grace period calculation for edge cases."""
+    # Zero velocity -> uses minimum threshold of 0.5 -> 28 days
+    grace_period = calculate_grace_period(0.0)
+    assert grace_period == 28
+    
+    # Negative velocity (shouldn't happen but handle gracefully) -> uses 0.5 -> 28 days
+    grace_period = calculate_grace_period(-1.0)
+    assert grace_period == 28
+    
+    # Exactly at threshold: 0.5 articles/day -> 28 days
+    grace_period = calculate_grace_period(0.5)
+    assert grace_period == 28
+    
+    # Just above threshold for minimum: 2.0 articles/day -> 7 days
+    grace_period = calculate_grace_period(2.0)
+    assert grace_period == 7
+
+
+def test_calculate_grace_period_formula_correctness():
+    """Test that the formula produces expected results across the range."""
+    # Formula: min(30, max(7, int(14 / max(mention_velocity, 0.5))))
+    
+    test_cases = [
+        (0.5, 28),   # 14 / 0.5 = 28
+        (0.7, 20),   # 14 / 0.7 = 20
+        (1.0, 14),   # 14 / 1.0 = 14
+        (1.4, 10),   # 14 / 1.4 = 10
+        (2.0, 7),    # 14 / 2.0 = 7 (at minimum threshold)
+        (3.0, 7),    # 14 / 3.0 = 4.67 -> 7 (clamped to minimum)
+        (10.0, 7),   # 14 / 10.0 = 1.4 -> 7 (clamped to minimum)
+    ]
+    
+    for velocity, expected_days in test_cases:
+        result = calculate_grace_period(velocity)
+        assert result == expected_days, f"Failed for velocity {velocity}: expected {expected_days}, got {result}"
+
+
+@pytest.mark.asyncio
+async def test_find_matching_narrative_with_adaptive_grace_period():
+    """Test that find_matching_narrative uses adaptive grace period when cluster_velocity is provided."""
+    with patch("crypto_news_aggregator.services.narrative_service.mongo_manager") as mock_mongo, \
+         patch("crypto_news_aggregator.services.narrative_service.calculate_fingerprint_similarity") as mock_similarity:
+        
+        # Mock database
+        mock_db = MagicMock()
+        mock_collection = MagicMock()
+        mock_db.narratives = mock_collection
+        mock_mongo.get_async_database = AsyncMock(return_value=mock_db)
+        
+        # Create a candidate narrative that's 10 days old
+        ten_days_ago = datetime.now(timezone.utc) - timedelta(days=10)
+        candidate_narrative = {
+            "_id": "narrative123",
+            "title": "Test Narrative",
+            "last_updated": ten_days_ago,
+            "status": "hot",
+            "fingerprint": {
+                "nucleus_entity": "Bitcoin",
+                "top_actors": ["Bitcoin", "Ethereum"],
+                "key_actions": ["surged", "rallied"]
+            }
+        }
+        
+        # Mock cursor that simulates MongoDB filtering
+        def make_mock_cursor(query):
+            class MockCursor:
+                async def to_list(self, length):
+                    # Simulate MongoDB's filtering based on last_updated
+                    cutoff = query.get("last_updated", {}).get("$gte")
+                    if cutoff and candidate_narrative["last_updated"] >= cutoff:
+                        return [candidate_narrative]
+                    return []
+            return MockCursor()
+        
+        mock_collection.find.side_effect = make_mock_cursor
+        
+        # Mock high similarity
+        mock_similarity.return_value = 0.8
+        
+        # Test fingerprint
+        test_fingerprint = {
+            "nucleus_entity": "Bitcoin",
+            "top_actors": ["Bitcoin", "Ethereum"],
+            "key_actions": ["surged"]
+        }
+        
+        # Test 1: High velocity (3.0 articles/day) -> 7 day grace period
+        # The 10-day-old narrative should NOT be found (outside 7-day window)
+        result = await find_matching_narrative(test_fingerprint, cluster_velocity=3.0)
+        assert result is None, "High velocity should use 7-day window, excluding 10-day-old narrative"
+        
+        # Verify the query used the correct cutoff time (7 days)
+        call_args = mock_collection.find.call_args[0][0]
+        cutoff_time = call_args["last_updated"]["$gte"]
+        expected_cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+        # Allow 1 second tolerance for test execution time
+        assert abs((cutoff_time - expected_cutoff).total_seconds()) < 1
+        
+        # Test 2: Low velocity (0.3 articles/day) -> 28 day grace period
+        # The 10-day-old narrative SHOULD be found (within 28-day window)
+        result = await find_matching_narrative(test_fingerprint, cluster_velocity=0.3)
+        assert result is not None, "Low velocity should use 28-day window, including 10-day-old narrative"
+        assert result["_id"] == "narrative123"
+        
+        # Verify the query used the correct cutoff time (28 days for 0.3 velocity)
+        call_args = mock_collection.find.call_args[0][0]
+        cutoff_time = call_args["last_updated"]["$gte"]
+        expected_cutoff = datetime.now(timezone.utc) - timedelta(days=28)
+        assert abs((cutoff_time - expected_cutoff).total_seconds()) < 1
+
+
+@pytest.mark.asyncio
+async def test_find_matching_narrative_default_grace_period():
+    """Test that find_matching_narrative uses default 14-day grace period when cluster_velocity is not provided."""
+    with patch("crypto_news_aggregator.services.narrative_service.mongo_manager") as mock_mongo, \
+         patch("crypto_news_aggregator.services.narrative_service.calculate_fingerprint_similarity") as mock_similarity:
+        
+        # Mock database
+        mock_db = MagicMock()
+        mock_collection = MagicMock()
+        mock_db.narratives = mock_collection
+        mock_mongo.get_async_database = AsyncMock(return_value=mock_db)
+        
+        # Mock cursor with no results
+        class MockCursor:
+            async def to_list(self, length):
+                return []
+        
+        mock_collection.find.return_value = MockCursor()
+        
+        # Test fingerprint
+        test_fingerprint = {
+            "nucleus_entity": "Bitcoin",
+            "top_actors": ["Bitcoin"],
+            "key_actions": []
+        }
+        
+        # Call without cluster_velocity (should use default 14 days)
+        result = await find_matching_narrative(test_fingerprint)
+        
+        # Verify the query used the default 14-day cutoff
+        call_args = mock_collection.find.call_args[0][0]
+        cutoff_time = call_args["last_updated"]["$gte"]
+        expected_cutoff = datetime.now(timezone.utc) - timedelta(days=14)
+        assert abs((cutoff_time - expected_cutoff).total_seconds()) < 1
+
+
+@pytest.mark.asyncio
+async def test_find_matching_narrative_explicit_within_days_overrides_velocity():
+    """Test that explicit within_days parameter is used when cluster_velocity is not provided."""
+    with patch("crypto_news_aggregator.services.narrative_service.mongo_manager") as mock_mongo:
+        
+        # Mock database
+        mock_db = MagicMock()
+        mock_collection = MagicMock()
+        mock_db.narratives = mock_collection
+        mock_mongo.get_async_database = AsyncMock(return_value=mock_db)
+        
+        # Mock cursor
+        class MockCursor:
+            async def to_list(self, length):
+                return []
+        
+        mock_collection.find.return_value = MockCursor()
+        
+        # Test fingerprint
+        test_fingerprint = {
+            "nucleus_entity": "Bitcoin",
+            "top_actors": ["Bitcoin"],
+            "key_actions": []
+        }
+        
+        # Call with explicit within_days=21 and no cluster_velocity
+        result = await find_matching_narrative(test_fingerprint, within_days=21)
+        
+        # Verify the query used 21 days
+        call_args = mock_collection.find.call_args[0][0]
+        cutoff_time = call_args["last_updated"]["$gte"]
+        expected_cutoff = datetime.now(timezone.utc) - timedelta(days=21)
+        assert abs((cutoff_time - expected_cutoff).total_seconds()) < 1
+
+
+@pytest.mark.asyncio
+async def test_detect_narratives_uses_adaptive_grace_period():
+    """Integration test: verify that detect_narratives passes cluster velocity to find_matching_narrative."""
+    with patch("crypto_news_aggregator.services.narrative_service.backfill_narratives_for_recent_articles") as mock_backfill, \
+         patch("crypto_news_aggregator.services.narrative_service.mongo_manager") as mock_mongo, \
+         patch("crypto_news_aggregator.services.narrative_service.cluster_by_narrative_salience") as mock_cluster, \
+         patch("crypto_news_aggregator.services.narrative_service.find_matching_narrative") as mock_find_match, \
+         patch("crypto_news_aggregator.services.narrative_service.generate_narrative_from_cluster") as mock_generate:
+        
+        # Mock backfill
+        mock_backfill.return_value = 5
+        
+        # Mock database
+        mock_db = MagicMock()
+        mock_articles_collection = MagicMock()
+        mock_narratives_collection = MagicMock()
+        mock_db.articles = mock_articles_collection
+        mock_db.narratives = mock_narratives_collection
+        mock_mongo.get_async_database = AsyncMock(return_value=mock_db)
+        
+        # Mock articles with narrative data
+        sample_articles = [
+            {
+                "_id": "article1",
+                "title": "Bitcoin Surges",
+                "published_at": datetime.now(timezone.utc),
+                "narrative_summary": {"actions": ["surged"]},
+                "actors": ["Bitcoin"],
+                "actor_salience": {"Bitcoin": 5},
+                "nucleus_entity": "Bitcoin"
+            },
+            {
+                "_id": "article2",
+                "title": "Bitcoin Adoption",
+                "published_at": datetime.now(timezone.utc),
+                "narrative_summary": {"actions": ["adopted"]},
+                "actors": ["Bitcoin"],
+                "actor_salience": {"Bitcoin": 5},
+                "nucleus_entity": "Bitcoin"
+            },
+            {
+                "_id": "article3",
+                "title": "Bitcoin Rally",
+                "published_at": datetime.now(timezone.utc),
+                "narrative_summary": {"actions": ["rallied"]},
+                "actors": ["Bitcoin"],
+                "actor_salience": {"Bitcoin": 5},
+                "nucleus_entity": "Bitcoin"
+            }
+        ]
+        
+        # Mock cursor
+        class MockCursor:
+            async def to_list(self, length):
+                return sample_articles
+        
+        mock_articles_collection.find.return_value = MockCursor()
+        
+        # Mock clustering - return one cluster with 3 articles
+        mock_cluster.return_value = [sample_articles]
+        
+        # Mock find_matching_narrative - return None (no match, will create new)
+        mock_find_match.return_value = None
+        
+        # Mock narrative generation
+        mock_generate.return_value = {
+            "title": "Bitcoin Rally",
+            "summary": "Bitcoin surges to new highs",
+            "actors": ["Bitcoin"],
+            "nucleus_entity": "Bitcoin",
+            "article_ids": ["article1", "article2", "article3"],
+            "article_count": 3,
+            "entity_relationships": []
+        }
+        
+        # Mock insert_one
+        mock_narratives_collection.insert_one = AsyncMock(return_value=MagicMock(inserted_id="narrative123"))
+        
+        # Detect narratives with 48-hour window
+        narratives = await detect_narratives(hours=48, min_articles=2, use_salience_clustering=True)
+        
+        # Verify find_matching_narrative was called with cluster_velocity
+        assert mock_find_match.called
+        call_kwargs = mock_find_match.call_args[1]
+        
+        # Verify cluster_velocity was passed
+        assert "cluster_velocity" in call_kwargs
+        cluster_velocity = call_kwargs["cluster_velocity"]
+        
+        # Calculate expected velocity: 3 articles / 2 days = 1.5 articles/day
+        expected_velocity = 3 / 2.0
+        assert abs(cluster_velocity - expected_velocity) < 0.01, \
+            f"Expected velocity ~{expected_velocity}, got {cluster_velocity}"

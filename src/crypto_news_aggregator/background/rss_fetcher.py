@@ -9,12 +9,18 @@ from typing import Iterable, List, Sequence, Dict, Any, Optional
 from ..services.rss_service import RSSService
 from ..db.operations.articles import create_or_update_articles
 from ..db.operations.entity_mentions import create_entity_mentions_batch
-from ..llm.factory import get_llm_provider
+from ..llm.factory import get_llm_provider, get_optimized_llm
 from ..db.mongodb import mongo_manager
 from ..core.config import settings
 from ..services.entity_normalization import normalize_entity_name
+from ..services.selective_processor import create_processor
+from ..services.relevance_classifier import classify_article
 
 logger = logging.getLogger(__name__)
+
+# Blacklist of sources to exclude from processing
+# These sources contain advertising or low-quality content
+BLACKLIST_SOURCES = ['benzinga']
 
 _STOPWORDS = {
     "the",
@@ -70,6 +76,28 @@ async def fetch_and_process_rss_feeds():
     """Fetches RSS feeds, processes articles, and stores them."""
     rss_service = RSSService()
     articles = await rss_service.fetch_all_feeds()
+    
+    # Filter out blacklisted sources with detailed logging
+    original_count = len(articles)
+    logger.info(f"Fetched {original_count} articles from RSS feeds")
+    
+    # Log sources before filtering
+    source_counts = {}
+    for article in articles:
+        source = article.source.lower()
+        source_counts[source] = source_counts.get(source, 0) + 1
+    logger.info(f"Articles by source before filtering: {source_counts}")
+    
+    # Apply blacklist filter
+    articles = [a for a in articles if a.source.lower() not in BLACKLIST_SOURCES]
+    filtered_count = original_count - len(articles)
+    
+    if filtered_count > 0:
+        logger.warning(f"🚫 Filtered out {filtered_count} articles from blacklisted sources: {BLACKLIST_SOURCES}")
+    else:
+        logger.info(f"✅ No blacklisted articles found (blacklist: {BLACKLIST_SOURCES})")
+    
+    logger.info(f"Processing {len(articles)} articles after blacklist filter")
     await create_or_update_articles(articles)
 
     # Run LLM analysis on the newly fetched articles
@@ -366,9 +394,30 @@ async def _retry_individual_extractions(
 
 
 async def process_new_articles_from_mongodb():
-    """Analyzes and enriches new articles from MongoDB that haven't been processed yet."""
+    """
+    Analyzes and enriches new articles from MongoDB that haven't been processed yet.
+    
+    Uses cost-optimized processing:
+    - OptimizedAnthropicLLM with caching and Haiku model (12x cheaper)
+    - SelectiveArticleProcessor to decide LLM vs regex extraction (~50% reduction)
+    - Combined savings: ~85% cost reduction
+    """
     db = await mongo_manager.get_async_database()
     collection = db.articles
+    
+    # Initialize optimized LLM with caching and cost tracking
+    try:
+        optimized_llm = await get_optimized_llm(db)
+        logger.info("✅ Optimized LLM initialized with caching and cost tracking")
+    except Exception as e:
+        logger.error(f"Failed to initialize optimized LLM, falling back to standard: {e}")
+        optimized_llm = None
+    
+    # Initialize selective processor
+    selective_processor = create_processor(db)
+    logger.info(f"✅ Selective processor initialized - {selective_processor.get_processing_stats()}")
+    
+    # Keep standard LLM for sentiment/relevance (not entity extraction)
     llm_client = get_llm_provider()
 
     enrichment_query = {
@@ -380,6 +429,8 @@ async def process_new_articles_from_mongodb():
             {"sentiment_score": None},
             {"sentiment_score": 0.0},
             {"sentiment": {"$exists": False}},
+            {"relevance_tier": {"$exists": False}},
+            {"relevance_tier": None},
         ]
     }
 
@@ -392,10 +443,13 @@ async def process_new_articles_from_mongodb():
         logger.debug("No articles to enrich")
         return 0
 
-    # Process entity extraction in batches
+    logger.info(f"🚀 Processing {len(articles_list)} articles with cost-optimized extraction")
+
+    # Process entity extraction using selective processing
     batch_size = settings.ENTITY_EXTRACTION_BATCH_SIZE
-    total_entity_cost = 0.0
     entity_extraction_results = {}
+    total_llm_processed = 0
+    total_regex_processed = 0
 
     for i in range(0, len(articles_list), batch_size):
         batch = articles_list[i : i + batch_size]
@@ -406,62 +460,123 @@ async def process_new_articles_from_mongodb():
             len(articles_list),
         )
 
-        extraction_result = await _process_entity_extraction_batch(batch, llm_client)
-        
-        # Log what was returned from LLM
-        results_count = len(extraction_result.get("results", []))
-        logger.info(f"Entity extraction returned {results_count} results for batch")
-        
-        # Log detailed entity counts
-        total_primary = 0
-        total_context = 0
-        for result in extraction_result.get("results", []):
-            primary_count = len(result.get("primary_entities", []))
-            context_count = len(result.get("context_entities", []))
-            total_primary += primary_count
-            total_context += context_count
-        
-        logger.info(f"Batch entity breakdown: {total_primary} primary entities, {total_context} context entities")
+        # Use selective processing if optimized LLM is available
+        if optimized_llm:
+            # Process each article with selective method
+            for article in batch:
+                article_id_str = str(article.get("_id"))
+                
+                # Decide processing method
+                use_llm = selective_processor.should_use_llm(article)
+                method_emoji = "🤖" if use_llm else "📝"
+                
+                if use_llm:
+                    # Use optimized LLM (with caching)
+                    try:
+                        entity_results = await optimized_llm.extract_entities_batch([{
+                            "title": article.get("title", ""),
+                            "text": article.get("text") or article.get("content") or article.get("description") or ""
+                        }])
+                        entities = entity_results[0].get("entities", []) if entity_results else []
+                        
+                        # Convert to expected format
+                        entity_extraction_results[article_id_str] = {
+                            "article_id": article_id_str,
+                            "primary_entities": [
+                                {
+                                    "name": e.get("name"),
+                                    "type": e.get("type"),
+                                    "confidence": e.get("confidence", 0.9),
+                                    "ticker": None
+                                }
+                                for e in entities if e.get("is_primary", False)
+                            ],
+                            "context_entities": [
+                                {
+                                    "name": e.get("name"),
+                                    "type": e.get("type"),
+                                    "confidence": e.get("confidence", 0.9)
+                                }
+                                for e in entities if not e.get("is_primary", False)
+                            ],
+                            "sentiment": "neutral",
+                            "method": "llm"
+                        }
+                        total_llm_processed += 1
+                        logger.debug(f"{method_emoji} Article {article_id_str}: LLM extraction, {len(entities)} entities")
+                    except Exception as e:
+                        logger.error(f"LLM extraction failed for {article_id_str}: {e}")
+                        # Fall back to regex
+                        use_llm = False
+                
+                if not use_llm:
+                    # Use regex extraction (free, fast)
+                    regex_entities = await selective_processor.extract_entities_simple(
+                        article.get("_id"),
+                        article
+                    )
+                    
+                    entity_extraction_results[article_id_str] = {
+                        "article_id": article_id_str,
+                        "primary_entities": [
+                            {
+                                "name": e.get("entity"),
+                                "type": e.get("entity_type"),
+                                "confidence": e.get("confidence", 0.7),
+                                "ticker": None
+                            }
+                            for e in regex_entities if e.get("is_primary", False)
+                        ],
+                        "context_entities": [
+                            {
+                                "name": e.get("entity"),
+                                "type": e.get("entity_type"),
+                                "confidence": e.get("confidence", 0.7)
+                            }
+                            for e in regex_entities if not e.get("is_primary", False)
+                        ],
+                        "sentiment": "neutral",
+                        "method": "regex"
+                    }
+                    total_regex_processed += 1
+                    logger.debug(f"{method_emoji} Article {article_id_str}: Regex extraction, {len(regex_entities)} entities")
+        else:
+            # Fallback to original batch processing
+            extraction_result = await _process_entity_extraction_batch(batch, llm_client)
+            
+            for result in extraction_result.get("results", []):
+                article_id = result.get("article_id")
+                if article_id:
+                    entity_extraction_results[article_id] = result
+            
+            total_llm_processed += len(batch)
 
-        # Log usage stats and metrics
-        usage = extraction_result.get("usage", {})
-        metrics = extraction_result.get("metrics", {})
-
-        if usage:
-            batch_cost = usage.get("total_cost", 0.0)
-            total_entity_cost += batch_cost
-
-            # Log comprehensive batch metrics
+    # Log processing summary
+    logger.info(
+        f"📊 Entity extraction complete: {total_llm_processed} LLM, {total_regex_processed} regex "
+        f"({total_regex_processed / max(1, total_llm_processed + total_regex_processed) * 100:.1f}% cost savings)"
+    )
+    
+    # Log cache and cost stats if using optimized LLM
+    if optimized_llm:
+        try:
+            cache_stats = await optimized_llm.get_cache_stats()
+            cost_summary = await optimized_llm.get_cost_summary()
+            
             logger.info(
-                "Batch metrics: articles_processed=%d, entities_extracted=%d, "
-                "cost_per_batch=$%.6f, processing_time=%.2fs",
-                metrics.get("articles_processed", 0),
-                metrics.get("entities_extracted", 0),
-                batch_cost,
-                metrics.get("processing_time", 0.0),
+                f"📈 Cache stats: {cache_stats.get('active_entries', 0)} entries, "
+                f"{cache_stats.get('hit_rate_percent', 0):.1f}% hit rate"
             )
-
             logger.info(
-                "Token usage: model=%s, input=%d, output=%d, total=%d",
-                usage.get("model", "unknown"),
-                usage.get("input_tokens", 0),
-                usage.get("output_tokens", 0),
-                usage.get("total_tokens", 0),
+                f"💰 Cost stats: ${cost_summary.get('month_to_date', 0):.4f} MTD, "
+                f"projected ${cost_summary.get('projected_monthly', 0):.2f}/month"
             )
-
-            # Log any failed articles
-            failed = metrics.get("failed_articles", [])
-            if failed:
-                logger.warning("Failed articles in batch: %s", ", ".join(failed[:10]))
-
-        # Map results by article_id
-        for result in extraction_result.get("results", []):
-            article_id = result.get("article_id")
-            if article_id:
-                entity_extraction_results[article_id] = result
+        except Exception as e:
+            logger.warning(f"Failed to get cache/cost stats: {e}")
 
     # Now process articles individually for other enrichments
     processed = 0
+    tier_counts = {1: 0, 2: 0, 3: 0}  # Track tier distribution
     async for article in collection.find(enrichment_query):
         article_id = article.get("_id")
         try:
@@ -478,6 +593,21 @@ async def process_new_articles_from_mongodb():
             if not combined_text:
                 logger.debug("Skipping article %s due to missing text", article_id)
                 continue
+
+            # Classify article relevance tier (rule-based, no LLM cost)
+            classification = classify_article(
+                title=title,
+                text=combined_text[:1000],  # First 1000 chars for classification
+                source=article.get("source")
+            )
+            relevance_tier = classification["tier"]
+            relevance_reason = classification["reason"]
+
+            tier_emoji = {1: "🔥", 2: "📰", 3: "🔇"}[relevance_tier]
+            tier_counts[relevance_tier] += 1
+            logger.debug(
+                f"{tier_emoji} Article {article_id}: Tier {relevance_tier} ({relevance_reason})"
+            )
 
             try:
                 relevance_score = float(llm_client.score_relevance(combined_text))
@@ -563,6 +693,8 @@ async def process_new_articles_from_mongodb():
             update_operations = {
                 "$set": {
                     "relevance_score": relevance_score,
+                    "relevance_tier": relevance_tier,
+                    "relevance_reason": relevance_reason,
                     "sentiment_score": sentiment_score,
                     "sentiment_label": sentiment_label,
                     "sentiment": sentiment_payload,
@@ -665,9 +797,10 @@ async def process_new_articles_from_mongodb():
             "Enriched %s article(s) with sentiment, themes, keywords, and entities",
             processed,
         )
-
-    if total_entity_cost > 0:
-        logger.info("Total entity extraction cost: $%.6f", total_entity_cost)
+        # Log tier distribution
+        logger.info(
+            f"📊 Relevance tiers: 🔥 High={tier_counts[1]}, 📰 Medium={tier_counts[2]}, 🔇 Low={tier_counts[3]}"
+        )
 
     return processed
 

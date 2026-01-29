@@ -62,6 +62,7 @@ from fastapi.responses import JSONResponse
 
 from .api.v1 import router as api_router
 from .api import openai_compatibility as openai_api
+from .api import admin as admin_api
 from .core.monitoring import setup_performance_monitoring
 from .core.config import get_settings
 from .core.auth import API_KEY_NAME
@@ -146,11 +147,11 @@ app = FastAPI(
 )
 
 # CORS middleware configuration
-# Use regex pattern to match all localhost and Vercel deployments
+# Use regex pattern to match all localhost, 127.0.0.1, and Vercel deployments
 # This avoids conflicts between allow_origins and allow_origin_regex
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^(http://localhost:\d+|https://.*\.vercel\.app)$",
+    allow_origin_regex=r"^(http://(localhost|127\.0\.0\.1):\d+|https://.*\.vercel\.app)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -185,6 +186,9 @@ async def forbidden_exception_handler(request: Request, exc: Exception):
 app.include_router(api_router)
 
 app.include_router(openai_api.router, prefix="/v1/chat", tags=["OpenAI Compatibility"])
+
+# Admin endpoints for cost monitoring
+app.include_router(admin_api.router)
 
 
 # Root health check for deployment platforms

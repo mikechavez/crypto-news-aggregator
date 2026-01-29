@@ -3,6 +3,7 @@ from typing import List, Optional
 from .base import LLMProvider
 from .sentient import SentientProvider
 from .anthropic import AnthropicProvider
+from .optimized_anthropic import OptimizedAnthropicLLM, create_optimized_llm
 from ..core.config import get_settings
 
 PROVIDER_MAP = {
@@ -45,3 +46,27 @@ def get_llm_provider() -> LLMProvider:
         f"Could not initialize any of the specified LLM providers: {providers_to_try}. "
         f"Last error: {last_exception}"
     )
+
+
+async def get_optimized_llm(db) -> OptimizedAnthropicLLM:
+    """
+    Factory function to get an optimized LLM provider with caching and cost tracking.
+    
+    This is the preferred method for entity extraction as it:
+    - Uses Haiku model (12x cheaper than Sonnet)
+    - Caches responses to avoid duplicate API calls
+    - Tracks costs for monitoring
+    
+    Args:
+        db: MongoDB database instance
+    
+    Returns:
+        Initialized OptimizedAnthropicLLM instance
+    """
+    settings = get_settings()
+    api_key = settings.ANTHROPIC_API_KEY
+    
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY not configured")
+    
+    return await create_optimized_llm(db, api_key)

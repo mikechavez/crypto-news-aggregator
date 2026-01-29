@@ -66,32 +66,12 @@ export function formatPercentage(num: number, decimals: number = 1): string {
 }
 
 /**
- * Format sentiment score to a readable label
- */
-export function formatSentiment(score: number | null): string {
-  if (score === null) return 'Neutral';
-  if (score > 0.3) return 'Positive';
-  if (score < -0.3) return 'Negative';
-  return 'Neutral';
-}
-
-/**
- * Get color class for sentiment
- */
-export function getSentimentColor(score: number | null): string {
-  if (score === null) return 'text-gray-500';
-  if (score > 0.3) return 'text-green-600';
-  if (score < -0.3) return 'text-red-600';
-  return 'text-gray-500';
-}
-
-/**
  * Get color class for signal strength
  */
 export function getSignalStrengthColor(strength: number): string {
-  if (strength >= 0.7) return 'text-red-600';
-  if (strength >= 0.4) return 'text-yellow-600';
-  return 'text-blue-600';
+  if (strength >= 0.7) return 'text-red-600 dark:text-red-400';
+  if (strength >= 0.4) return 'text-yellow-600 dark:text-yellow-400';
+  return 'text-blue-600 dark:text-blue-400';
 }
 
 /**
@@ -129,20 +109,20 @@ export function formatEntityType(entityType: string): string {
  */
 export function getEntityTypeColor(entityType: string): string {
   const colorMap: Record<string, string> = {
-    'cryptocurrency': 'text-blue-600 bg-blue-50',
-    'blockchain': 'text-purple-600 bg-purple-50',
-    'protocol': 'text-indigo-600 bg-indigo-50',
-    'company': 'text-green-600 bg-green-50',
-    'organization': 'text-orange-600 bg-orange-50',
-    'event': 'text-red-600 bg-red-50',
-    'concept': 'text-gray-600 bg-gray-50',
-    'person': 'text-pink-600 bg-pink-50',
-    'location': 'text-teal-600 bg-teal-50',
-    'ticker': 'text-blue-600 bg-blue-50',
-    'project': 'text-indigo-600 bg-indigo-50',
+    'cryptocurrency': 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
+    'blockchain': 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300',
+    'protocol': 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300',
+    'company': 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300',
+    'organization': 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300',
+    'event': 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300',
+    'concept': 'bg-gray-100 dark:bg-gray-700/30 text-gray-800 dark:text-gray-300',
+    'person': 'bg-pink-100 dark:bg-pink-900/30 text-pink-800 dark:text-pink-300',
+    'location': 'bg-teal-100 dark:bg-teal-900/30 text-teal-800 dark:text-teal-300',
+    'ticker': 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
+    'project': 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300',
   };
 
-  return colorMap[entityType.toLowerCase()] || 'text-gray-600 bg-gray-50';
+  return colorMap[entityType.toLowerCase()] || 'bg-gray-100 dark:bg-gray-700/30 text-gray-800 dark:text-gray-300';
 }
 
 /**
@@ -169,15 +149,15 @@ export function formatTheme(theme: string): string {
  */
 export function getThemeColor(theme: string): string {
   const colorMap: Record<string, string> = {
-    'regulatory': 'text-red-700 bg-red-100 hover:bg-red-200',
-    'defi_adoption': 'text-purple-700 bg-purple-100 hover:bg-purple-200',
-    'institutional_investment': 'text-green-700 bg-green-100 hover:bg-green-200',
-    'technology_upgrade': 'text-blue-700 bg-blue-100 hover:bg-blue-200',
-    'market_volatility': 'text-orange-700 bg-orange-100 hover:bg-orange-200',
-    'security_breach': 'text-red-700 bg-red-100 hover:bg-red-200',
-    'partnership': 'text-indigo-700 bg-indigo-100 hover:bg-indigo-200',
-    'ecosystem_growth': 'text-teal-700 bg-teal-100 hover:bg-teal-200',
+    'regulatory': 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50',
+    'defi_adoption': 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900/50',
+    'institutional_investment': 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50',
+    'technology_upgrade': 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50',
+    'market_volatility': 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50',
+    'security_breach': 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50',
+    'partnership': 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-900/50',
+    'ecosystem_growth': 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 hover:bg-teal-200 dark:hover:bg-teal-900/50',
   };
 
-  return colorMap[theme] || 'text-gray-700 bg-gray-100 hover:bg-gray-200';
+  return colorMap[theme] || 'bg-gray-100 dark:bg-gray-700/30 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700/50';
 }

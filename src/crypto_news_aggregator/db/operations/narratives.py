@@ -70,14 +70,24 @@ async def upsert_narrative(
     article_count: int,
     mention_velocity: float,
     lifecycle: str,
-    first_seen: Optional[datetime] = None
+    momentum: str = "unknown",
+    recency_score: float = 0.0,
+    entity_relationships: Optional[List[Dict[str, Any]]] = None,
+    first_seen: Optional[datetime] = None,
+    lifecycle_state: Optional[str] = None,
+    lifecycle_history: Optional[List[Dict[str, Any]]] = None,
+    reawakening_count: Optional[int] = None,
+    reawakened_from: Optional[datetime] = None,
+    resurrection_velocity: Optional[float] = None,
+    dormant_since: Optional[datetime] = None,
+    reactivated_count: Optional[int] = None
 ) -> str:
     """
     Create or update a narrative record with full structure and timeline tracking.
-    
+
     Upserts based on theme to avoid duplicates. Updates all fields
     if the narrative already exists. Appends daily snapshots to timeline_data.
-    
+
     Args:
         theme: Theme category (e.g., "regulatory", "defi_adoption")
         title: Generated narrative title
@@ -86,9 +96,19 @@ async def upsert_narrative(
         article_ids: List of article IDs supporting this narrative
         article_count: Number of articles supporting this narrative
         mention_velocity: Articles per day rate
-        lifecycle: Lifecycle stage (emerging, hot, mature, declining)
+        lifecycle: Lifecycle stage (emerging, rising, hot, heating, mature, cooling, declining)
+        momentum: Momentum indicator (growing, declining, stable, unknown)
+        recency_score: Freshness score (0-1, higher = more recent)
+        entity_relationships: Top 5 entity co-occurrence pairs with weights: [{"a": "SEC", "b": "Binance", "weight": 3}]
         first_seen: When narrative was first detected (optional)
-    
+        lifecycle_state: Lifecycle state (emerging, rising, hot, cooling, dormant) - optional
+        lifecycle_history: History of lifecycle state transitions - optional
+        reawakening_count: Number of times narrative has been reactivated (optional)
+        reawakened_from: Timestamp when narrative went dormant before reactivation (optional)
+        resurrection_velocity: Articles per day in last 48 hours during reactivation (optional)
+        dormant_since: Timestamp when narrative transitioned to dormant state (optional)
+        reactivated_count: Number of times narrative has been reactivated from dormancy (optional)
+
     Returns:
         The ID of the upserted narrative
     """
@@ -101,6 +121,26 @@ async def upsert_narrative(
     # Check if narrative with this theme exists
     existing = await collection.find_one({"theme": theme})
     
+    # Validate and normalize first_seen and last_updated timestamps
+    first_seen_date = first_seen or now
+    if first_seen_date.tzinfo is None:
+        first_seen_date = first_seen_date.replace(tzinfo=timezone.utc)
+    
+    # Ensure last_updated >= first_seen (prevent data corruption)
+    if now < first_seen_date:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            f"[NARRATIVE VALIDATION] Detected reversed timestamps for theme '{theme}': "
+            f"last_updated ({now}) < first_seen ({first_seen_date}). "
+            f"Using first_seen as last_updated to maintain data integrity."
+        )
+        # Use first_seen as the update time if current time is somehow before first_seen
+        # (this shouldn't happen in normal operation but protects against clock skew)
+        last_updated_date = first_seen_date
+    else:
+        last_updated_date = now
+    
     # Create today's timeline snapshot
     timeline_snapshot = {
         "date": today,
@@ -111,7 +151,38 @@ async def upsert_narrative(
     
     if existing:
         # Update existing narrative
-        first_seen_date = existing.get("first_seen", now)
+        existing_first_seen = existing.get("first_seen", now)
+        if existing_first_seen.tzinfo is None:
+            existing_first_seen = existing_first_seen.replace(tzinfo=timezone.utc)
+        
+        # Check if existing first_seen is already corrupted (in the future)
+        if existing_first_seen > now:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"[NARRATIVE VALIDATION] Detected corrupted first_seen for theme '{theme}': "
+                f"first_seen ({existing_first_seen}) is in the future (now: {now}). "
+                f"Resetting first_seen to now to fix data corruption."
+            )
+            # Fix corrupted first_seen by using current time
+            existing_first_seen = now
+        
+        # Validate existing first_seen vs new last_updated
+        # If last_updated would be before first_seen, keep the existing first_seen
+        if last_updated_date < existing_first_seen:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"[NARRATIVE VALIDATION] Update would create reversed timestamps for theme '{theme}': "
+                f"new last_updated ({last_updated_date}) < existing first_seen ({existing_first_seen}). "
+                f"Keeping existing first_seen and using it as last_updated."
+            )
+            # Use existing first_seen as both first_seen and last_updated
+            first_seen_date = existing_first_seen
+            last_updated_date = existing_first_seen
+        else:
+            first_seen_date = existing_first_seen
+        
         days_active = _calculate_days_active(first_seen_date)
         
         # Get existing timeline data and peak activity
@@ -143,11 +214,37 @@ async def upsert_narrative(
             "article_count": article_count,
             "mention_velocity": mention_velocity,
             "lifecycle": lifecycle,
-            "last_updated": now,
+            "momentum": momentum,
+            "recency_score": recency_score,
+            "entity_relationships": entity_relationships or [],
+            "first_seen": first_seen_date,
+            "last_updated": last_updated_date,
             "timeline_data": timeline_data,
             "peak_activity": peak_activity,
             "days_active": days_active
         }
+
+        # Add lifecycle_state if provided
+        if lifecycle_state is not None:
+            update_data["lifecycle_state"] = lifecycle_state
+
+        # Add lifecycle_history if provided
+        if lifecycle_history is not None:
+            update_data["lifecycle_history"] = lifecycle_history
+
+        # Add resurrection tracking fields if provided
+        if reawakening_count is not None:
+            update_data["reawakening_count"] = reawakening_count
+        if reawakened_from is not None:
+            update_data["reawakened_from"] = reawakened_from
+        if resurrection_velocity is not None:
+            update_data["resurrection_velocity"] = resurrection_velocity
+
+        # Add dormancy tracking fields if provided
+        if dormant_since is not None:
+            update_data["dormant_since"] = dormant_since
+        if reactivated_count is not None:
+            update_data["reactivated_count"] = reactivated_count
         
         await collection.update_one(
             {"theme": theme},
@@ -156,7 +253,6 @@ async def upsert_narrative(
         return str(existing["_id"])
     else:
         # Create new narrative with initial timeline data
-        first_seen_date = first_seen or now
         days_active = _calculate_days_active(first_seen_date)
         
         narrative_data = {
@@ -166,10 +262,13 @@ async def upsert_narrative(
             "entities": entities,
             "article_ids": article_ids,
             "first_seen": first_seen_date,
-            "last_updated": now,
+            "last_updated": last_updated_date,
             "article_count": article_count,
             "mention_velocity": mention_velocity,
             "lifecycle": lifecycle,
+            "momentum": momentum,
+            "recency_score": recency_score,
+            "entity_relationships": entity_relationships or [],
             "timeline_data": [timeline_snapshot],
             "peak_activity": {
                 "date": today,
@@ -178,6 +277,28 @@ async def upsert_narrative(
             },
             "days_active": days_active
         }
+
+        # Add lifecycle_state if provided
+        if lifecycle_state is not None:
+            narrative_data["lifecycle_state"] = lifecycle_state
+
+        # Add lifecycle_history if provided
+        if lifecycle_history is not None:
+            narrative_data["lifecycle_history"] = lifecycle_history
+
+        # Add resurrection tracking fields if provided
+        if reawakening_count is not None:
+            narrative_data["reawakening_count"] = reawakening_count
+        if reawakened_from is not None:
+            narrative_data["reawakened_from"] = reawakened_from
+        if resurrection_velocity is not None:
+            narrative_data["resurrection_velocity"] = resurrection_velocity
+
+        # Add dormancy tracking fields if provided
+        if dormant_since is not None:
+            narrative_data["dormant_since"] = dormant_since
+        if reactivated_count is not None:
+            narrative_data["reactivated_count"] = reactivated_count
         
         result = await collection.insert_one(narrative_data)
         return str(result.inserted_id)
@@ -190,6 +311,10 @@ async def get_active_narratives(
     """
     Get active narratives sorted by most recently updated.
     
+    Filters narratives to only include active states (emerging, rising, hot, 
+    cooling, reactivated). Excludes dormant and echo states which should appear
+    in the archive view.
+    
     Args:
         limit: Maximum number of narratives to return (default 10)
         lifecycle_filter: Optional filter by lifecycle stage
@@ -200,8 +325,17 @@ async def get_active_narratives(
     db = await mongo_manager.get_async_database()
     collection = db.narratives
     
-    # Build query filter
-    query = {}
+    # Build query filter - exclude dormant and echo states
+    # Active states: emerging, rising, hot, cooling, reactivated
+    active_states = ['emerging', 'rising', 'hot', 'cooling', 'reactivated']
+    
+    query = {
+        '$or': [
+            {'lifecycle_state': {'$in': active_states}},
+            {'lifecycle_state': {'$exists': False}}  # Include narratives without lifecycle_state for backward compatibility
+        ]
+    }
+    
     if lifecycle_filter:
         query["lifecycle"] = lifecycle_filter
     
@@ -264,23 +398,153 @@ async def get_narrative_timeline(narrative_id: str) -> Optional[List[Dict[str, A
         return None
 
 
+async def get_archived_narratives(
+    limit: int = 50,
+    days: int = 30
+) -> List[Dict[str, Any]]:
+    """
+    Get archived (dormant) narratives sorted by most recently updated.
+    
+    Returns narratives with lifecycle_state = 'dormant' that have been updated
+    within the lookback window. These are narratives that have gone quiet but
+    may still be relevant.
+    
+    Args:
+        limit: Maximum number of narratives to return (default 50)
+        days: Look back X days from now (default 30)
+    
+    Returns:
+        List of dormant narrative documents
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    db = await mongo_manager.get_async_database()
+    collection = db.narratives
+    
+    # Calculate cutoff date
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+    
+    # First, let's check what narratives exist in the database
+    total_count = await collection.count_documents({})
+    logger.info(f"[DEBUG] Total narratives in database: {total_count}")
+    
+    # Check how many have lifecycle_state field
+    with_lifecycle_state = await collection.count_documents({"lifecycle_state": {"$exists": True}})
+    logger.info(f"[DEBUG] Narratives with lifecycle_state field: {with_lifecycle_state}")
+    
+    # Check lifecycle_state distribution
+    pipeline = [{"$group": {"_id": "$lifecycle_state", "count": {"$sum": 1}}}]
+    lifecycle_distribution = []
+    async for doc in collection.aggregate(pipeline):
+        lifecycle_distribution.append(doc)
+    logger.info(f"[DEBUG] Lifecycle state distribution: {lifecycle_distribution}")
+    
+    # Query for narratives with lifecycle_state = 'dormant' within lookback window
+    query = {
+        "lifecycle_state": "dormant",
+        "last_updated": {"$gte": cutoff_date}
+    }
+    
+    logger.info(f"[DEBUG] Query for archived narratives: {query}")
+    logger.info(f"[DEBUG] Cutoff date: {cutoff_date}")
+    
+    # Sort by last_updated descending (most recently dormant first)
+    cursor = collection.find(query).sort("last_updated", -1).limit(limit)
+    
+    narratives = []
+    async for narrative in cursor:
+        narrative["_id"] = str(narrative["_id"])
+        narratives.append(narrative)
+    
+    logger.info(f"[DEBUG] Found {len(narratives)} archived narratives")
+    
+    return narratives
+
+
+async def get_resurrected_narratives(
+    limit: int = 20,
+    days: int = 7
+) -> List[Dict[str, Any]]:
+    """
+    Get narratives that have been reactivated (resurrected from dormant state).
+    
+    Returns narratives with reawakening_count > 0 that have been updated within
+    the lookback window, sorted by most recently updated.
+    
+    Args:
+        limit: Maximum number of narratives to return (default 20, max 100)
+        days: Look back X days from now (default 7)
+    
+    Returns:
+        List of resurrected narrative documents with resurrection metrics
+    """
+    db = await mongo_manager.get_async_database()
+    collection = db.narratives
+    
+    # Calculate cutoff date
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+    
+    # Query for narratives with reawakening_count > 0 and last_updated within lookback window
+    # This captures narratives that were resurrected recently, regardless of when they went dormant
+    query = {
+        "reawakening_count": {"$gt": 0},
+        "last_updated": {"$gte": cutoff_date}
+    }
+    
+    # Sort by last_updated descending (most recently active first)
+    cursor = collection.find(query).sort("last_updated", -1).limit(limit)
+    
+    narratives = []
+    async for narrative in cursor:
+        narrative["_id"] = str(narrative["_id"])
+        narratives.append(narrative)
+    
+    return narratives
+
+
 async def ensure_indexes():
     """
     Ensure required indexes exist on the narratives collection.
     
     Creates indexes for:
     - last_updated (for sorting and cleanup)
-    - theme (for upsert uniqueness)
-    - lifecycle (for filtering)
+    - theme (for upsert operations, non-unique due to null values)
+    - lifecycle (for filtering - legacy)
+    - lifecycle_state (for filtering - new field)
+    - reawakened_from (for resurrection queries)
+    - compound index on lifecycle_state + last_updated (for efficient active narrative queries)
     """
     db = await mongo_manager.get_async_database()
     collection = db.narratives
     
+    # Helper to create index if it doesn't exist
+    async def create_index_if_not_exists(keys, name, **kwargs):
+        try:
+            await collection.create_index(keys, name=name, **kwargs)
+        except Exception as e:
+            # Index might already exist, that's okay
+            if "already exists" not in str(e) and "IndexOptionsConflict" not in str(e):
+                # Only raise if it's not an "already exists" error
+                pass
+    
     # Index on last_updated for sorting and cleanup
-    await collection.create_index("last_updated", name="idx_last_updated")
+    await create_index_if_not_exists("last_updated", name="idx_last_updated")
     
-    # Index on theme for upsert operations
-    await collection.create_index("theme", unique=True, name="idx_theme_unique")
+    # Index on theme for upsert operations (non-unique due to potential null values)
+    await create_index_if_not_exists("theme", name="idx_theme")
     
-    # Index on lifecycle for filtering
-    await collection.create_index("lifecycle", name="idx_lifecycle")
+    # Index on lifecycle for filtering (legacy)
+    await create_index_if_not_exists("lifecycle", name="idx_lifecycle")
+    
+    # Index on lifecycle_state for filtering (new field) - THIS IS THE CRITICAL ONE
+    await create_index_if_not_exists("lifecycle_state", name="idx_lifecycle_state")
+    
+    # Compound index for efficient active narrative queries (lifecycle_state + last_updated)
+    await create_index_if_not_exists(
+        [("lifecycle_state", 1), ("last_updated", -1)],
+        name="idx_lifecycle_state_last_updated"
+    )
+    
+    # Index on reawakened_from for resurrection queries
+    await create_index_if_not_exists("reawakened_from", name="idx_reawakened_from")

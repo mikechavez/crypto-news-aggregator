@@ -48,7 +48,7 @@ class ArticleBase(BaseModel):
         "bitcoinmagazine",
         "theblock",
         "cryptoslate",
-        "benzinga",
+        # "benzinga",  # Excluded - advertising content
         "messari",
         "bitcoin.com",
         "glassnode",
@@ -67,14 +67,32 @@ class ArticleBase(BaseModel):
     metrics: ArticleMetrics
     keywords: List[str] = []
     relevance_score: Optional[float] = None
+    relevance_tier: Optional[int] = Field(
+        None,
+        ge=1,
+        le=3,
+        description="Relevance tier: 1=high signal, 2=medium, 3=low/exclude"
+    )
+    relevance_reason: Optional[str] = Field(
+        None,
+        description="Reason for relevance classification"
+    )
     sentiment_score: Optional[float] = None
     sentiment_label: Optional[str] = None
     raw_data: Dict[str, Any]  # To store the raw article payload
     published_at: datetime  # Timestamp from the source
     
-    # Narrative salience fields
+    # Narrative data fields
+    actors: Optional[List[str]] = None
     actor_salience: Optional[Dict[str, int]] = None  # {"EntityName": 5, ...}
     nucleus_entity: Optional[str] = None  # Primary entity article is about
+    narrative_focus: Optional[str] = None  # 2-5 word phrase describing what's happening (e.g., "price surge", "regulatory enforcement")
+    actions: Optional[List[str]] = None
+    tensions: Optional[List[str]] = None
+    implications: Optional[str] = None
+    narrative_summary: Optional[str] = None
+    narrative_hash: Optional[str] = None  # Content hash for caching
+    narrative_extracted_at: Optional[datetime] = None
 
 
 class ArticleCreate(ArticleBase):
@@ -88,6 +106,8 @@ class ArticleUpdate(BaseModel):
 
     text: Optional[str] = None
     relevance_score: Optional[float] = None
+    relevance_tier: Optional[int] = Field(None, ge=1, le=3)
+    relevance_reason: Optional[str] = None
     metrics: Optional[ArticleMetrics] = None
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

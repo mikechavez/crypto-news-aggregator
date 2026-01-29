@@ -197,6 +197,8 @@ async def update_narratives():
                 article_count=narrative["article_count"],
                 mention_velocity=narrative["mention_velocity"],
                 lifecycle=narrative["lifecycle"],
+                momentum=narrative.get("momentum", "unknown"),
+                recency_score=narrative.get("recency_score", 0.0),
                 first_seen=narrative.get("first_seen")
             )
         
@@ -300,9 +302,11 @@ async def main():
         tasks.append(asyncio.create_task(schedule_rss_fetch(rss_interval)))
         logger.info("RSS ingestion task created.")
         
-        logger.info("Starting signal score update task (every 2 minutes)...")
-        tasks.append(asyncio.create_task(update_signal_scores()))
-        logger.info("Signal score update task created.")
+        # Signal score update task is DISABLED - signals are now computed on-demand
+        # when the API is called (compute-on-read pattern). This eliminates staleness
+        # issues and reduces background computation load. See ADR-001.
+        # tasks.append(asyncio.create_task(update_signal_scores()))
+        logger.info("Signal score update task DISABLED (using compute-on-read pattern)")
         
         narrative_interval = 60 * 10  # 10 minutes
         logger.info("Starting narrative update schedule (every %s seconds)", narrative_interval)

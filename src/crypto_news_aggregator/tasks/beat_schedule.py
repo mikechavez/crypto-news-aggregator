@@ -45,4 +45,82 @@ def get_schedule():
                 "queue": "alerts",
             },
         },
+        # ============================================================
+        # Briefing Tasks - Daily crypto briefings at 8 AM and 8 PM EST
+        # ============================================================
+        # Morning briefing at 8:00 AM EST (13:00 UTC, or 12:00 UTC during DST)
+        # Using America/New_York timezone for automatic DST handling
+        "generate-morning-briefing": {
+            "task": "crypto_news_aggregator.tasks.briefing_tasks.generate_morning_briefing",
+            "schedule": crontab(
+                hour=8,
+                minute=0,
+                # Note: Celery uses the configured timezone (UTC by default)
+                # 8 AM EST = 13:00 UTC (or 12:00 UTC during EDT)
+                # For production, set celery timezone to America/New_York
+            ),
+            "options": {
+                "expires": 3600,  # 1 hour
+                "time_limit": 600,  # 10 minutes
+            },
+        },
+        # Evening briefing at 8:00 PM EST (01:00 UTC next day, or 00:00 UTC during DST)
+        "generate-evening-briefing": {
+            "task": "crypto_news_aggregator.tasks.briefing_tasks.generate_evening_briefing",
+            "schedule": crontab(
+                hour=20,
+                minute=0,
+            ),
+            "options": {
+                "expires": 3600,  # 1 hour
+                "time_limit": 600,  # 10 minutes
+            },
+        },
+        # Weekly cleanup of old briefings (every Sunday at 3 AM EST)
+        "cleanup-old-briefings": {
+            "task": "crypto_news_aggregator.tasks.briefing_tasks.cleanup_old_briefings",
+            "schedule": crontab(
+                hour=3,
+                minute=0,
+                day_of_week="sunday",
+            ),
+            "args": (30,),  # Keep 30 days of briefings
+            "options": {
+                "expires": 3600,  # 1 hour
+                "time_limit": 300,  # 5 minutes
+            },
+        },
+        # Consolidate duplicate narratives every hour
+        "consolidate-narratives": {
+            "task": "consolidate_narratives",
+            "schedule": crontab(minute=0),  # Every hour at :00
+            "options": {
+                "expires": 3600,  # 1 hour timeout
+                "time_limit": 3600,  # 1 hour
+            },
+        },
+        # Cleanup invalid narrative references nightly at 2 AM EST
+        "cleanup-invalid-narrative-references": {
+            "task": "crypto_news_aggregator.tasks.narrative_cleanup.cleanup_invalid_article_references",
+            "schedule": crontab(
+                hour=2,
+                minute=0,
+            ),
+            "options": {
+                "expires": 3600,  # 1 hour
+                "time_limit": 1800,  # 30 minutes
+            },
+        },
+        # Validate narrative data integrity nightly at 2:30 AM EST
+        "validate-narrative-data-integrity": {
+            "task": "crypto_news_aggregator.tasks.narrative_cleanup.validate_narrative_data_integrity",
+            "schedule": crontab(
+                hour=2,
+                minute=30,
+            ),
+            "options": {
+                "expires": 3600,  # 1 hour
+                "time_limit": 1800,  # 30 minutes
+            },
+        },
     }
