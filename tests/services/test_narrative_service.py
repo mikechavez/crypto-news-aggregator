@@ -12,7 +12,8 @@ from bson import ObjectId
 from crypto_news_aggregator.services.narrative_service import (
     determine_lifecycle_stage,
     extract_entities_from_articles,
-    detect_narratives
+    detect_narratives,
+    validate_article_mentions_entity
 )
 
 
@@ -292,3 +293,145 @@ async def test_extract_entities_handles_mixed_article_id_formats():
         assert "Ethereum" in entities
         assert "Ripple" in entities
         assert "SEC" in entities
+
+
+def test_validate_article_mentions_entity_success():
+    """Test validation passes when article mentions entity in title."""
+    article = {
+        "title": "Coinbase Stock Surges After Earnings",
+        "text": "The crypto exchange reported strong Q4 results..."
+    }
+    assert validate_article_mentions_entity(article, "Coinbase") is True
+
+
+def test_validate_article_mentions_entity_in_body_only():
+    """Test validation passes when entity only in body text."""
+    article = {
+        "title": "Crypto Exchange Reports Strong Quarter",
+        "text": "Coinbase led the sector with record trading volume today..."
+    }
+    assert validate_article_mentions_entity(article, "Coinbase") is True
+
+
+def test_validate_article_mentions_entity_failure():
+    """Test validation fails when entity not mentioned."""
+    article = {
+        "title": "Sharps Technology Partners with Solana",
+        "text": "Sharps announced a new blockchain integration with Solana..."
+    }
+    assert validate_article_mentions_entity(article, "Coinbase") is False
+
+
+def test_validate_article_mentions_entity_case_insensitive():
+    """Test validation is case-insensitive."""
+    article = {
+        "title": "COINBASE Stock Update",
+        "text": "coinbase shares rose 5% today..."
+    }
+    assert validate_article_mentions_entity(article, "Coinbase") is True
+
+
+def test_validate_article_mentions_entity_word_boundary():
+    """Test validation respects word boundaries."""
+    article = {
+        "title": "Coinbase Trading Volume Increases",
+        "text": "Coinbase reported high trading activity..."
+    }
+    # "Coin" should NOT match "Coinbase"
+    assert validate_article_mentions_entity(article, "Coin") is False
+
+    # "Coinbase" should match "Coinbase"
+    assert validate_article_mentions_entity(article, "Coinbase") is True
+
+
+def test_validate_article_mentions_entity_partial_match_prevented():
+    """Test that partial matches are prevented (e.g., 'Coin' not matching 'Coinbase')."""
+    article = {
+        "title": "Bitcoin and Ethereum Rally",
+        "text": "The crypto market saw gains today..."
+    }
+    # "Bit" should NOT match "Bitcoin"
+    assert validate_article_mentions_entity(article, "Bit") is False
+
+    # "Bitcoin" should match "Bitcoin"
+    assert validate_article_mentions_entity(article, "Bitcoin") is True
+
+
+def test_validate_article_mentions_entity_empty_nucleus():
+    """Test validation fails gracefully with empty nucleus entity."""
+    article = {
+        "title": "Some News",
+        "text": "Some content..."
+    }
+    assert validate_article_mentions_entity(article, "") is False
+    assert validate_article_mentions_entity(article, None) is False
+
+
+def test_validate_article_mentions_entity_missing_fields():
+    """Test validation handles missing article fields."""
+    # Missing text field
+    article = {
+        "title": "Coinbase News"
+    }
+    assert validate_article_mentions_entity(article, "Coinbase") is True
+
+    # Missing title field
+    article = {
+        "text": "Coinbase reported..."
+    }
+    assert validate_article_mentions_entity(article, "Coinbase") is True
+
+    # Missing both fields
+    article = {}
+    assert validate_article_mentions_entity(article, "Coinbase") is False
+
+
+def test_validate_article_mentions_entity_special_characters():
+    """Test validation with special regex characters in entity name."""
+    article = {
+        "title": "OpenAI Partners with Coinbase.io",
+        "text": "OpenAI announced a partnership with Coinbase.io today..."
+    }
+    # Entity with . character should be escaped and matched literally
+    assert validate_article_mentions_entity(article, "Coinbase.io") is True
+    # Partial match with just "Coinbase" should work
+    assert validate_article_mentions_entity(article, "Coinbase") is True
+
+
+def test_post_cluster_validation_integration():
+    """Test post-cluster validation with multiple articles."""
+    articles = [
+        {
+            "id": "1",
+            "title": "Coinbase Earnings Report",
+            "text": "Coinbase beat expectations with strong quarterly results..."
+        },
+        {
+            "id": "2",
+            "title": "Sharps Technology News",
+            "text": "Sharps announced a partnership with Solana blockchain..."
+        },
+        {
+            "id": "3",
+            "title": "Crypto Market Update",
+            "text": "Bitcoin and Coinbase saw gains today..."
+        }
+    ]
+
+    # Simulate post-cluster validation
+    nucleus_entity = "Coinbase"
+    validated = [
+        a for a in articles if validate_article_mentions_entity(a, nucleus_entity)
+    ]
+
+    # Should only include articles 1 and 3 (both mention Coinbase)
+    assert len(validated) == 2
+    assert validated[0]["id"] == "1"
+    assert validated[1]["id"] == "3"
+
+    # Article 2 should be rejected
+    rejected = [
+        a for a in articles if not validate_article_mentions_entity(a, nucleus_entity)
+    ]
+    assert len(rejected) == 1
+    assert rejected[0]["id"] == "2"

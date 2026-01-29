@@ -15,6 +15,7 @@ Supports both:
 
 import json
 import logging
+import re
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
 
@@ -43,6 +44,52 @@ SALIENCE_CLUSTERING_CONFIG = {
     'merge_similarity_threshold': 0.5, # Minimum similarity to merge shallow narratives
     'ubiquitous_entities': {'Bitcoin', 'Ethereum', 'crypto', 'blockchain'},
 }
+
+
+def validate_article_mentions_entity(
+    article: Dict[str, Any],
+    nucleus_entity: str,
+    require_exact_match: bool = True
+) -> bool:
+    """
+    Validate that article actually mentions the narrative's nucleus entity.
+
+    This is a final safety check to prevent articles from being assigned to
+    narratives they're not actually about.
+
+    Args:
+        article: Article document with title and text fields
+        nucleus_entity: Narrative's nucleus entity (e.g., "Coinbase", "Bitcoin")
+        require_exact_match: If True, require exact entity name match (default True)
+
+    Returns:
+        True if article mentions nucleus_entity, False otherwise
+
+    Example:
+        >>> article = {"title": "Coinbase Stock Surges", "text": "Coinbase reported..."}
+        >>> validate_article_mentions_entity(article, "Coinbase")
+        True
+
+        >>> article = {"title": "Sharps Technology", "text": "Sharps announced..."}
+        >>> validate_article_mentions_entity(article, "Coinbase")
+        False
+    """
+    if not nucleus_entity:
+        return False
+
+    # Get article text
+    title = (article.get("title") or "").lower()
+    text = (article.get("text") or "").lower()
+    entity_lower = nucleus_entity.lower()
+
+    # Check for exact word boundary match
+    # This prevents "Bit" matching "Bitcoin" or "Coin" matching "Coinbase"
+    pattern = r'\b' + re.escape(entity_lower) + r'\b'
+
+    found_in_title = bool(re.search(pattern, title))
+    found_in_text = bool(re.search(pattern, text))
+
+    return found_in_title or found_in_text
 
 
 def determine_lifecycle_stage(
@@ -175,12 +222,74 @@ async def detect_narratives(
                     narratives.append(narrative)
             
             logger.info(f"Generated {len(narratives)} narratives before merging")
-            
+
             # Merge shallow narratives
             narratives = await merge_shallow_narratives(narratives)
-            
+
             logger.info(f"After merging: {len(narratives)} final narratives")
-            
+
+            # Post-clustering validation: Ensure articles mention nucleus_entity
+            total_articles_before = sum(n.get("article_count", 0) for n in narratives)
+            total_rejected_post_cluster = 0
+
+            for narrative_data in narratives:
+                nucleus_entity = narrative_data.get("nucleus_entity", "")
+                article_ids = narrative_data.get("article_ids", [])
+
+                if not nucleus_entity or not article_ids:
+                    continue
+
+                # Filter article_ids to only include articles mentioning nucleus_entity
+                validated_article_ids = []
+                rejected_articles = []
+
+                for article_id in article_ids:
+                    # Find the article in the original articles list
+                    article = next((a for a in articles if str(a.get("_id")) == str(article_id)), None)
+
+                    if article and validate_article_mentions_entity(article, nucleus_entity):
+                        validated_article_ids.append(article_id)
+                    else:
+                        rejected_articles.append({
+                            "article_id": article_id,
+                            "title": article.get("title", "") if article else "unknown"
+                        })
+                        total_rejected_post_cluster += 1
+
+                # Update narrative with validated articles
+                narrative_data["article_ids"] = validated_article_ids
+                narrative_data["article_count"] = len(validated_article_ids)
+
+                # Log rejected articles
+                if rejected_articles:
+                    logger.info(
+                        f"Post-cluster validation: {len(rejected_articles)} articles rejected from "
+                        f"'{nucleus_entity}' narrative",
+                        extra={
+                            "narrative_nucleus": nucleus_entity,
+                            "total_clustered": len(article_ids),
+                            "validated": len(validated_article_ids),
+                            "rejected": len(rejected_articles)
+                        }
+                    )
+                    for rejected in rejected_articles:
+                        logger.warning(
+                            f"Post-cluster validation rejected article from narrative",
+                            extra={
+                                "narrative_nucleus": nucleus_entity,
+                                "article_title": rejected["title"][:100],
+                                "article_id": str(rejected["article_id"]),
+                                "reason": "nucleus_entity_not_in_text"
+                            }
+                        )
+
+            logger.info(
+                f"Post-clustering validation complete: {total_rejected_post_cluster} articles rejected "
+                f"({total_rejected_post_cluster}/{total_articles_before} = "
+                f"{total_rejected_post_cluster/total_articles_before*100:.1f}%)" if total_articles_before > 0
+                else "Post-clustering validation complete: 0 articles to validate"
+            )
+
             # Save narratives to database
             saved_narratives = []
             for narrative_data in narratives:
