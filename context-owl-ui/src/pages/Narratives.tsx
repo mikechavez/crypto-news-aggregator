@@ -7,6 +7,7 @@ import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { formatRelativeTime, formatNumber } from '../lib/formatters';
 import { cn } from '../lib/cn';
+import { ArticleSkeleton } from '../components/ArticleSkeleton';
 
 // Lifecycle configuration with icons, colors, and glow effects
 const lifecycleConfig = {
@@ -45,6 +46,7 @@ export function Narratives() {
   const [expandedArticles, setExpandedArticles] = useState<Set<number>>(new Set());
   const [narrativeArticles, setNarrativeArticles] = useState<Map<string, any[]>>(new Map());
   const [loadingArticles, setLoadingArticles] = useState<Set<string>>(new Set());
+  const [loadingMore, setLoadingMore] = useState<Set<string>>(new Set());
   const [paginationState, setPaginationState] = useState<Map<string, number>>(new Map());
   const ARTICLES_PER_PAGE = 20;
   
@@ -230,8 +232,10 @@ export function Narratives() {
                     return (
                     <div className="mt-3 space-y-2">
                       {isLoadingArticles ? (
-                        <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                          Loading articles...
+                        <div className="mt-3 space-y-2">
+                          {[...Array(5)].map((_, i) => (
+                            <ArticleSkeleton key={i} />
+                          ))}
                         </div>
                       ) : articles.length > 0 ? (
                         <>
@@ -256,7 +260,16 @@ export function Narratives() {
                             </div>
                             );
                           })}
-                          
+
+                          {/* Show skeleton loaders while loading more articles */}
+                          {loadingMore.has(narrativeId) && (
+                            <div className="mt-2 space-y-2">
+                              {[...Array(5)].map((_, i) => (
+                                <ArticleSkeleton key={`loading-${i}`} />
+                              ))}
+                            </div>
+                          )}
+
                           {/* Load More button */}
                           {hasMore && (
                             <button
