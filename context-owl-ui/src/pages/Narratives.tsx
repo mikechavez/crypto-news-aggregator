@@ -45,6 +45,8 @@ export function Narratives() {
   const [expandedArticles, setExpandedArticles] = useState<Set<number>>(new Set());
   const [narrativeArticles, setNarrativeArticles] = useState<Map<string, any[]>>(new Map());
   const [loadingArticles, setLoadingArticles] = useState<Set<string>>(new Set());
+  const [paginationState, setPaginationState] = useState<Map<string, number>>(new Map());
+  const ARTICLES_PER_PAGE = 20;
   
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['narratives'],
@@ -103,6 +105,11 @@ export function Narratives() {
           const articles = narrativeArticles.get(narrativeId) || narrative.articles || [];
           const isLoadingArticles = loadingArticles.has(narrativeId);
           
+          const displayedCount = paginationState.get(narrativeId) || ARTICLES_PER_PAGE;
+          const visibleArticles = articles.slice(0, displayedCount);
+          const totalArticles = articles.length;
+          const hasMore = visibleArticles.length < totalArticles;
+          
           const toggleExpanded = async () => {
             console.log('[DEBUG] Card clicked - Narrative ID:', narrativeId, 'Title:', displayTitle);
             const newExpanded = new Set(expandedArticles);
@@ -136,6 +143,10 @@ export function Narratives() {
               }
             }
             setExpandedArticles(newExpanded);
+          };
+          
+          const loadMoreArticles = () => {
+            setPaginationState(prev => new Map(prev).set(narrativeId, (prev.get(narrativeId) || ARTICLES_PER_PAGE) + ARTICLES_PER_PAGE));
           };
           
           return (
@@ -201,8 +212,17 @@ export function Narratives() {
               {/* Articles section */}
               {(narrative.article_count > 0 || articles.length > 0) && (
                 <div className="pt-4 border-t border-gray-200 dark:border-dark-border">
-                  <div className="text-sm text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1">
-                    {isExpanded ? '▼' : '▶'} {formatNumber(narrative.article_count)} Articles
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1">
+                      {isExpanded ? '▼' : '▶'} {formatNumber(narrative.article_count)} Articles
+                    </div>
+                    
+                    {/* Showing X of Y Articles badge */}
+                    {isExpanded && articles.length > 0 && (
+                      <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full">
+                        Showing {formatNumber(visibleArticles.length)} of {formatNumber(totalArticles)}
+                      </span>
+                    )}
                   </div>
                   
                   {isExpanded && (() => {
@@ -214,27 +234,42 @@ export function Narratives() {
                           Loading articles...
                         </div>
                       ) : articles.length > 0 ? (
-                        articles.map((article, articleIdx) => {
-                          console.log('[DEBUG] Rendering article:', articleIdx, article.title);
-                          return (
-                          <div key={articleIdx} className="text-sm bg-gray-50 dark:bg-dark-hover p-3 rounded">
-                            <a
-                              href={article.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline font-medium block mb-1"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {article.title}
-                            </a>
-                            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs">
-                              <span className="capitalize">{article.source}</span>
-                              <span>•</span>
-                              <span>{formatRelativeTime(article.published_at)}</span>
+                        <>
+                          {visibleArticles.map((article, articleIdx) => {
+                            console.log('[DEBUG] Rendering article:', articleIdx, article.title);
+                            return (
+                            <div key={articleIdx} className="text-sm bg-gray-50 dark:bg-dark-hover p-3 rounded">
+                              <a
+                                href={article.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline font-medium block mb-1"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {article.title}
+                              </a>
+                              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs">
+                                <span className="capitalize">{article.source}</span>
+                                <span>•</span>
+                                <span>{formatRelativeTime(article.published_at)}</span>
+                              </div>
                             </div>
-                          </div>
-                          );
-                        })
+                            );
+                          })}
+                          
+                          {/* Load More button */}
+                          {hasMore && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                loadMoreArticles();
+                              }}
+                              className="w-full mt-3 px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white text-sm font-medium rounded transition-colors"
+                            >
+                              Load More
+                            </button>
+                          )}
+                        </>
                       ) : (
                         <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
                           No articles available
