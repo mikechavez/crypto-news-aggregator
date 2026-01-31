@@ -42,12 +42,17 @@ const parseNarrativeDate = (dateValue: any): string => {
 };
 
 
+interface PaginationState {
+  offset: number;
+  totalCount: number;
+}
+
 export function Narratives() {
   const [expandedArticles, setExpandedArticles] = useState<Set<number>>(new Set());
   const [narrativeArticles, setNarrativeArticles] = useState<Map<string, any[]>>(new Map());
   const [loadingArticles, setLoadingArticles] = useState<Set<string>>(new Set());
   const [loadingMore, setLoadingMore] = useState<Set<string>>(new Set());
-  const [paginationState, setPaginationState] = useState<Map<string, number>>(new Map());
+  const [paginationState, setPaginationState] = useState<Map<string, PaginationState>>(new Map());
   const ARTICLES_PER_PAGE = 20;
   
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
@@ -107,10 +112,9 @@ export function Narratives() {
           const articles = narrativeArticles.get(narrativeId) || narrative.articles || [];
           const isLoadingArticles = loadingArticles.has(narrativeId);
           
-          const displayedCount = paginationState.get(narrativeId) || ARTICLES_PER_PAGE;
-          const visibleArticles = articles.slice(0, displayedCount);
-          const totalArticles = articles.length;
-          const hasMore = visibleArticles.length < totalArticles;
+          const paginationInfo = paginationState.get(narrativeId);
+          const totalArticles = paginationInfo?.totalCount || narrative.article_count || articles.length;
+          const hasMore = articles.length < totalArticles;
           
           const toggleExpanded = async () => {
             console.log('[DEBUG] Card clicked - Narrative ID:', narrativeId, 'Title:', displayTitle);
@@ -127,10 +131,15 @@ export function Narratives() {
                 console.log('[DEBUG] Fetching articles for narrative:', narrativeId);
                 setLoadingArticles(prev => new Set(prev).add(narrativeId));
                 try {
-                  const narrativeWithArticles = await narrativesAPI.getNarrativeById(narrativeId);
-                  console.log('[DEBUG] API Response:', narrativeWithArticles);
-                  console.log('[DEBUG] Articles in response:', narrativeWithArticles.articles?.length || 0);
-                  setNarrativeArticles(prev => new Map(prev).set(narrativeId, narrativeWithArticles.articles || []));
+                  const response = await narrativesAPI.getArticlesPaginated(narrativeId, 0, ARTICLES_PER_PAGE);
+                  console.log('[DEBUG] API Response:', response);
+                  console.log('[DEBUG] Articles in response:', response.articles?.length || 0);
+                  console.log('[DEBUG] Total count:', response.total_count);
+                  setNarrativeArticles(prev => new Map(prev).set(narrativeId, response.articles || []));
+                  setPaginationState(prev => new Map(prev).set(narrativeId, {
+                    offset: response.offset + response.limit,
+                    totalCount: response.total_count
+                  }));
                 } catch (error) {
                   console.error('[ERROR] Failed to fetch articles:', error);
                 } finally {
@@ -147,8 +156,36 @@ export function Narratives() {
             setExpandedArticles(newExpanded);
           };
           
-          const loadMoreArticles = () => {
-            setPaginationState(prev => new Map(prev).set(narrativeId, (prev.get(narrativeId) || ARTICLES_PER_PAGE) + ARTICLES_PER_PAGE));
+          const loadMoreArticles = async () => {
+            if (!narrativeId || !paginationInfo) return;
+
+            const nextOffset = paginationInfo.offset;
+            setLoadingMore(prev => new Set(prev).add(narrativeId));
+
+            try {
+              const response = await narrativesAPI.getArticlesPaginated(narrativeId, nextOffset, ARTICLES_PER_PAGE);
+              console.log('[DEBUG] Load more response:', response);
+
+              // Append new articles to existing ones
+              setNarrativeArticles(prev => {
+                const existing = prev.get(narrativeId) || [];
+                return new Map(prev).set(narrativeId, [...existing, ...response.articles]);
+              });
+
+              // Update pagination state with new offset
+              setPaginationState(prev => new Map(prev).set(narrativeId, {
+                offset: response.offset + response.limit,
+                totalCount: response.total_count
+              }));
+            } catch (error) {
+              console.error('[ERROR] Failed to load more articles:', error);
+            } finally {
+              setLoadingMore(prev => {
+                const next = new Set(prev);
+                next.delete(narrativeId);
+                return next;
+              });
+            }
           };
           
           return (
@@ -222,7 +259,7 @@ export function Narratives() {
                     {/* Showing X of Y Articles badge */}
                     {isExpanded && articles.length > 0 && (
                       <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full">
-                        Showing {formatNumber(visibleArticles.length)} of {formatNumber(totalArticles)}
+                        Showing {formatNumber(articles.length)} of {formatNumber(totalArticles)}
                       </span>
                     )}
                   </div>
@@ -239,7 +276,7 @@ export function Narratives() {
                         </div>
                       ) : articles.length > 0 ? (
                         <>
-                          {visibleArticles.map((article, articleIdx) => {
+                          {articles.map((article, articleIdx) => {
                             console.log('[DEBUG] Rendering article:', articleIdx, article.title);
                             return (
                             <div key={articleIdx} className="text-sm bg-gray-50 dark:bg-dark-hover p-3 rounded">
