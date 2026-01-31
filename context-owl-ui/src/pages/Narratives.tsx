@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Sparkles, TrendingUp, Flame, Zap, Star, Wind } from 'lucide-react';
+import { Sparkles, TrendingUp, Flame, Zap, Star, Wind, AlertCircle } from 'lucide-react';
 import { narrativesAPI } from '../api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Loading } from '../components/Loading';
@@ -53,6 +53,7 @@ export function Narratives() {
   const [loadingArticles, setLoadingArticles] = useState<Set<string>>(new Set());
   const [loadingMore, setLoadingMore] = useState<Set<string>>(new Set());
   const [paginationState, setPaginationState] = useState<Map<string, PaginationState>>(new Map());
+  const [loadErrors, setLoadErrors] = useState<Map<string, string>>(new Map());
   const ARTICLES_PER_PAGE = 20;
   
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
@@ -125,11 +126,19 @@ export function Narratives() {
             } else {
               console.log('[DEBUG] Expanding card at index:', index);
               newExpanded.add(index);
-              
+
               // Fetch articles if not already loaded
               if (narrativeId && !narrativeArticles.has(narrativeId) && !loadingArticles.has(narrativeId)) {
                 console.log('[DEBUG] Fetching articles for narrative:', narrativeId);
                 setLoadingArticles(prev => new Set(prev).add(narrativeId));
+
+                // Clear any previous errors for this narrative
+                setLoadErrors(prev => {
+                  const next = new Map(prev);
+                  next.delete(narrativeId);
+                  return next;
+                });
+
                 try {
                   const response = await narrativesAPI.getArticlesPaginated(narrativeId, 0, ARTICLES_PER_PAGE);
                   console.log('[DEBUG] API Response:', response);
@@ -142,6 +151,12 @@ export function Narratives() {
                   }));
                 } catch (error) {
                   console.error('[ERROR] Failed to fetch articles:', error);
+
+                  // Set user-friendly error message
+                  setLoadErrors(prev => new Map(prev).set(
+                    narrativeId,
+                    'Failed to load articles. Please try again.'
+                  ));
                 } finally {
                   setLoadingArticles(prev => {
                     const next = new Set(prev);
@@ -162,6 +177,13 @@ export function Narratives() {
             const nextOffset = paginationInfo.offset;
             setLoadingMore(prev => new Set(prev).add(narrativeId));
 
+            // Clear any previous errors for this narrative
+            setLoadErrors(prev => {
+              const next = new Map(prev);
+              next.delete(narrativeId);
+              return next;
+            });
+
             try {
               const response = await narrativesAPI.getArticlesPaginated(narrativeId, nextOffset, ARTICLES_PER_PAGE);
               console.log('[DEBUG] Load more response:', response);
@@ -179,6 +201,12 @@ export function Narratives() {
               }));
             } catch (error) {
               console.error('[ERROR] Failed to load more articles:', error);
+
+              // Set user-friendly error message
+              setLoadErrors(prev => new Map(prev).set(
+                narrativeId,
+                'Failed to load more articles. Please try again.'
+              ));
             } finally {
               setLoadingMore(prev => {
                 const next = new Set(prev);
@@ -187,7 +215,51 @@ export function Narratives() {
               });
             }
           };
-          
+
+          const retryLoadArticles = async () => {
+            const articles = narrativeArticles.get(narrativeId) || [];
+
+            // If no articles have been loaded yet, retry initial load
+            if (articles.length === 0) {
+              console.log('[DEBUG] Retrying initial load for narrative:', narrativeId);
+
+              // Clear error before retry
+              setLoadErrors(prev => {
+                const next = new Map(prev);
+                next.delete(narrativeId);
+                return next;
+              });
+
+              setLoadingArticles(prev => new Set(prev).add(narrativeId));
+
+              try {
+                const response = await narrativesAPI.getArticlesPaginated(narrativeId, 0, ARTICLES_PER_PAGE);
+
+                setNarrativeArticles(prev => new Map(prev).set(narrativeId, response.articles || []));
+                setPaginationState(prev => new Map(prev).set(narrativeId, {
+                  offset: response.offset + response.limit,
+                  totalCount: response.total_count
+                }));
+              } catch (error) {
+                console.error('[ERROR] Retry failed:', error);
+                setLoadErrors(prev => new Map(prev).set(
+                  narrativeId,
+                  'Failed to load articles. Please try again.'
+                ));
+              } finally {
+                setLoadingArticles(prev => {
+                  const next = new Set(prev);
+                  next.delete(narrativeId);
+                  return next;
+                });
+              }
+            } else {
+              // If some articles are loaded, retry load more
+              console.log('[DEBUG] Retrying load more for narrative:', narrativeId);
+              await loadMoreArticles();
+            }
+          };
+
           return (
           <Card 
             key={`${narrative.theme}-${index}`}
@@ -318,6 +390,31 @@ export function Narratives() {
                             >
                               Load More
                             </button>
+                          )}
+
+                          {/* Error message with retry */}
+                          {loadErrors.has(narrativeId) && (
+                            <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200
+                                            dark:border-red-800 rounded-lg">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-start gap-2 flex-1">
+                                  <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                                  <span className="text-sm text-red-700 dark:text-red-300">
+                                    {loadErrors.get(narrativeId)}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    retryLoadArticles();
+                                  }}
+                                  className="text-sm text-red-600 dark:text-red-400 hover:text-red-800
+                                             dark:hover:text-red-300 font-medium hover:underline whitespace-nowrap"
+                                >
+                                  Retry
+                                </button>
+                              </div>
+                            </div>
                           )}
                         </>
                       ) : (
