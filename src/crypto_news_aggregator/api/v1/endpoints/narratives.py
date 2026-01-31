@@ -28,20 +28,20 @@ _narratives_cache_ttl = timedelta(minutes=1)
 async def get_articles_for_narrative(article_ids: List[str], limit: int = 20) -> List[Dict[str, Any]]:
     """
     Fetch article details for a list of article IDs.
-    
+
     Args:
         article_ids: List of article MongoDB ObjectIds (as strings)
         limit: Maximum number of articles to return (default 20)
-    
+
     Returns:
         List of article dicts with title, url, source, published_at
     """
     if not article_ids:
         return []
-    
+
     db = await mongo_manager.get_async_database()
     articles_collection = db.articles
-    
+
     # Convert string IDs to ObjectIds
     object_ids = []
     for article_id in article_ids[:limit]:
@@ -52,15 +52,15 @@ async def get_articles_for_narrative(article_ids: List[str], limit: int = 20) ->
                 object_ids.append(article_id)
         except Exception:
             continue
-    
+
     if not object_ids:
         return []
-    
+
     # Fetch articles by _id
     cursor = articles_collection.find(
         {"_id": {"$in": object_ids}}
     ).sort("published_at", -1).limit(limit)
-    
+
     articles = []
     async for article in cursor:
         articles.append({
@@ -69,8 +69,107 @@ async def get_articles_for_narrative(article_ids: List[str], limit: int = 20) ->
             "source": article.get("source", ""),
             "published_at": article.get("published_at").isoformat() if article.get("published_at") else None
         })
-    
+
     return articles
+
+
+async def get_articles_paginated(
+    narrative_id: str,
+    offset: int,
+    limit: int,
+    db: Any
+) -> Dict[str, Any]:
+    """
+    Fetch paginated articles for a narrative with total count and has_more flag.
+
+    Args:
+        narrative_id: MongoDB ObjectId of the narrative (as string)
+        offset: Number of articles to skip (0-based indexing)
+        limit: Maximum number of articles to return (1-50)
+        db: Database connection (AsyncIO motor database)
+
+    Returns:
+        Dict with:
+        - articles: List of article dicts (title, url, source, published_at)
+        - total_count: Total number of articles in narrative
+        - offset: Requested offset
+        - limit: Requested limit
+        - has_more: Boolean indicating if more articles exist beyond this page
+
+    Raises:
+        HTTPException 400: If offset < 0, limit <= 0, limit > 50, or invalid narrative ID
+        HTTPException 404: If narrative not found
+    """
+    # Validate offset and limit
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="Offset cannot be negative")
+
+    if limit <= 0:
+        raise HTTPException(status_code=400, detail="Limit must be greater than 0")
+
+    if limit > 50:
+        raise HTTPException(status_code=400, detail="Limit cannot exceed 50")
+
+    # Validate narrative ID format
+    try:
+        narrative_obj_id = ObjectId(narrative_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid narrative ID format")
+
+    # Fetch narrative to get article_ids
+    narratives_collection = db.narratives
+    narrative = await narratives_collection.find_one({"_id": narrative_obj_id})
+
+    if not narrative:
+        raise HTTPException(status_code=404, detail="Narrative not found")
+
+    # Get article IDs and total count
+    article_ids = narrative.get("article_ids", [])
+    total_count = len(article_ids)
+
+    # Slice article IDs based on offset and limit
+    sliced_article_ids = article_ids[offset:offset + limit]
+
+    # Fetch article details
+    articles = []
+    if sliced_article_ids:
+        articles_collection = db.articles
+
+        # Convert string IDs to ObjectIds
+        object_ids = []
+        for article_id in sliced_article_ids:
+            try:
+                if isinstance(article_id, str):
+                    object_ids.append(ObjectId(article_id))
+                else:
+                    object_ids.append(article_id)
+            except Exception:
+                continue
+
+        if object_ids:
+            # Fetch articles by _id
+            cursor = articles_collection.find(
+                {"_id": {"$in": object_ids}}
+            ).sort("published_at", -1).limit(len(object_ids))
+
+            async for article in cursor:
+                articles.append({
+                    "title": article.get("title", ""),
+                    "url": article.get("url", ""),
+                    "source": article.get("source", ""),
+                    "published_at": article.get("published_at").isoformat() if article.get("published_at") else None
+                })
+
+    # Calculate has_more
+    has_more = (offset + limit) < total_count
+
+    return {
+        "articles": articles,
+        "total_count": total_count,
+        "offset": offset,
+        "limit": limit,
+        "has_more": has_more
+    }
 
 
 class TimelineSnapshot(BaseModel):
@@ -635,6 +734,51 @@ async def get_resurrected_narratives_endpoint(
     except Exception as e:
         logger.exception(f"Error fetching resurrected narratives: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch resurrected narratives")
+
+
+@router.get("/{narrative_id}/articles")
+async def get_narrative_articles_endpoint(
+    narrative_id: str,
+    offset: int = Query(0, ge=0, description="Number of articles to skip"),
+    limit: int = Query(20, ge=1, le=50, description="Maximum number of articles to return (1-50)")
+):
+    """
+    Get paginated articles for a specific narrative.
+
+    Returns a page of articles with pagination metadata.
+
+    Args:
+        narrative_id: MongoDB ObjectId of the narrative (as string)
+        offset: Number of articles to skip (default 0)
+        limit: Maximum number of articles to return (default 20, max 50)
+
+    Returns:
+        Dict with:
+        - articles: List of article dicts with title, url, source, published_at
+        - total_count: Total number of articles in this narrative
+        - offset: Requested offset
+        - limit: Requested limit
+        - has_more: Boolean indicating if more articles exist
+
+    Raises:
+        400: If invalid parameters (offset < 0, limit > 50, invalid narrative ID)
+        404: If narrative not found
+        500: If database error occurs
+    """
+    try:
+        db = await mongo_manager.get_async_database()
+        result = await get_articles_paginated(
+            narrative_id=narrative_id,
+            offset=offset,
+            limit=limit,
+            db=db
+        )
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error fetching paginated articles: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch articles")
 
 
 @router.get("/{narrative_id}", response_model=NarrativeResponse)
