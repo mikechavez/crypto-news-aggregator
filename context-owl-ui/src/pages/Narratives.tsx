@@ -116,6 +116,10 @@ export function Narratives() {
           const paginationInfo = paginationState.get(narrativeId);
           const totalArticles = paginationInfo?.totalCount || narrative.article_count || articles.length;
           const hasMore = articles.length < totalArticles;
+
+          // Calculate progress indicator values
+          const currentPage = Math.floor(articles.length / ARTICLES_PER_PAGE) + (articles.length % ARTICLES_PER_PAGE > 0 ? 1 : 0);
+          const totalPages = Math.ceil(totalArticles / ARTICLES_PER_PAGE);
           
           const toggleExpanded = async () => {
             console.log('[DEBUG] Card clicked - Narrative ID:', narrativeId, 'Title:', displayTitle);
@@ -327,12 +331,17 @@ export function Narratives() {
                     <div className="text-sm text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1">
                       {isExpanded ? '▼' : '▶'} {formatNumber(narrative.article_count)} Articles
                     </div>
-                    
-                    {/* Showing X of Y Articles badge */}
+
+                    {/* Progress indicator and Showing X of Y Articles badge */}
                     {isExpanded && articles.length > 0 && (
-                      <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full">
-                        Showing {formatNumber(articles.length)} of {formatNumber(totalArticles)}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                          Page {currentPage} of {totalPages}
+                        </span>
+                        <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full">
+                          Showing {formatNumber(articles.length)} of {formatNumber(totalArticles)}
+                        </span>
+                      </div>
                     )}
                   </div>
                   
