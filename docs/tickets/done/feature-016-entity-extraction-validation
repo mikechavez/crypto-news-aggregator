@@ -1,0 +1,448 @@
+# FEATURE-016: Entity Extraction Validation (LLM Hallucination Prevention)
+
+## Context
+- **ADR:** None (Data Quality Fix)
+- **Sprint:** Sprint 3 (Data Quality & Stability)
+- **Priority:** P0 (CRITICAL - Prevents Irrelevant Articles)
+- **Estimate:** 2-3 hours
+- **Parent Investigation:** FEATURE-014 (Deep-research code audit)
+- **Status:** ✅ COMPLETE & COMMITTED (2026-01-28)
+- **Implementation Progress:**
+  - ✅ Core function implemented and integrated
+  - ✅ 26 unit tests added - ALL PASSING
+  - ✅ Special character edge case fixed (hybrid approach)
+  - ✅ Committed to feature/016-entity-extraction-validation (commit a15c89a)
+
+## Background
+
+During BUG-003 investigation (irrelevant articles in narratives), deep-research code audit revealed that **LLM entity extraction never validates that extracted entities actually appear in the article text**.
+
+**Current Problem:**
+```python
+# narrative_themes.py:755
+# LLM extracts: nucleus_entity = "Netflix"
+# Article is about: "Coinbase stock surges"
+# Result: "Netflix" assigned as nucleus entity (hallucination)
+# No validation that "Netflix" appears in article.title or article.text
+```
+
+**Real Examples Found:**
+1. **"Netflix Stock Earnings"** article assigned to Coinbase narrative
+   - LLM hallucinated "Coinbase" as nucleus entity
+   - "Coinbase" doesn't appear in article text
+   - Article is about Netflix earnings
+
+**Root Cause:**
+- `narrative_themes.py:755` - LLM extraction has no post-validation
+- LLM can hallucinate entities not present in source text
+- No check that `nucleus_entity` appears in `article.title` or `article.text`
+
+**Impact:**
+- 1-2% of articles assigned to wrong narratives
+- Undermines platform credibility
+- Users see obviously irrelevant articles
+
+## Implementation Status (2026-01-28) - ✅ COMPLETE
+
+### ✅ FULLY IMPLEMENTED & TESTED
+
+**Validation Function Added (narrative_themes.py:28-77)**
+```python
+def validate_entity_in_text(nucleus_entity: str, article_title: str, article_text: str) -> bool:
+    """
+    Validate that the extracted nucleus entity actually appears in the article text.
+
+    Hybrid approach:
+    - For simple entities (alphanumeric only): Uses word-boundary regex
+    - For entities with special chars: Uses exact string matching
+
+    This prevents false matches (e.g., "Bit" ≠ "Bitcoin") while supporting
+    entities like "OpenAI (ChatGPT)" and "U.S. Securities"
+    """
+```
+
+**Integration Into Extraction Pipeline (narrative_themes.py:787+)**
+- Called after JSON parsing succeeds
+- Validates nucleus_entity before accepting extraction
+- Logs hallucination detection
+- Retries with stricter prompt on validation failure (same retry logic as JSON validation)
+- Returns None if max retries exhausted
+
+**Test Coverage (test_narrative_themes.py)**
+- 26 comprehensive unit tests added to TestValidateEntityInText class
+- Test Categories:
+  - ✅ Basic matching (title, body, both)
+  - ✅ Case insensitivity (lower, upper, mixed)
+  - ✅ Word boundaries (Bit vs Bitcoin, ETH vs Ethereum)
+  - ✅ Edge cases (empty, None, long text)
+  - ✅ Real hallucination examples (Netflix → Coinbase)
+  - ✅ Multi-word entities
+  - ✅ Special characters (parentheses, hyphens, periods)
+
+**Test Results: ALL 26 PASSING ✅**
+- 109/116 total tests in suite passing
+- 7 skipped tests (unrelated, marked @skip)
+- All 26 entity validation tests passing
+- Special character edge case fixed with hybrid approach
+
+---
+
+## What to Build (Original Specification)
+
+Add **entity text validation** after LLM extraction to prevent hallucinations:
+
+1. After LLM extracts `nucleus_entity`, verify it appears in article text
+2. Check both `article.title` and `article.text` (case-insensitive)
+3. Reject extraction if entity not found in text
+4. Log rejected extractions for monitoring
+5. Return `None` or skip article if validation fails
+
+**Expected Behavior:**
+```python
+# BEFORE (Current - No Validation)
+LLM extracts: nucleus_entity = "Netflix"
+Article text: "Coinbase stock surges after earnings"
+Result: ✅ Accepted (no validation)
+→ Wrong! "Netflix" not in article
+
+# AFTER (With Validation)
+LLM extracts: nucleus_entity = "Netflix"
+Article text: "Coinbase stock surges after earnings"
+Validation: ❌ "Netflix" not found in text
+Result: Rejected, article skipped
+→ Correct! Prevents hallucination
+```
+
+## Files to Modify
+
+**Primary:**
+- `src/crypto_news_aggregator/services/narrative_themes.py` (line ~755)
+  - Add `validate_entity_in_text()` function
+  - Call validation after LLM extraction
+  - Reject extractions that fail validation
+  - Add logging for rejected extractions
+
+**Secondary (for logging):**
+- `src/crypto_news_aggregator/services/narrative_service.py`
+  - Add counter for rejected extractions
+  - Log summary stats after detection run
+
+## Implementation Details
+
+### Step 1: Add Entity Validation Function
+
+```python
+# In narrative_themes.py (around line 700, before LLM extraction)
+
+import logging
+import re
+
+logger = logging.getLogger(__name__)
+
+def validate_entity_in_text(nucleus_entity: str, article_title: str, article_text: str) -> bool:
+    """
+    Validate that the extracted nucleus entity actually appears in the article text.
+    
+    This prevents LLM hallucinations where the model extracts entities not present
+    in the source material.
+    
+    Args:
+        nucleus_entity: Entity extracted by LLM (e.g., "Netflix", "Coinbase")
+        article_title: Article headline
+        article_text: Full article text
+        
+    Returns:
+        True if entity found in title or text, False otherwise
+        
+    Example:
+        >>> validate_entity_in_text("Netflix", "Netflix Stock Surges", "Netflix reported...")
+        True
+        >>> validate_entity_in_text("Netflix", "Coinbase Earnings", "Coinbase reported...")
+        False
+    """
+    if not nucleus_entity:
+        return False
+    
+    # Normalize for case-insensitive matching
+    entity_lower = nucleus_entity.lower()
+    title_lower = (article_title or "").lower()
+    text_lower = (article_text or "").lower()
+    
+    # Check if entity appears in title or text
+    # Use word boundary matching to avoid false positives (e.g., "Bit" matching "Bitcoin")
+    pattern = r'\b' + re.escape(entity_lower) + r'\b'
+    
+    found_in_title = bool(re.search(pattern, title_lower))
+    found_in_text = bool(re.search(pattern, text_lower))
+    
+    return found_in_title or found_in_text
+```
+
+### Step 2: Integrate Validation into LLM Extraction
+
+```python
+# In narrative_themes.py (around line 755 - after LLM extraction)
+
+async def extract_narrative_theme_with_llm(article: Dict) -> Optional[Dict]:
+    """
+    Extract narrative theme using Claude LLM.
+    
+    Now includes validation to prevent hallucinated entities.
+    """
+    # ... existing LLM call code ...
+    
+    # Parse LLM response
+    try:
+        response_data = json.loads(llm_response)
+        nucleus_entity = response_data.get("nucleus_entity")
+        theme = response_data.get("theme")
+        
+        # NEW: Validate entity appears in article text
+        if not validate_entity_in_text(
+            nucleus_entity=nucleus_entity,
+            article_title=article.get("title", ""),
+            article_text=article.get("text", "")
+        ):
+            logger.warning(
+                f"Entity extraction validation failed: '{nucleus_entity}' not found in article",
+                extra={
+                    "article_id": article.get("id"),
+                    "article_title": article.get("title", "")[:100],
+                    "extracted_entity": nucleus_entity,
+                    "validation_failed": True
+                }
+            )
+            return None  # Reject this extraction
+        
+        # Validation passed, continue normally
+        return {
+            "nucleus_entity": nucleus_entity,
+            "theme": theme,
+            # ... rest of extraction
+        }
+        
+    except json.JSONDecodeError:
+        logger.error(f"Failed to parse LLM response")
+        return None
+```
+
+### Step 3: Add Observability (Logging)
+
+```python
+# In narrative_service.py (around detect_narratives function)
+
+# Add counter at start of detection run
+rejected_entity_validation = 0
+
+# Increment counter when validation fails
+if not validate_entity_in_text(...):
+    rejected_entity_validation += 1
+    # ... log rejection ...
+
+# Log summary at end of detection run
+logger.info(
+    "Narrative detection complete",
+    extra={
+        "articles_processed": total_articles,
+        "rejected_entity_validation": rejected_entity_validation,
+        "rejection_rate": f"{rejected_entity_validation/total_articles*100:.1f}%",
+        "narratives_created": len(new_narratives)
+    }
+)
+```
+
+### Step 4: Add Tests
+
+```python
+# tests/test_narrative_themes.py
+
+def test_validate_entity_in_text_success():
+    """Test validation passes when entity is in text."""
+    assert validate_entity_in_text(
+        nucleus_entity="Bitcoin",
+        article_title="Bitcoin Price Surges to New High",
+        article_text="Bitcoin reached a new all-time high today..."
+    ) is True
+
+def test_validate_entity_in_text_in_body_only():
+    """Test validation passes when entity only in body."""
+    assert validate_entity_in_text(
+        nucleus_entity="Ethereum",
+        article_title="Crypto Market Update",
+        article_text="Ethereum led the gains with 5% increase..."
+    ) is True
+
+def test_validate_entity_in_text_hallucination():
+    """Test validation fails when entity is hallucinated."""
+    assert validate_entity_in_text(
+        nucleus_entity="Netflix",
+        article_title="Coinbase Earnings Beat Expectations",
+        article_text="Coinbase reported strong Q4 earnings..."
+    ) is False
+
+def test_validate_entity_in_text_case_insensitive():
+    """Test validation is case-insensitive."""
+    assert validate_entity_in_text(
+        nucleus_entity="coinbase",
+        article_title="COINBASE Stock Rises",
+        article_text="Coinbase shares increased..."
+    ) is True
+
+def test_validate_entity_in_text_word_boundary():
+    """Test validation respects word boundaries."""
+    # "Bit" should NOT match "Bitcoin"
+    assert validate_entity_in_text(
+        nucleus_entity="Bit",
+        article_title="Bitcoin Price Update",
+        article_text="Bitcoin is trading higher..."
+    ) is False
+    
+    # "Bitcoin" should match "Bitcoin"
+    assert validate_entity_in_text(
+        nucleus_entity="Bitcoin",
+        article_title="Bitcoin Price Update",
+        article_text="Bitcoin is trading higher..."
+    ) is True
+```
+
+## Acceptance Criteria
+
+- [x] `validate_entity_in_text()` function implemented
+- [x] Case-insensitive matching (Bitcoin = bitcoin = BITCOIN)
+- [x] Word boundary matching (avoid "Bit" matching "Bitcoin")
+- [x] Validation integrated after LLM extraction
+- [x] Failed validations return `None` (skip article)
+- [x] Rejected extractions logged with article details
+- [x] Summary logging includes rejection count and rate
+- [x] Unit tests cover success, failure, and edge cases
+- [x] Test with known bad article (Netflix → Coinbase)
+- [x] Verify rejection rate is reasonable (1-5%)
+
+## Out of Scope
+
+- Fuzzy matching (e.g., "BTC" matching "Bitcoin")
+- Synonym matching (e.g., "ETH" matching "Ethereum")
+- Multi-word entity handling improvements (handled by word boundary regex)
+- Historical article reprocessing (new articles only)
+
+## Dependencies
+
+**Blocked by:** None
+**Blocks:** None (complements FEATURE-017, FEATURE-018)
+
+## Testing Requirements
+
+### Unit Tests
+See "Step 4: Add Tests" above
+
+### Integration Testing
+```bash
+# Test with production data
+python -m crypto_news_aggregator.services.narrative_service
+
+# Check logs for:
+# 1. Rejected extractions (should see Netflix, etc.)
+# 2. Rejection rate (should be 1-5%)
+# 3. No legitimate articles rejected
+```
+
+### Manual Validation
+```python
+# Test known bad article (Netflix in Coinbase narrative)
+article = {
+    "id": "...",
+    "title": "Netflix Stock Earnings Beat Estimates",
+    "text": "Netflix reported strong Q4 earnings..."
+}
+
+# Before fix: LLM might extract "Coinbase" (hallucination)
+# After fix: Validation rejects because "Coinbase" not in text
+```
+
+## Success Metrics
+
+**Target:**
+- Rejection rate: 1-5% of articles (catches hallucinations without over-filtering)
+- Zero obviously wrong company assignments (Netflix → Coinbase)
+- No legitimate articles rejected
+
+**Monitoring:**
+```bash
+# Check logs after deployment
+grep "Entity extraction validation failed" app.log | wc -l
+# Should see 1-5% of total articles
+
+# Sample rejected articles
+grep "Entity extraction validation failed" app.log | head -5
+# Verify rejected articles are actually irrelevant
+```
+
+## Environment Variables Required
+
+None (uses existing logging configuration)
+
+## Git Workflow
+
+```bash
+# Create feature branch
+git checkout -b feature/016-entity-extraction-validation
+
+# Implement validation
+# Add tests
+# Test against production data
+
+git add src/crypto_news_aggregator/services/narrative_themes.py
+git add tests/test_narrative_themes.py
+
+git commit -m "feat(narratives): add entity extraction validation
+
+- Validate extracted entities actually appear in article text
+- Prevent LLM hallucinations (e.g., Netflix → Coinbase)
+- Add case-insensitive word-boundary matching
+- Log rejected extractions for monitoring
+- Add comprehensive tests
+
+Fixes: BUG-003 (partial - 1 of 3 fixes)
+Related: FEATURE-014, FEATURE-017, FEATURE-018"
+
+git push origin feature/016-entity-extraction-validation
+```
+
+## Quick Reference
+
+**Problem:** LLM hallucinates entities not in article text
+**Solution:** Validate entity appears in title or text
+**Location:** `narrative_themes.py:755` (after LLM extraction)
+**Time:** 2-3 hours (implementation + testing)
+
+**Known Bad Cases:**
+1. "Netflix Stock Earnings" → Incorrectly assigned to Coinbase
+2. Entity extracted but not present in source text
+
+**Expected Rejection Rate:** 1-5% of articles
+
+## Related Tickets
+
+- **FEATURE-014** - Investigation that discovered this issue
+- **BUG-003** - Irrelevant articles in narratives (parent bug)
+- **FEATURE-015** - Database safety hardening (sibling)
+- **FEATURE-017** - Actor salience threshold tuning (next fix)
+- **FEATURE-018** - Post-clustering validation (final fix)
+
+## Notes
+
+This is **Fix 1 of 3** from the BUG-003 investigation:
+- ⭐ **Fix 1 (this):** Entity extraction validation (highest priority)
+- Fix 2: Actor salience threshold increase (FEATURE-017)
+- Fix 3: Post-clustering validation (FEATURE-018)
+
+**Why this is highest priority:**
+- Catches the most egregious errors (completely wrong companies)
+- Prevents hallucinations at the source
+- Simple validation with high ROI
+- No false positives (entity either is or isn't in text)
+
+**After this fix:**
+- "Netflix → Coinbase" type errors eliminated
+- Rejection rate provides quality signal
+- Combined with FEATURE-017 and FEATURE-018 for comprehensive quality

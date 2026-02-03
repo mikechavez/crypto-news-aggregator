@@ -1,0 +1,36 @@
+slash commands
+
+
+/session-start
+
+read session-start.md
+
+/session-end
+
+Update docs/session-start.md and docs/current-sprint.md and tickets/
+
+update session-start.md
+update current-sprint.md
+
+
+/implement-ticket [ticketNumber]
+
+use haiku to implement ticket-###
+
+
+/test 
+
+inputs: security-standards.md, ticket-000
+
+test the feature in ticket.
+
+/commit-push
+
+inputs: coding standards
+
+commit by following development-standards.md, security-standards.md, and ui-standards.md
+
+
+
+current-sprint.md: Detailed log of everything in the sprint (useful for retrospectives)
+SESSION_START.md: Optimized cache for "start working immediately" (updated continuously)

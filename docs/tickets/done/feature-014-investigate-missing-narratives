@@ -1,0 +1,358 @@
+feature-014-investigate-missing-narratives
+
+Context
+ADR: None (Investigation ticket)
+Sprint: Sprint 2 (Intelligence Layer)
+Priority: P0 (CRITICAL BLOCKER)
+Estimate: 30-60 minutes
+Background
+During FEATURE-013 dry-run testing, the backfill script reported 0 narratives in the database when production should have 50-100+ narratives. This blocks all narrative-related work including:
+
+FEATURE-013 backfill execution
+FEATURE-011 consolidation safety pass
+Any narrative UI testing
+
+Status: **COMPLETE** (2026-01-07)
+Root Cause Found: Scripts were connecting to `backdrop` database instead of `crypto_news` database
+- FEATURE-013 backfill script updated to use correct database
+- Query filter also fixed (was filtering by date, now backfills all)
+
+**Follow-up Tickets Created from Investigation (2026-01-28):**
+This investigation's findings led to the creation of implementation tickets to prevent similar issues and improve data quality:
+- **FEATURE-015:** Database Safety Hardening (prevent wrong database connections)
+- **FEATURE-016:** Entity Extraction Validation (prevent LLM hallucinations in BUG-003)
+- **FEATURE-017:** Actor Salience Threshold Tuning (filter tangential mentions in BUG-003)
+- **FEATURE-018:** Post-Clustering Validation (final quality gate for BUG-003)
+## Investigation Results (2026-01-07)
+
+**Diagnostic Summary:**
+- ✅ Connected to MongoDB Atlas successfully
+- ✅ Found 3 databases available: admin, crypto_news, local
+- ✅ Database `backdrop` was empty (0 collections) - this was the issue
+- ✅ Database `crypto_news` contains production data:
+  - 24,573 articles
+  - 436 narratives
+  - 163,677 entity mentions
+  - **All 436 narratives missing narrative_focus field** ✅ Ready for backfill
+
+**Root Cause:**
+- Database name was hardcoded as `backdrop` in both FEATURE-013 and FEATURE-014 scripts
+- Actual production database is `crypto_news`
+- MongoDB Atlas creates empty databases on first access, so script was connecting successfully but finding no data
+
+**Fixes Applied:**
+1. Fixed `scripts/backfill_narrative_focus.py`:
+   - Changed `client["backdrop"]` → `client["crypto_news"]`
+   - Removed date filter (was `first_detected_at >= Dec 1, 2025` which found 0 results)
+   - Now backfills ALL narratives missing narrative_focus field
+
+2. Created diagnostic script at `scripts/diagnose_database.py`:
+   - Lists all databases and collection counts
+   - Validates connection to production
+   - Checks for narratives missing focus field
+   - Provides clear status summary
+
+**Validation:**
+- Dry-run test: Found 436 narratives ✅
+- Sample narratives displayed correctly ✅
+- Ready to execute real backfill
+
+What to Build
+Investigation script that:
+
+Verifies correct database connection (prod vs dev)
+Counts articles, narratives, and entity_mentions
+Checks RSS fetcher status and recent activity
+Verifies narrative detection pipeline is working
+Tests a manual narrative detection run
+Provides actionable diagnosis of the issue
+
+Files to Check
+Environment/Config:
+
+.env - Verify MONGODB_URI points to production Atlas cluster
+src/crypto_news_aggregator/core/config.py - Database connection logic
+Railway environment variables (if different from local)
+
+Database Operations:
+
+src/crypto_news_aggregator/db/operations/articles.py - Article CRUD
+src/crypto_news_aggregator/db/operations/narratives.py - Narrative CRUD
+src/crypto_news_aggregator/db/operations/entity_mentions.py - Entity tracking
+
+Background Tasks:
+
+src/crypto_news_aggregator/background/rss_fetcher.py - Article ingestion
+src/crypto_news_aggregator/services/narrative_service.py - Narrative detection
+src/crypto_news_aggregator/tasks/celery_config.py - Celery task definitions
+
+Implementation Details
+Step 1: Create Database Diagnostic Script
+python#!/usr/bin/env python3
+"""
+Diagnose database connection and data state.
+
+Usage:
+    python scripts/diagnose_database.py
+"""
+
+import asyncio
+import os
+import sys
+from datetime import datetime, timedelta, timezone
+
+from motor.motor_asyncio import AsyncIOMotorClient
+from loguru import logger
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+
+async def diagnose_database():
+    """Run comprehensive database diagnostics."""
+    
+    # 1. Check environment
+    mongo_uri = os.getenv("MONGODB_URI")
+    if not mongo_uri:
+        logger.error("❌ MONGODB_URI not set in environment")
+        return
+    
+    # Extract database name from URI
+    if "backdrop" in mongo_uri.lower():
+        logger.info("✅ URI contains 'backdrop' - looks like production")
+    else:
+        logger.warning("⚠️  URI does not contain 'backdrop' - verify database name")
+    
+    logger.info(f"📍 Connection string: {mongo_uri[:50]}...{mongo_uri[-20:]}")
+    
+    # 2. Connect and verify
+    try:
+        client = AsyncIOMotorClient(mongo_uri)
+        
+        # Test connection
+        await client.admin.command('ping')
+        logger.info("✅ Successfully connected to MongoDB")
+        
+        # Get database name from URI or use default
+        db_name = "backdrop"
+        if "/" in mongo_uri and "?" in mongo_uri:
+            db_name = mongo_uri.split("/")[-1].split("?")[0]
+        
+        db = client[db_name]
+        logger.info(f"📊 Using database: {db_name}")
+        
+        # 3. Collection counts
+        logger.info("\n=== COLLECTION COUNTS ===")
+        
+        articles_count = await db.articles.count_documents({})
+        logger.info(f"Articles: {articles_count}")
+        
+        narratives_count = await db.narratives.count_documents({})
+        logger.info(f"Narratives: {narratives_count}")
+        
+        entity_mentions_count = await db.entity_mentions.count_documents({})
+        logger.info(f"Entity Mentions: {entity_mentions_count}")
+        
+        signals_count = await db.signals.count_documents({})
+        logger.info(f"Signals: {signals_count}")
+        
+        # 4. Recent activity check (last 7 days)
+        logger.info("\n=== RECENT ACTIVITY (Last 7 Days) ===")
+        
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        
+        recent_articles = await db.articles.count_documents({
+            "published_at": {"$gte": seven_days_ago}
+        })
+        logger.info(f"Recent articles: {recent_articles}")
+        
+        recent_narratives = await db.narratives.count_documents({
+            "first_detected_at": {"$gte": seven_days_ago}
+        })
+        logger.info(f"Recent narratives: {recent_narratives}")
+        
+        # 5. Sample documents
+        logger.info("\n=== SAMPLE DOCUMENTS ===")
+        
+        sample_article = await db.articles.find_one(
+            {},
+            sort=[("published_at", -1)]
+        )
+        if sample_article:
+            logger.info(f"Latest article: {sample_article.get('title', 'N/A')}")
+            logger.info(f"  - Published: {sample_article.get('published_at', 'N/A')}")
+            logger.info(f"  - Source: {sample_article.get('source', 'N/A')}")
+            logger.info(f"  - Has entities: {len(sample_article.get('entities', []))}")
+            logger.info(f"  - Relevance tier: {sample_article.get('relevance_tier', 'N/A')}")
+        else:
+            logger.warning("⚠️  No articles found")
+        
+        sample_narrative = await db.narratives.find_one(
+            {},
+            sort=[("last_updated", -1)]
+        )
+        if sample_narrative:
+            logger.info(f"Latest narrative: {sample_narrative.get('title', 'N/A')}")
+            logger.info(f"  - Theme: {sample_narrative.get('theme', 'N/A')}")
+            logger.info(f"  - Article count: {sample_narrative.get('article_count', 0)}")
+            logger.info(f"  - Has focus: {'narrative_focus' in sample_narrative}")
+            if 'narrative_focus' in sample_narrative:
+                logger.info(f"  - Focus: {sample_narrative['narrative_focus']}")
+            logger.info(f"  - Last updated: {sample_narrative.get('last_updated', 'N/A')}")
+        else:
+            logger.warning("⚠️  No narratives found")
+        
+        # 6. Check for narratives missing focus
+        if narratives_count > 0:
+            logger.info("\n=== NARRATIVE FOCUS STATUS ===")
+            
+            missing_focus = await db.narratives.count_documents({
+                "narrative_focus": {"$exists": False}
+            })
+            logger.info(f"Narratives missing focus: {missing_focus}/{narratives_count}")
+            
+            dec_cutoff = datetime(2025, 12, 1, tzinfo=timezone.utc)
+            missing_focus_recent = await db.narratives.count_documents({
+                "narrative_focus": {"$exists": False},
+                "first_detected_at": {"$gte": dec_cutoff}
+            })
+            logger.info(f"Missing focus (Dec 1+ only): {missing_focus_recent}")
+        
+        # 7. Diagnosis summary
+        logger.info("\n=== DIAGNOSIS ===")
+        
+        if articles_count == 0:
+            logger.error("❌ PROBLEM: No articles in database")
+            logger.info("   → Check if RSS fetcher is running")
+            logger.info("   → Verify Celery worker is active")
+            logger.info("   → Check Railway logs for ingestion errors")
+        elif narratives_count == 0:
+            logger.error("❌ PROBLEM: Articles exist but no narratives")
+            logger.info("   → Check narrative detection pipeline")
+            logger.info("   → Verify entity extraction is working")
+            logger.info("   → Check for errors in narrative_service.py")
+        elif recent_articles == 0:
+            logger.warning("⚠️  WARNING: No recent articles (last 7 days)")
+            logger.info("   → RSS fetcher may have stopped")
+            logger.info("   → Check Celery beat schedule")
+        else:
+            logger.info("✅ Database appears healthy")
+            logger.info(f"   → {articles_count} articles")
+            logger.info(f"   → {narratives_count} narratives")
+            logger.info(f"   → {recent_articles} recent articles")
+        
+        client.close()
+        
+    except Exception as e:
+        logger.error(f"❌ Database connection failed: {e}")
+        logger.info("   → Verify MONGODB_URI is correct")
+        logger.info("   → Check network connectivity")
+        logger.info("   → Verify MongoDB Atlas allows your IP")
+
+
+if __name__ == "__main__":
+    asyncio.run(diagnose_database())
+Step 2: Check Environment Variables
+bash# Verify .env file exists and has correct MONGODB_URI
+cat .env | grep MONGODB_URI
+
+# Compare with Railway production settings
+# (Check Railway dashboard → backdrop-api → Variables)
+Step 3: Verify Database Name in Connection String
+MongoDB connection strings use the format:
+`mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<DATABASE_NAME>?retryWrites=true&w=majority`
+
+The database name should be `crypto_news` for production.
+Step 4: Test Connection from Different Locations
+python# Add to diagnostic script - test from project root
+os.chdir('/Users/mc/dev-projects/crypto-news-aggregator')
+
+# Also test with explicit database name
+db = client.backdrop  # Force backdrop database
+Step 5: Fix and Verify
+Once issue identified:
+
+Update environment variables if needed
+Re-run diagnostic script
+Verify counts match expected production data
+Run FEATURE-013 dry-run again to confirm
+
+Acceptance Criteria
+
+✅ Diagnostic script identifies root cause of missing data
+✅ Database connection verified to production Atlas cluster
+✅ Article count > 1000 (production should have thousands)
+✅ Narrative count > 50 (production should have 50-100+)
+✅ Recent activity (last 7 days) shows active ingestion
+✅ Clear action plan to fix issue if misconfiguration found
+✅ FEATURE-013 dry-run shows expected narrative counts after fix
+
+Out of Scope
+
+Fixing broken RSS fetcher (separate ticket if needed)
+Fixing broken narrative detection (separate ticket if needed)
+Backfilling historical data (FEATURE-013 handles this)
+
+Dependencies
+None - This is the blocker investigation
+Testing Requirements
+bash# From repo root: /Users/mc/dev-projects/crypto-news-aggregator
+
+# 1. Run diagnostic
+python scripts/diagnose_database.py
+
+# 2. Compare with Railway production
+# Check Railway logs for recent article ingestion
+# Verify Celery worker is running
+
+# 3. Test FEATURE-013 after fix
+python scripts/backfill_narrative_focus.py --dry-run
+
+# Expected output after fix:
+# "Found 50-100 narratives to backfill"
+Success Metrics
+
+Diagnostic script runs successfully
+Root cause identified within 30 minutes
+Clear path forward to fix issue
+FEATURE-013 can proceed with real backfill
+
+Environment Variables Required
+
+MONGODB_URI - MongoDB Atlas connection string (must point to production)
+
+Git Workflow
+bash# Create diagnostic script only (no code changes yet)
+git checkout -b feature/investigate-missing-narratives
+
+git add scripts/diagnose_database.py
+
+git commit -m "feat(scripts): add database diagnostic script
+
+- Checks database connection and collection counts
+- Verifies recent activity and sample documents
+- Diagnoses missing narratives issue
+- Provides actionable remediation steps"
+
+# Don't push yet - investigate locally first
+Quick Reference
+Expected Production Counts:
+
+Articles: 1,500+ (from past 3 months)
+Narratives: 50-100+ (active narratives)
+Entity Mentions: 10,000+ (extracted entities)
+
+Database: backdrop (MongoDB Atlas)
+Collections:
+
+articles - News articles with entities
+narratives - Detected narrative clusters
+entity_mentions - Entity extraction results
+signals - Trending signals (deprecated - compute on read)
+
+Investigation Priority:
+
+Verify correct database connection
+Check collection counts
+Verify recent activity
+Identify root cause
+Document fix steps

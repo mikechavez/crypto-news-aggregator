@@ -1,0 +1,496 @@
+# [FEATURE-024] Smooth Scrolling - Complete Implementation Guide
+
+**Status:** Ready for Implementation  
+**Priority:** P2 (Medium - UX Enhancement)  
+**Estimated Effort:** 1 hour  
+**Sprint:** Sprint 4 (UX Enhancements)  
+**Depends On:** FEATURE-019 (Article Pagination)
+
+---
+
+## Overview
+
+This ticket adds automatic smooth scrolling to the first newly-loaded article after clicking "Load More". Without this, users don't see the new content immediately since it loads below the viewport, requiring manual scrolling.
+
+**Current Behavior:**
+- User clicks "Load More"
+- New articles load below viewport
+- User doesn't see new content
+- Must manually scroll down
+- Feels disconnected
+
+**New Behavior:**
+- User clicks "Load More"
+- New articles load
+- Viewport smoothly scrolls to first new article
+- User sees new content immediately
+- Smooth, continuous experience
+
+---
+
+## Implementation Instructions
+
+### Step 1: Add Data Attribute to Articles
+
+**File:** `context-owl-ui/src/pages/Narratives.tsx`
+
+**Location:** In the articles.map() block (around line 250)
+
+**FIND THIS:**
+```typescript
+        {articles.map((article, articleIdx) => (
+          <div key={articleIdx} className="text-sm bg-gray-50 dark:bg-dark-hover p-3 rounded">
+            <a
+              href={article.url}
+```
+
+**REPLACE WITH:**
+```typescript
+        {articles.map((article, articleIdx) => (
+          <div 
+            key={articleIdx} 
+            data-article-index={articleIdx}
+            className="text-sm bg-gray-50 dark:bg-dark-hover p-3 rounded"
+          >
+            <a
+              href={article.url}
+```
+
+**Explanation:** The `data-article-index` attribute allows us to target the first newly-loaded article for scrolling. For example, if 20 articles are loaded and we load 20 more, we can target the article at index 20 (the first new one).
+
+---
+
+### Step 2: Create Scroll Helper Function
+
+**File:** `context-owl-ui/src/pages/Narratives.tsx`
+
+**Location:** After the `retryLoadArticles` function, before the `return` statement (around line 220)
+
+**ADD THIS NEW FUNCTION:**
+```typescript
+const scrollToNewArticles = (narrativeId: string, previousCount: number) => {
+  // Find the first newly-loaded article (at index = previousCount)
+  const firstNewArticle = document.querySelector(
+    `[data-article-index="${previousCount}"]`
+  ) as HTMLElement;
+  
+  if (firstNewArticle) {
+    // Get the article's position
+    const rect = firstNewArticle.getBoundingClientRect();
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    
+    // Scroll to position with 80px offset from top (breathing room)
+    const targetPosition = rect.top + scrollTop - 80;
+    
+    window.scrollTo({
+      top: targetPosition,
+      behavior: 'smooth'
+    });
+    
+    console.log('[DEBUG] Scrolling to article index:', previousCount, 'at position:', targetPosition);
+  } else {
+    console.warn('[WARN] Could not find article at index:', previousCount);
+  }
+};
+```
+
+**Explanation:** This function:
+- Finds the first newly-loaded article using the `data-article-index` attribute
+- Calculates its position relative to the page top
+- Scrolls smoothly to that position with 80px offset (so it's not right at the top edge)
+- Uses native `window.scrollTo` with `behavior: 'smooth'` for animation
+
+---
+
+### Step 3: Update loadMoreArticles to Trigger Scroll
+
+**File:** `context-owl-ui/src/pages/Narratives.tsx`
+
+**Location:** Inside the `loadMoreArticles` function (around line 180)
+
+**FIND THIS:**
+```typescript
+const loadMoreArticles = async (narrativeId: string) => {
+  const state = paginationState.get(narrativeId);
+  if (!state || loadingMore.has(narrativeId)) {
+    console.log('[DEBUG] Skipping loadMore - state:', !!state, 'already loading:', loadingMore.has(narrativeId));
+    return;
+  }
+  
+  console.log('[DEBUG] Loading more articles - offset:', state.offset, 'narrativeId:', narrativeId);
+  setLoadingMore(prev => new Set(prev).add(narrativeId));
+  
+  // Clear any previous errors for this narrative
+  setLoadErrors(prev => {
+    const next = new Map(prev);
+    next.delete(narrativeId);
+    return next;
+  });
+  
+  try {
+    const response = await fetch(
+      `/api/v1/narratives/${narrativeId}/articles?offset=${state.offset}&limit=20`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to load more articles: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('[DEBUG] Load more response:', data.articles?.length, 'new articles');
+    
+    setPaginationState(prev => new Map(prev).set(narrativeId, {
+      loadedArticles: [...state.loadedArticles, ...data.articles],
+      offset: state.offset + data.limit,
+      hasMore: data.has_more,
+      totalCount: data.total_count
+    }));
+  } catch (error) {
+    console.error('[ERROR] Failed to load more articles:', error);
+    
+    // Set user-friendly error message
+    setLoadErrors(prev => new Map(prev).set(
+      narrativeId,
+      'Failed to load more articles. Please try again.'
+    ));
+  } finally {
+    setLoadingMore(prev => {
+      const next = new Set(prev);
+      next.delete(narrativeId);
+      return next;
+    });
+  }
+};
+```
+
+**REPLACE WITH:**
+```typescript
+const loadMoreArticles = async (narrativeId: string) => {
+  const state = paginationState.get(narrativeId);
+  if (!state || loadingMore.has(narrativeId)) {
+    console.log('[DEBUG] Skipping loadMore - state:', !!state, 'already loading:', loadingMore.has(narrativeId));
+    return;
+  }
+  
+  // Remember the current article count BEFORE loading more
+  const previousArticleCount = state.loadedArticles.length;
+  
+  console.log('[DEBUG] Loading more articles - offset:', state.offset, 'narrativeId:', narrativeId);
+  setLoadingMore(prev => new Set(prev).add(narrativeId));
+  
+  // Clear any previous errors for this narrative
+  setLoadErrors(prev => {
+    const next = new Map(prev);
+    next.delete(narrativeId);
+    return next;
+  });
+  
+  try {
+    const response = await fetch(
+      `/api/v1/narratives/${narrativeId}/articles?offset=${state.offset}&limit=20`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to load more articles: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('[DEBUG] Load more response:', data.articles?.length, 'new articles');
+    
+    setPaginationState(prev => new Map(prev).set(narrativeId, {
+      loadedArticles: [...state.loadedArticles, ...data.articles],
+      offset: state.offset + data.limit,
+      hasMore: data.has_more,
+      totalCount: data.total_count
+    }));
+    
+    // Scroll to first new article after state updates and DOM renders
+    // Use setTimeout to ensure DOM has updated with new articles
+    setTimeout(() => {
+      scrollToNewArticles(narrativeId, previousArticleCount);
+    }, 100);
+    
+  } catch (error) {
+    console.error('[ERROR] Failed to load more articles:', error);
+    
+    // Set user-friendly error message
+    setLoadErrors(prev => new Map(prev).set(
+      narrativeId,
+      'Failed to load more articles. Please try again.'
+    ));
+  } finally {
+    setLoadingMore(prev => {
+      const next = new Set(prev);
+      next.delete(narrativeId);
+      return next;
+    });
+  }
+};
+```
+
+**Explanation:** The key changes are:
+1. **Line 5:** Store `previousArticleCount` before loading (this is the index of the first new article)
+2. **Lines 39-42:** After successful load, wait 100ms for DOM to update, then scroll to the article at `previousArticleCount` index
+
+**Why 100ms delay?** React needs time to render the new articles to the DOM. The `setTimeout` ensures the articles are fully rendered before we try to scroll to them.
+
+---
+
+## Complete Function Reference
+
+Here's what the complete `loadMoreArticles` and `scrollToNewArticles` functions should look like:
+
+```typescript
+const scrollToNewArticles = (narrativeId: string, previousCount: number) => {
+  // Find the first newly-loaded article (at index = previousCount)
+  const firstNewArticle = document.querySelector(
+    `[data-article-index="${previousCount}"]`
+  ) as HTMLElement;
+  
+  if (firstNewArticle) {
+    // Get the article's position
+    const rect = firstNewArticle.getBoundingClientRect();
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    
+    // Scroll to position with 80px offset from top (breathing room)
+    const targetPosition = rect.top + scrollTop - 80;
+    
+    window.scrollTo({
+      top: targetPosition,
+      behavior: 'smooth'
+    });
+    
+    console.log('[DEBUG] Scrolling to article index:', previousCount, 'at position:', targetPosition);
+  } else {
+    console.warn('[WARN] Could not find article at index:', previousCount);
+  }
+};
+
+const loadMoreArticles = async (narrativeId: string) => {
+  const state = paginationState.get(narrativeId);
+  if (!state || loadingMore.has(narrativeId)) {
+    console.log('[DEBUG] Skipping loadMore - state:', !!state, 'already loading:', loadingMore.has(narrativeId));
+    return;
+  }
+  
+  // Remember the current article count BEFORE loading more
+  const previousArticleCount = state.loadedArticles.length;
+  
+  console.log('[DEBUG] Loading more articles - offset:', state.offset, 'narrativeId:', narrativeId);
+  setLoadingMore(prev => new Set(prev).add(narrativeId));
+  
+  // Clear any previous errors for this narrative
+  setLoadErrors(prev => {
+    const next = new Map(prev);
+    next.delete(narrativeId);
+    return next;
+  });
+  
+  try {
+    const response = await fetch(
+      `/api/v1/narratives/${narrativeId}/articles?offset=${state.offset}&limit=20`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to load more articles: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('[DEBUG] Load more response:', data.articles?.length, 'new articles');
+    
+    setPaginationState(prev => new Map(prev).set(narrativeId, {
+      loadedArticles: [...state.loadedArticles, ...data.articles],
+      offset: state.offset + data.limit,
+      hasMore: data.has_more,
+      totalCount: data.total_count
+    }));
+    
+    // Scroll to first new article after state updates and DOM renders
+    setTimeout(() => {
+      scrollToNewArticles(narrativeId, previousArticleCount);
+    }, 100);
+    
+  } catch (error) {
+    console.error('[ERROR] Failed to load more articles:', error);
+    
+    setLoadErrors(prev => new Map(prev).set(
+      narrativeId,
+      'Failed to load more articles. Please try again.'
+    ));
+  } finally {
+    setLoadingMore(prev => {
+      const next = new Set(prev);
+      next.delete(narrativeId);
+      return next;
+    });
+  }
+};
+```
+
+---
+
+## Testing Checklist
+
+### Manual Testing Steps
+
+**Test Case 1: Basic Auto-scroll**
+1. Navigate to Narratives page
+2. Expand narrative with 100+ articles
+3. Initial 20 articles load
+4. ✅ VERIFY: No auto-scroll on initial load (stays at narrative header)
+5. Scroll down to see all 20 articles
+6. Click "Load More"
+7. ✅ VERIFY: Viewport smoothly scrolls down
+8. ✅ VERIFY: First new article (article #21) is visible near top
+9. ✅ VERIFY: Animation is smooth (not jarring)
+10. ✅ VERIFY: Previous articles still accessible by scrolling up
+
+**Test Case 2: Multiple Load More Clicks**
+1. Expand narrative with 100+ articles
+2. Click "Load More" → ✅ Scrolls to article #21
+3. Click "Load More" again → ✅ Scrolls to article #41
+4. Click "Load More" again → ✅ Scrolls to article #61
+5. ✅ VERIFY: Each scroll is smooth
+6. ✅ VERIFY: Each scroll targets correct article
+
+**Test Case 3: No Scroll on Initial Load**
+1. Expand narrative for first time
+2. ✅ VERIFY: Initial 20 articles load
+3. ✅ VERIFY: **No auto-scroll** (viewport stays at top)
+4. ✅ VERIFY: User can see narrative header and first articles
+5. Click "Load More"
+6. ✅ VERIFY: **Now scroll happens** (to article #21)
+
+**Test Case 4: Scroll Positioning**
+1. Click "Load More"
+2. Wait for scroll to complete
+3. ✅ VERIFY: First new article is ~80px from top of viewport
+4. ✅ VERIFY: Article is not right at the edge (has breathing room)
+5. ✅ VERIFY: Article is fully visible (not cut off)
+
+**Test Case 5: Manual Scroll Override**
+1. Expand narrative, load 40 articles
+2. Manually scroll to top of page
+3. Click "Load More"
+4. ✅ VERIFY: Auto-scroll brings you back to article #41
+5. ✅ VERIFY: User can manually scroll away during/after animation
+
+**Test Case 6: Scroll After Error Recovery**
+1. Expand narrative, load 20 articles
+2. Simulate network error for "Load More" (offline)
+3. ✅ VERIFY: **No auto-scroll** (error occurred)
+4. Fix network, click "Retry"
+5. ✅ VERIFY: Auto-scroll happens after successful load
+
+**Test Case 7: Browser Console Check**
+1. Open DevTools → Console
+2. Expand narrative
+3. Click "Load More"
+4. ✅ VERIFY: Console log shows "Scrolling to article index: 20"
+5. ✅ VERIFY: No warning about missing article
+6. Click "Load More" again
+7. ✅ VERIFY: Console log shows "Scrolling to article index: 40"
+
+**Test Case 8: Rapid Clicking Prevention**
+1. Expand narrative
+2. Click "Load More"
+3. Immediately click "Load More" again (rapid fire)
+4. ✅ VERIFY: Button is disabled (prevents second click)
+5. ✅ VERIFY: Only one scroll animation happens
+6. Wait for load to complete
+7. Click "Load More" again
+8. ✅ VERIFY: New scroll animation to next batch
+
+**Test Case 9: Scroll Timing**
+1. Expand narrative
+2. Click "Load More"
+3. Watch the scroll animation
+4. ✅ VERIFY: Scroll starts ~100ms after articles appear
+5. ✅ VERIFY: Scroll animation takes ~0.5-1 second
+6. ✅ VERIFY: Timing feels natural (not too fast/slow)
+
+**Test Case 10: Multiple Narratives**
+1. Expand Narrative A
+2. Click "Load More" in Narrative A
+3. ✅ VERIFY: Scrolls to Narrative A's new articles
+4. Expand Narrative B (while A is still expanded)
+5. Click "Load More" in Narrative B
+6. ✅ VERIFY: Scrolls to Narrative B's new articles
+7. ✅ VERIFY: Each narrative scrolls independently
+
+---
+
+## Browser Compatibility Testing
+
+Test in the following browsers:
+- ✅ Chrome (latest) - native smooth scroll
+- ✅ Firefox (latest) - native smooth scroll
+- ✅ Safari (latest) - native smooth scroll
+- ✅ Edge (latest) - native smooth scroll
+- ✅ Mobile Safari (iOS) - may have different scroll behavior
+- ✅ Mobile Chrome (Android) - may have different scroll behavior
+
+**Note:** All modern browsers support `scrollIntoView({ behavior: 'smooth' })` and `window.scrollTo({ behavior: 'smooth' })`. If a browser doesn't support it, it will fall back to instant scroll (still functional, just not animated).
+
+---
+
+## Acceptance Criteria
+
+- ✅ After "Load More", viewport scrolls automatically
+- ✅ Scroll targets first newly-loaded article
+- ✅ Scroll uses smooth animation (not instant)
+- ✅ Scroll positions article ~80px from top
+- ✅ Initial expansion does NOT auto-scroll
+- ✅ Scroll only after successful load
+- ✅ Scroll does NOT happen if load fails
+- ✅ User can manually scroll during/after
+- ✅ Works for multiple batches sequentially
+- ✅ Console logs help debug scroll behavior
+- ✅ No errors in console
+- ✅ Cross-browser compatible
+- ✅ Mobile responsive
+
+---
+
+## Success Metrics
+
+After deployment, measure:
+- **Smooth scroll experience:** Users report scrolling feels natural
+- **Content visibility:** 100% of new articles visible after scroll
+- **No jarring jumps:** Scroll animation is smooth
+- **User control:** Users can scroll manually during/after
+- **Correct targeting:** Always scrolls to first new article
+- **Zero scroll on initial load:** Only on "Load More"
+
+---
+
+## Notes for Developer
+
+1. **Why 100ms setTimeout?** React state updates are async. The setTimeout ensures the DOM has fully rendered the new articles before we try to scroll to them.
+
+2. **Why 80px offset?** Gives breathing room at the top so the article isn't right at the edge. Adjust this value if you have a sticky header or want different spacing.
+
+3. **data-article-index attribute:** This makes it easy to target specific articles by their index. Alternative would be using article IDs, but index is simpler since we know the count.
+
+4. **Smooth scroll fallback:** If a browser doesn't support `behavior: 'smooth'`, it will instant scroll (still functional, just not animated).
+
+5. **No scroll on error:** The `setTimeout` with scroll is inside the `try` block's success path, so if an error occurs, no scroll happens.
+
+6. **Console logs:** The debug logs help verify the scroll is targeting the right article. Remove them before final deployment if desired.
+
+---
+
+## Related Tickets
+
+- **FEATURE-019:** Article Pagination (prerequisite - must be complete)
+- **FEATURE-020:** Skeleton Loaders (complementary)
+- **FEATURE-021:** Error Handling (complementary - scroll only on success)
+- **FEATURE-022:** Progress Indicator (complementary)
+
+---
+
+**Implementation Time:** 30-45 minutes  
+**Testing Time:** 15-30 minutes  
+**Total:** 45 minutes - 1 hour  
+
+**Status:** Ready for implementation - all code provided above

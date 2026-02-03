@@ -1,0 +1,440 @@
+---
+id: BUG-003
+type: bug
+status: backlog
+priority: critical
+severity: high
+created: 2026-01-28
+updated: 2026-01-28
+affects: Article Assignment Logic, Narrative Quality, Entity Extraction
+related_tickets: BUG-001 (discovered during investigation)
+sprint: Sprint 4 (or current sprint extension)
+estimated_effort: 6-10 hours
+---
+
+# Irrelevant Articles Being Assigned to Narratives
+
+## Problem
+
+During BUG-001 Phase 3 investigation, user manual review discovered that irrelevant articles are being assigned to narratives. This indicates a fundamental data quality issue with how articles get associated with narratives.
+
+**Discovery Context:**
+- While investigating badge/dropdown count mismatch for BUG-001
+- User manually reviewed all 184 articles in "Coinbase's Dual Narratives: Resilience and Controversy"
+- Found 5 completely irrelevant articles (2.7% error rate)
+
+**Impact:**
+- Undermines user trust in narrative quality
+- Inflates article counts artificially
+- Degrades platform value proposition (quality narrative intelligence)
+- Potentially affects multiple narratives across the platform
+
+## Expected Behavior
+
+**Article Assignment Criteria:**
+- Articles should only be assigned to narratives if they are directly relevant to the narrative's focus
+- Article content should match the narrative theme (e.g., "Coinbase" articles should be about Coinbase specifically)
+- Expected relevance rate: >95% of articles should be clearly relevant
+
+**Example:**
+For narrative "Coinbase's Dual Narratives: Resilience and Controversy":
+- ✅ SHOULD include: Coinbase stock upgrades, regulatory actions against Coinbase, Coinbase product launches
+- ❌ SHOULD NOT include: Netflix earnings, general "US banks Bitcoin" news, OpenAI/Trump Media articles
+
+## Actual Behavior
+
+Articles are being assigned to narratives even when they are not directly relevant to the narrative focus.
+
+**Irrelevant Articles Found in Coinbase Narrative:**
+
+1. **Article #6:** "60% of top US banks are geared up for Bitcoin: River"
+   - **Source:** Cointelegraph (2026-01-27)
+   - **Why irrelevant:** About general banking Bitcoin adoption, not Coinbase specifically
+   - **Likely cause:** "Bitcoin" keyword match, but article doesn't mention Coinbase
+
+2. **Article #21:** "Netflix Stock Earnings Impress, But Shares Fall on Competitive Pressures"
+   - **Source:** WatcherGuru (2026-01-21)
+   - **Why irrelevant:** Completely wrong company (Netflix, not Coinbase)
+   - **Likely cause:** Unknown - possibly entity extraction error or misclassification
+
+3. **Article #59:** "Solana treasury company Sharps Technology taps Coinbase to launch validator"
+   - **Source:** The Block (2026-01-12)
+   - **Why irrelevant:** Primary focus is Sharps Technology/Solana, Coinbase mentioned tangentially
+   - **Likely cause:** Coinbase mentioned in article, but not the main subject
+
+4. **Article #63:** "Bank of America, Goldman Sachs Upgrade Coinbase (COIN) Stock to 'Buy'"
+   - **Source:** Bitcoin.com (2026-01-11)
+   - **Why irrelevant:** Borderline - user flagged it (may be relevant to "resilience" theme)
+   - **Likely cause:** May actually be relevant, but user questioned it
+
+5. **Article #112:** "OpenAI bailed out? Trump Media stock up 40%! Wallet Connect Interview"
+   - **Source:** Decrypt (2025-12-19)
+   - **Why irrelevant:** About OpenAI and Trump Media (completely wrong companies)
+   - **Likely cause:** Unknown - possibly entity extraction error
+
+**Error Rate:** 5 out of 184 articles = 2.7% irrelevant
+**Target:** <5% error rate (should be >95% relevant)
+
+## Environment
+
+- **Environment:** Production
+- **Narrative Tested:** "Coinbase's Dual Narratives: Resilience and Controversy" (184 articles)
+- **User Impact:** HIGH - Affects platform credibility and narrative quality
+- **Scope:** Potentially affects all narratives (needs sampling)
+
+## Steps to Reproduce
+
+1. Navigate to Narratives page in production
+2. Find "Coinbase's Dual Narratives: Resilience and Controversy"
+3. Review article list (exported to `coinbase_headlines_review.txt`)
+4. Manually verify each article's relevance to Coinbase
+5. Observe irrelevant articles (Netflix, OpenAI/Trump Media, etc.)
+
+## Root Cause Analysis (INVESTIGATION COMPLETE)
+
+**Primary Root Cause: Unconstrained LLM Entity Extraction with Missing Validation**
+
+The issue stems from the LLM-based narrative extraction service (`discover_narrative_from_article()` in `narrative_themes.py:547-823`) that extracts:
+- `nucleus_entity` - primary entity article is about
+- `actors` - entities mentioned with salience scores (1-5)
+- `actor_salience` - importance of each actor
+
+**Critical Validation Gap:** Extracted entities are never validated against actual article content to ensure they appear in the text.
+
+### How Irrelevant Articles Get Assigned
+
+**Complete Assignment Flow:**
+1. Article ingestion → 2. Relevance classification (Tier 1-3) → 3. **LLM narrative extraction (FAILURE POINT)** → 4. Clustering → 5. Assignment
+
+**Specific Failure Points:**
+
+1. **Entity Extraction Validation Missing** (Line 755+)
+   - LLM extracts nucleus_entity and actors without verification
+   - No check that entities appear in article title/text
+   - No confidence thresholds for entity mentions
+   - Allows hallucination/misidentification
+
+2. **Relevance Tier Filtering Incomplete** (relevance_classifier.py:31-46)
+   - Stock ticker patterns don't catch all cases
+   - Netflix (NFLX) not in ticker list
+   - Pattern requires ticker symbol; title may just say "Netflix"
+
+3. **Actor Salience Scores Too Permissive**
+   - Any mention of entity (even in quotes) can have high salience (≥4)
+   - No distinction between primary vs. secondary mentions
+   - Quotes count same as main narrative text
+
+4. **Post-Clustering Validation Missing**
+   - detect_narratives() assigns articles without semantic verification
+   - No check that article content mentions narrative's nucleus_entity
+   - No final relevance score between article and narrative
+
+### Article-Specific Analysis
+
+**Article #6: "60% of top US banks are geared up for Bitcoin: River"**
+- **Root Cause:** Nucleus_entity extraction error
+  - LLM extracted "Bitcoin" or "US Banks" as nucleus (correct)
+  - "Coinbase" extracted as actor because quoted by Brian Armstrong
+  - Clustering matched on "Coinbase" actor despite low salience
+  - Article is ABOUT banks, not Coinbase - wrong nucleus_entity
+- **Fix:** Validate nucleus_entity appears in article; filter by salience threshold
+
+**Article #21: "Netflix Stock Earnings..."**
+- **Root Cause:** LLM entity extraction hallucination
+  - Most likely: Misidentified nucleus_entity as "Coinbase"
+  - OR: "Coinbase" extracted as high-salience actor via hallucination
+  - Netflix article has no Coinbase connection
+- **Fix:** Validate extracted entities actually appear in article text
+
+**Article #59: "Solana treasury company Sharps Technology taps Coinbase to launch validator"**
+- **Root Cause:** Actor-based clustering on insufficient signal
+  - Nucleus_entity correctly identified as "Sharps Technology" or "Solana"
+  - "Coinbase" extracted as actor (high salience 4-5 due to being in title)
+  - Clustering algorithm matched "Coinbase" actor at 0.4+ threshold
+  - Article primary focus is Sharps/Solana, Coinbase tangential
+- **Fix:** Increase actor salience threshold; require nucleus_entity match not just actor
+
+**Article #112: "OpenAI bailed out? Trump Media stock up 40%! Wallet Connect Interview"**
+- **Analysis:** ACTUALLY RELEVANT (False Positive in Your Flagging)
+  - Content discusses **Coinbase product expansions**: trading, prediction markets, DEX, borrowing, Base launch
+  - Hosted on Decrypt (crypto media)
+  - Title is misleading clickbait but content is Coinbase-focused
+- **Lesson:** Title-only validation insufficient; must check full text
+- **Status:** Should be INCLUDED in Coinbase narrative
+
+### Corrected Article Classifications
+
+**Definite False Positives (Should Remove):**
+1. Netflix Stock Earnings
+2. 60% of US banks Bitcoin article
+3. Sharps Technology/Solana article (tangential mention)
+
+**False Positive from User Flagging:**
+- OpenAI/Trump Media article - Actually IS about Coinbase (UI/crypto context)
+
+**Error Rate Correction:**
+- Original: 5/184 = 2.7% error rate
+- Corrected: 3/184 = 1.6% error rate (1 was misflagged)
+- Still above acceptable threshold but better than reported
+
+## Files to Investigate
+
+**Article Assignment Logic:**
+```bash
+src/crypto_news_aggregator/services/narrative_service.py
+  - detect_narratives() - How articles initially get assigned
+  - _merge_narratives() - Consolidation impact on article lists
+  - _reactivate_narrative() - Reactivation impact
+```
+
+**Entity Extraction:**
+```bash
+src/crypto_news_aggregator/services/entity_extraction.py
+  - Entity extraction thresholds
+  - Text matching patterns
+  - False positive scenarios
+```
+
+**Relevance Classification:**
+```bash
+src/crypto_news_aggregator/services/relevance_classifier.py
+  - Article relevance scoring logic
+  - Quality thresholds
+  - Classification criteria
+```
+
+## Investigation Plan
+
+### Phase 1: Code Audit (3-4 hours)
+
+**Task 1.1: Understand Article Assignment Flow**
+- Trace how articles get assigned to narratives initially
+- Identify all decision points in the assignment logic
+- Document matching criteria used
+
+**Questions:**
+1. What triggers an article to be assigned to a narrative?
+2. Is it keyword matching? Entity extraction? Semantic similarity?
+3. Are there thresholds or confidence scores?
+4. Where in the code does this happen?
+
+**Task 1.2: Examine Entity Extraction**
+- Review entity extraction implementation
+- Check thresholds and matching patterns
+- Test against known false positives (Netflix, OpenAI articles)
+
+**Questions:**
+1. How does entity extraction identify "Coinbase"?
+2. What thresholds determine entity presence?
+3. Can it distinguish primary vs. secondary mentions?
+4. Why would "Netflix" or "OpenAI" match "Coinbase"?
+
+**Task 1.3: Review Relevance Scoring**
+- Examine relevance classifier logic
+- Check if quality scores exist
+- Verify if thresholds are enforced
+
+**Questions:**
+1. Is there a relevance score for each article-narrative pair?
+2. What threshold determines "relevant enough"?
+3. Are there quality filters in place?
+
+### Phase 2: Data Quality Audit (1-2 hours)
+
+**Task 2.1: Sample Additional Narratives**
+- Pick 5-10 narratives across different entities
+- Export article headlines for each
+- Manually review for relevance
+- Calculate error rates
+
+**Narratives to Sample:**
+- Bitcoin narrative (high volume)
+- Ethereum narrative (high volume)
+- Smaller entity narrative (low volume)
+- Controversial narrative
+- Technical narrative
+
+**Task 2.2: Calculate Platform-Wide Error Rate**
+- Aggregate findings from sampled narratives
+- Determine if 2.7% is typical or exceptional
+- Identify if certain narrative types have higher error rates
+
+**Success Criteria:**
+- Error rate calculated for 5-10 narratives
+- Pattern identified (e.g., high-volume narratives worse, entity-specific issues)
+- Severity assessed (isolated vs. widespread)
+
+### Phase 3: Root Cause Identification (1-2 hours)
+
+**Task 3.1: Test Hypotheses Against Evidence**
+- Map known irrelevant articles to code logic
+- Trace "Netflix article" through assignment flow
+- Identify exact decision point that allowed assignment
+
+**Task 3.2: Document Root Cause**
+- Write clear explanation of why irrelevant articles are included
+- Identify specific code locations responsible
+- Propose targeted fixes
+
+### Phase 4: Fix Implementation (2-4 hours)
+
+**Recommended Fix Strategy (3-part approach):**
+
+**Fix 1: Add Entity Extraction Validation (2-3 hours)** ⭐ HIGHEST PRIORITY
+Location: `narrative_themes.py:755` (after LLM extraction)
+```python
+def validate_entity_in_text(entity: str, title: str, text: str) -> bool:
+    """Verify nucleus_entity actually appears in article content."""
+    content = f"{title} {text or ''}".lower()
+    entity_lower = entity.lower()
+    return entity_lower in content
+
+# After line 755: narrative_data = json.loads(response_clean)
+nucleus = narrative_data.get('nucleus_entity', '')
+if not validate_entity_in_text(nucleus, title, summary):
+    logger.warning(f"Nucleus entity '{nucleus}' not found in article {article_id}")
+    return None  # Reject extraction with bad nucleus
+```
+**Impact:** Prevents hallucinated entities, catches Netflix/OpenAI cases
+**Test:** Netflix article should fail - "Netflix" != "Coinbase"
+
+**Fix 2: Increase Actor Salience Threshold (1-2 hours)** ⭐ MEDIUM PRIORITY
+Location: `narrative_service.py:966-985` (clustering logic)
+```python
+# Current: actors with salience ≥4 = "high-salience"
+# New: require ≥4.5 for actor-only clustering
+ACTOR_SALIENCE_THRESHOLD = 4.5  # was implicit 4.0
+ACTOR_LINK_STRENGTH = 0.7  # only if salience > threshold
+
+# In cluster_by_narrative_salience():
+for article in articles:
+    for actor, salience in article.actors.items():
+        if salience > ACTOR_SALIENCE_THRESHOLD:  # stricter threshold
+            high_salience_actors[actor] += 1
+```
+**Impact:** Reduces tangential mentions (like Coinbase in Sharps article)
+**Test:** Sharps article should cluster to Solana, not Coinbase
+
+**Fix 3: Add Post-Clustering Article Validation (2-3 hours)** ⭐ HIGHEST PRIORITY
+Location: `narrative_service.py:880-1080` (detect_narratives)
+```python
+async def validate_article_relevance(
+    article: Dict,
+    narrative_nucleus: str,
+    article_text: str
+) -> bool:
+    """Verify article actually mentions narrative's nucleus entity."""
+    title = article.get('title', '').lower()
+    content = article_text.lower()[:500]  # First 500 chars
+
+    nucleus_lower = narrative_nucleus.lower()
+
+    # Check title (strongest signal)
+    if nucleus_lower in title:
+        return True
+
+    # Check first 500 chars of text
+    if nucleus_lower in content:
+        return True
+
+    # Fallback: very strict matching
+    return False
+
+# Before assigning articles to narrative, filter:
+validated_articles = [
+    a for a in cluster_articles
+    if validate_article_relevance(
+        a,
+        primary_nucleus,
+        a.get('text') or a.get('description') or ''
+    )
+]
+
+if len(validated_articles) < MIN_ARTICLES_PER_NARRATIVE:
+    continue  # Skip cluster if doesn't meet minimum
+```
+**Impact:** Final validation gate before assignment
+**Test:** Banking Bitcoin article should fail - "coinbase" not in content
+
+**Option D (Not Recommended): Semantic Filtering**
+- Use embedding similarity or LLM to verify "is ABOUT"
+- More expensive, adds latency
+- Can address edge cases but overkill for current problem
+- Consider for Phase 2 improvements
+
+### Phase 5: Testing & Validation (1-2 hours)
+
+**Test Cases:**
+- ✅ Verify "Netflix article" no longer assigned to Coinbase
+- ✅ Verify "OpenAI/Trump Media" articles filtered out
+- ✅ Verify legitimate Coinbase articles still included
+- ✅ Test against other narratives
+- ✅ Ensure no over-filtering of relevant content
+
+**Validation:**
+- Re-sample narratives after fix
+- Calculate new error rate (target: <5%)
+- Verify no false negatives (relevant articles filtered out)
+
+---
+
+## Expected Resolution
+
+**Status:** Backlog → In Progress
+**Priority:** P0 Critical (affects platform value)
+**Estimated Time:** 6-10 hours total
+**Blocking:** Platform credibility, user trust
+
+**Success Criteria:**
+- ✅ Root cause identified and documented
+- ✅ Article relevance >95% in manual spot checks
+- ✅ No obviously irrelevant articles (e.g., Netflix in Coinbase)
+- ✅ Clear, documented criteria for article-narrative association
+- ✅ Validation logic prevents future quality degradation
+- ✅ Platform-wide error rate measured and acceptable
+- ✅ Fix deployed to production
+- ✅ Quality improvement verified
+
+**Deliverables:**
+1. Investigation report documenting root cause
+2. Code fixes implementing quality improvements
+3. Unit tests covering validation logic
+4. Updated documentation on article assignment criteria
+5. Quality metrics showing improvement
+
+---
+
+## Related Tickets
+
+- **BUG-001:** Article Count Mismatch Between Badge and Dropdown
+  - Status: Complete (this issue discovered during Phase 3 investigation)
+  - Relationship: BUG-003 discovered while investigating BUG-001
+  - Note: BUG-001 was about UI display, BUG-003 is about data quality
+
+---
+
+## Notes
+
+**Key Insight:**
+BUG-001 uncovered this issue because it forced us to look at actual article content, not just counts. The badge/dropdown mismatch was a symptom that led us to discover a deeper problem with article assignment quality.
+
+**Why This is Separate from BUG-001:**
+- Different root cause (assignment logic vs. UI display)
+- Different scope (platform-wide vs. UI-specific)
+- Different fix (service layer vs. frontend)
+- Different severity (data quality vs. UX transparency)
+
+**User Impact:**
+While BUG-001 was about user confusion from count mismatches, BUG-003 is about trust in narrative quality. Users expect narratives to contain relevant articles. Finding Netflix articles in a Coinbase narrative undermines the platform's core value proposition.
+
+**Files for Reference:**
+- Test data: `coinbase_headlines_review.txt` (184 articles, 5 flagged)
+- Test data: `coinbase_headlines_review.json` (structured format)
+- Investigation notes: `BUG-001-Phase-4-Update-Summary.md`
+
+---
+
+**Created:** 2026-01-28
+**Updated:** 2026-01-28
+**Discovered By:** User manual review during BUG-001 investigation
+**Sprint:** TBD (Sprint 4 or Sprint 3 extension)

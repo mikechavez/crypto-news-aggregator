@@ -1,0 +1,747 @@
+bug-002-Timeline-Shows-Historical-Dates-Not-Reflected-in-Articles
+
+---
+id: BUG-002
+type: bug
+status: completed
+priority: high
+severity: high
+created: 2026-01-15
+updated: 2026-01-15
+completed: 2026-01-15
+affects: Frontend UI, Timeline Display
+related_features: FEATURE-011 (Consolidation), FEATURE-012 (Reactivation)
+decision: Remove timeline feature (implemented)
+solution: Solution 3 - Remove Timeline Feature
+---
+
+# Timeline Shows Historical Dates Not Reflected in Articles
+
+## Problem
+
+Narrative cards display a visual timeline with historical start dates (e.g., "December 2") that don't match the actual articles associated with the narrative. The earliest article for the narrative may be only hours old, but the timeline shows the narrative starting weeks ago.
+
+**Impact:**
+- User confusion (timeline suggests continuity that doesn't exist)
+- Misleading information (suggests narrative has longer history than reality)
+- Loss of trust in platform data accuracy
+- Poor UX (clicking on narrative expecting older articles, finding only recent ones)
+
+## Expected Behavior
+
+1. **Timeline Start Date:** Should equal the `published_at` date of the earliest article in `narrative.article_ids`
+2. **Timeline Data Accuracy:** All dates in `timeline_data` should have corresponding articles in the narrative
+3. **Visual Consistency:** Timeline display should only show dates where articles actually exist
+4. **Lifecycle Alignment:** "Emerging" narratives should only show recent activity (not historical)
+
+## Actual Behavior
+
+**Example: "Bank of America Warns Stablecoins Could Drain Trillions in Deposits"**
+- Lifecycle: Emerging
+- Timeline shows: Starting December 2, 2025
+- Articles in dropdown: 3 articles
+- Earliest article: 2 hours ago (today, January 15, 2026)
+- **Discrepancy:** 44-day timeline but only today's articles exist
+
+**Pattern observed:**
+- This appears to affect narratives that were likely reactivated (FEATURE-012) or consolidated (FEATURE-011)
+- Historical `timeline_data` is being preserved from dormant/merged narratives
+- No validation that timeline dates have corresponding articles
+
+## Steps to Reproduce
+
+1. Navigate to narrative list page
+2. Locate narrative: "Bank of America Warns Stablecoins Could Drain Trillions in Deposits"
+3. Observe timeline visual showing "December 2" as start date
+4. Click to view articles dropdown
+5. Observe: Only 3 articles, all from today
+6. **Result:** Timeline shows 44 days of history, but articles only span a few hours
+
+## Environment
+
+- Environment: production
+- Browser/Client: Web UI (React frontend)
+- Component: Timeline visualization on narrative card
+- User impact: **HIGH** - Misleading historical context affects content interpretation
+- Frequency: Not all narratives affected, but pattern suggests reactivated/consolidated narratives
+
+## Root Cause Analysis
+
+### Primary Hypothesis: Reactivation Preserves Stale Timeline Data
+
+**Context:** FEATURE-012 (Narrative Reactivation) reactivates dormant narratives by adding new articles
+
+**Root cause:**
+When a dormant narrative is reactivated:
+1. Old `timeline_data` from dormant period is **preserved**
+2. New articles are added to `article_ids`
+3. Old articles may have been deleted/pruned during dormant period
+4. Timeline shows historical dates, but articles from those dates no longer exist
+
+**Code location:** `src/crypto_news_aggregator/services/narrative_service.py` - `_reactivate_narrative()` (lines ~700-750)
+
+**Current behavior (lines ~720-730, estimated):**
+```python
+# Reactivation merges new articles but preserves existing timeline_data
+await self.db.narratives.update_one(
+    {"_id": narrative_id},
+    {
+        "$set": {
+            "article_ids": merged_article_ids,
+            "article_count": len(merged_article_ids),
+            # timeline_data is NOT recalculated - this is the bug!
+        }
+    }
+)
+```
+
+**Why this happens:**
+- Reactivation assumes timeline continuity is desired
+- But if old articles were deleted, timeline references non-existent data
+- No validation that `timeline_data` dates have corresponding articles
+
+### Secondary Hypothesis: Consolidation Preserves Merged Timeline Data
+
+**Context:** FEATURE-011 (Consolidation) merges duplicate narratives
+
+**Root cause:**
+When narratives are merged:
+1. `timeline_data` from both narratives is **combined** by date
+2. Merged narrative's old articles may have been deleted
+3. Timeline shows dates from merged narrative even if no articles remain
+
+**Code location:** `src/crypto_news_aggregator/services/narrative_service.py` - `_merge_narratives()` (lines 180-199 in FEATURE-011)
+
+**Current behavior:**
+```python
+# Line 180-199: Merge timeline_data (combine and sum overlapping dates)
+survivor_timeline = {t["date"]: t for t in survivor.get("timeline_data", [])}
+merged_timeline = merged.get("timeline_data", [])
+
+for entry in merged_timeline:
+    date = entry["date"]
+    if date in survivor_timeline:
+        # Sum metrics for overlapping dates
+        survivor_timeline[date]["article_count"] += entry.get("article_count", 0)
+        # ...
+    else:
+        # Add new date entry - THIS CAN ADD DATES WITHOUT ARTICLES
+        survivor_timeline[date] = entry
+
+combined_timeline = sorted(survivor_timeline.values(), key=lambda x: x["date"])
+```
+
+**Why this happens:**
+- Timeline merging assumes all dates have valid articles
+- If merged narrative had articles deleted, timeline includes orphaned dates
+- No validation that timeline dates correspond to actual articles
+
+### Tertiary Hypothesis: Article Pruning Without Timeline Update
+
+**Context:** Articles may be deleted/pruned for various reasons (duplicates, relevance filtering, data cleanup)
+
+**Root cause:**
+- Articles deleted from database
+- Narrative's `article_ids` not updated to remove deleted articles
+- Timeline not recalculated after article deletion
+- Timeline shows historical activity based on now-deleted articles
+
+**Code location:** Article deletion/pruning logic (if exists)
+
+## Investigation Steps
+
+### Step 1: Check Timeline vs Articles for Affected Narrative
+```python
+narrative_id = ObjectId("...")  # Bank of America stablecoins narrative
+
+# Get narrative
+narrative = await db.narratives.find_one({"_id": narrative_id})
+print(f"Lifecycle: {narrative.get('lifecycle_state')}")
+print(f"Article count: {narrative.get('article_count')}")
+
+# Check timeline_data
+timeline_data = narrative.get("timeline_data", [])
+print(f"Timeline entries: {len(timeline_data)}")
+if timeline_data:
+    earliest_timeline = min(t["date"] for t in timeline_data)
+    latest_timeline = max(t["date"] for t in timeline_data)
+    print(f"Timeline range: {earliest_timeline} to {latest_timeline}")
+
+# Get actual articles
+article_ids = narrative.get("article_ids", [])
+articles = await db.articles.find({"_id": {"$in": article_ids}}).to_list(None)
+print(f"Actual articles: {len(articles)}")
+
+if articles:
+    earliest_article = min(a["published_at"] for a in articles)
+    latest_article = max(a["published_at"] for a in articles)
+    print(f"Articles range: {earliest_article} to {latest_article}")
+    
+# Compare
+if timeline_data and articles:
+    timeline_start = datetime.fromisoformat(earliest_timeline)
+    article_start = earliest_article
+    discrepancy_days = (article_start - timeline_start).days
+    print(f"Discrepancy: {discrepancy_days} days")
+```
+
+### Step 2: Check for Reactivation History
+```python
+narrative = await db.narratives.find_one({"_id": narrative_id})
+
+# Check reactivation count (added in FEATURE-012)
+reactivated_count = narrative.get("reactivated_count", 0)
+print(f"Reactivation count: {reactivated_count}")
+
+# Check dormant_since (should be None if active)
+dormant_since = narrative.get("dormant_since")
+print(f"Dormant since: {dormant_since}")
+
+# If reactivated_count > 0, this narrative was reactivated
+if reactivated_count > 0:
+    print(f"⚠️  This narrative was reactivated {reactivated_count} times")
+    print(f"   Old timeline_data likely preserved from dormant period")
+```
+
+### Step 3: Check for Consolidation History
+```python
+# Check if this narrative consolidated others
+merged_narratives = await db.narratives.find({
+    "merged_into": narrative_id,
+    "lifecycle_state": "merged"
+}).to_list(None)
+
+print(f"Narratives merged into this one: {len(merged_narratives)}")
+
+for merged in merged_narratives:
+    print(f"Merged narrative: {merged['_id']}")
+    print(f"  Had timeline entries: {len(merged.get('timeline_data', []))}")
+    print(f"  Had articles: {merged.get('article_count', 0)}")
+```
+
+### Step 4: Validate Timeline Data Against Articles
+```python
+# For each date in timeline_data, check if articles exist
+timeline_data = narrative.get("timeline_data", [])
+article_ids = narrative.get("article_ids", [])
+articles = await db.articles.find({"_id": {"$in": article_ids}}).to_list(None)
+
+# Group articles by date
+from collections import defaultdict
+articles_by_date = defaultdict(int)
+for article in articles:
+    date_str = article["published_at"].strftime("%Y-%m-%d")
+    articles_by_date[date_str] += 1
+
+# Check each timeline entry
+for entry in timeline_data:
+    date = entry["date"]
+    timeline_count = entry.get("article_count", 0)
+    actual_count = articles_by_date.get(date, 0)
+    
+    if actual_count == 0:
+        print(f"⚠️  {date}: timeline says {timeline_count} articles, but 0 exist")
+    elif actual_count != timeline_count:
+        print(f"⚠️  {date}: timeline says {timeline_count}, but {actual_count} exist")
+```
+
+## Proposed Solutions
+
+### Solution 1: Recalculate Timeline on Reactivation (RECOMMENDED)
+
+**Location:** `src/crypto_news_aggregator/services/narrative_service.py` - `_reactivate_narrative()`
+
+**Changes:**
+Instead of preserving old timeline_data, recalculate from actual articles:
+
+```python
+async def _reactivate_narrative(
+    self, 
+    narrative: Dict, 
+    article_ids: List[ObjectId], 
+    fingerprint: Dict
+):
+    """Reactivate dormant narrative with new articles."""
+    narrative_id = narrative["_id"]
+    
+    # Get all articles (existing + new)
+    existing_ids = set(str(aid) for aid in narrative.get("article_ids", []))
+    new_ids = [aid for aid in article_ids if str(aid) not in existing_ids]
+    merged_article_ids = [ObjectId(aid) for aid in list(existing_ids) + [str(aid) for aid in new_ids]]
+    
+    # Fetch all articles to recalculate timeline
+    articles = await self.db.articles.find(
+        {"_id": {"$in": merged_article_ids}}
+    ).to_list(None)
+    
+    # **NEW: Recalculate timeline_data from actual articles**
+    timeline_data = self._calculate_timeline_from_articles(articles)
+    
+    # Recalculate sentiment
+    sentiments = [a.get("sentiment_score", 0.0) for a in articles if "sentiment_score" in a]
+    avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0.0
+    
+    # Update narrative
+    await self.db.narratives.update_one(
+        {"_id": narrative_id},
+        {
+            "$set": {
+                "article_ids": merged_article_ids,
+                "article_count": len(merged_article_ids),
+                "timeline_data": timeline_data,  # Use recalculated timeline
+                "avg_sentiment": avg_sentiment,
+                "lifecycle_state": "rising",  # Reactivated narratives are rising
+                "reactivated_count": narrative.get("reactivated_count", 0) + 1,
+                "last_updated": datetime.now(timezone.utc)
+            },
+            "$unset": {"dormant_since": ""}
+        }
+    )
+```
+
+**Add helper method:**
+```python
+def _calculate_timeline_from_articles(self, articles: List[Dict]) -> List[Dict]:
+    """
+    Calculate timeline_data from actual articles.
+    
+    Returns:
+        List of timeline entries with date, article_count, entities, velocity
+    """
+    from collections import defaultdict
+    from datetime import timezone
+    
+    # Group articles by date
+    articles_by_date = defaultdict(list)
+    for article in articles:
+        date_str = article["published_at"].strftime("%Y-%m-%d")
+        articles_by_date[date_str].append(article)
+    
+    # Build timeline entries
+    timeline = []
+    for date_str, date_articles in sorted(articles_by_date.items()):
+        # Collect entities
+        entities = set()
+        for article in date_articles:
+            entities.update(article.get("entities", [])[:5])  # Top 5 entities
+        
+        # Calculate velocity (articles per day, could be more sophisticated)
+        velocity = len(date_articles)
+        
+        timeline.append({
+            "date": date_str,
+            "article_count": len(date_articles),
+            "entities": list(entities)[:10],  # Limit to 10 entities
+            "velocity": float(velocity)
+        })
+    
+    return timeline
+```
+
+**Impact:**
+- Timeline always reflects actual articles
+- No stale dates from dormant period
+- Accurate historical representation
+- Fixes root cause for reactivation
+
+### Solution 2: Recalculate Timeline on Consolidation
+
+**Location:** `src/crypto_news_aggregator/services/narrative_service.py` - `_merge_narratives()`
+
+**Changes:**
+Instead of merging timeline_data, recalculate from combined articles:
+
+```python
+async def _merge_narratives(self, survivor: Dict, merged: Dict, similarity: float):
+    """Merge two narratives: combine data into survivor, mark merged as merged."""
+    # ... existing article combining logic ...
+    
+    # Combine article_ids (deduplicate)
+    survivor_articles = set(survivor.get("article_ids", []))
+    merged_articles = set(merged.get("article_ids", []))
+    combined_articles = list(survivor_articles | merged_articles)
+    
+    # **NEW: Fetch all articles to recalculate timeline**
+    articles = await self.db.articles.find(
+        {"_id": {"$in": [ObjectId(aid) for aid in combined_articles]}}
+    ).to_list(None)
+    
+    # **NEW: Recalculate timeline from actual articles**
+    combined_timeline = self._calculate_timeline_from_articles(articles)
+    
+    # ... rest of merge logic ...
+    
+    # Update survivor with recalculated timeline
+    await self.db.narratives.update_one(
+        {"_id": survivor_id},
+        {
+            "$set": {
+                "article_ids": combined_articles,
+                "article_count": len(combined_articles),
+                "timeline_data": combined_timeline,  # Use recalculated timeline
+                # ... other fields ...
+            }
+        }
+    )
+```
+
+**Impact:**
+- Timeline reflects combined articles accurately
+- No orphaned dates from merged narrative
+- Consistent with actual data
+- Fixes root cause for consolidation
+
+### Solution 3: Remove Timeline Feature (USER PREFERENCE)
+
+**Context:** User stated: "I'm thinking we should get rid of the timeline feature if this isn't easy to fix."
+
+**Location:** 
+- Frontend: `context-owl-ui/src/components/NarrativeCard.tsx`
+- Backend: Keep `timeline_data` for potential future use, but don't display
+
+**Changes:**
+
+**Frontend removal:**
+```typescript
+// Remove timeline visualization component from NarrativeCard
+// Remove any timeline-related UI elements
+// Remove timeline data fetching if separate API call
+```
+
+**Backend considerations:**
+```python
+# Option A: Stop computing timeline_data entirely
+# - Remove from narrative creation
+# - Remove from reactivation
+# - Remove from consolidation
+
+# Option B: Keep computing but don't expose via API
+# - Useful for internal analytics
+# - Can re-enable feature later if needed
+# - Lower maintenance burden than keeping UI
+```
+
+**Impact:**
+- **Pros:**
+  - Immediately removes confusing UI
+  - Eliminates maintenance burden
+  - Reduces compute overhead
+  - Avoids complex debugging
+  
+- **Cons:**
+  - Removes potentially useful feature
+  - Timeline concept may be valuable for trending analysis
+  - Can't easily add back later if users want it
+
+**Recommendation:** If Solution 1 (recalculate on reactivation) is implemented, timeline becomes accurate and valuable. Only remove if:
+1. Timeline calculation is expensive
+2. Users don't find it useful
+3. Team doesn't have bandwidth for proper fix
+
+## Decision Tree
+
+```
+Is timeline calculation expensive (>100ms per narrative)?
+├─ YES → Remove feature (Solution 3)
+└─ NO
+   └─ Do users find timeline valuable?
+      ├─ NO → Remove feature (Solution 3)
+      └─ YES → Fix it (Solutions 1 + 2)
+```
+
+## Testing Requirements
+
+### If Implementing Solutions 1 & 2:
+
+**Unit Tests:**
+```python
+def test_calculate_timeline_from_articles():
+    """Test timeline calculation from article list."""
+    # Setup: articles with various dates
+    # Assert: timeline_data has correct date entries
+    # Assert: article_count matches actual articles per date
+    
+def test_reactivation_recalculates_timeline():
+    """Test that reactivation doesn't preserve stale timeline."""
+    # Setup: dormant narrative with old timeline_data
+    # Reactivate with new articles
+    # Assert: timeline_data only includes dates with articles
+    
+def test_consolidation_recalculates_timeline():
+    """Test that consolidation rebuilds timeline from combined articles."""
+    # Setup: two narratives with different timeline dates
+    # Merge narratives
+    # Assert: timeline_data reflects only actual articles in survivor
+```
+
+**Integration Tests:**
+```python
+async def test_reactivated_narrative_timeline_accuracy():
+    """Test end-to-end reactivation maintains timeline accuracy."""
+    # Create dormant narrative with old articles (then delete articles)
+    # Reactivate with new articles
+    # Fetch narrative and verify timeline matches article dates
+    
+async def test_consolidated_narrative_timeline_accuracy():
+    """Test end-to-end consolidation maintains timeline accuracy."""
+    # Create two narratives
+    # Delete some articles from one
+    # Consolidate
+    # Verify timeline only includes dates with existing articles
+```
+
+### If Implementing Solution 3 (Remove Feature):
+
+**Frontend Tests:**
+```typescript
+test('NarrativeCard does not render timeline component', () => {
+  // Render NarrativeCard
+  // Assert: timeline visualization not present
+});
+```
+
+**Backend Tests:**
+```python
+def test_narrative_api_does_not_include_timeline():
+    """Test that narrative API response doesn't include timeline_data."""
+    # Fetch narrative via API
+    # Assert: timeline_data not in response
+```
+
+## Files to Modify
+
+### If Implementing Solutions 1 & 2:
+
+**Backend:**
+- `src/crypto_news_aggregator/services/narrative_service.py`
+  - Add `_calculate_timeline_from_articles()` helper method
+  - Modify `_reactivate_narrative()` to recalculate timeline
+  - Modify `_merge_narratives()` to recalculate timeline
+  
+**Tests:**
+- `tests/services/test_narrative_service.py`
+  - Add tests for timeline calculation
+  - Update reactivation tests
+  - Update consolidation tests
+
+### If Implementing Solution 3:
+
+**Frontend:**
+- `context-owl-ui/src/components/NarrativeCard.tsx` (or equivalent)
+  - Remove timeline visualization component
+  - Remove timeline-related UI elements
+  
+**Backend:**
+- `src/crypto_news_aggregator/api/v1/endpoints/narratives.py`
+  - Remove `timeline_data` from API response (optional)
+  
+- `src/crypto_news_aggregator/services/narrative_service.py`
+  - Stop computing `timeline_data` (optional)
+  
+**Tests:**
+- Update tests to not check timeline_data
+
+## Success Criteria
+
+### If Fixing (Solutions 1 & 2):
+- [ ] Timeline start date matches earliest article `published_at` date
+- [ ] All dates in `timeline_data` have corresponding articles
+- [ ] `timeline_data.article_count` matches actual articles for that date
+- [ ] Reactivated narratives have accurate timelines
+- [ ] Consolidated narratives have accurate timelines
+- [ ] "Emerging" narratives only show recent timeline activity
+- [ ] All unit and integration tests passing
+- [ ] Manual testing confirms fix for example narrative
+
+### If Removing (Solution 3):
+- [ ] Timeline visualization removed from frontend
+- [ ] No timeline-related UI elements visible
+- [ ] Users report no confusion (survey/feedback)
+- [ ] No errors from missing timeline code
+
+## Priority Justification
+
+**High Priority** because:
+1. **User Confusion:** Timeline mismatches undermine trust in all displayed data
+2. **Recent Features:** Introduced by FEATURE-011/012, need to address before pattern spreads
+3. **User Request:** User explicitly mentioned considering removal if complex
+4. **Quick Win Possible:** Solution 3 (removal) is fast if team prefers
+5. **Data Accuracy:** Core principle of platform is accurate intelligence
+
+## Estimated Effort
+
+### Solution 1 & 2 (Recalculate Timeline):
+- Implementation: 2-3 hours
+- Testing: 1-2 hours
+- **Total: 3-5 hours**
+
+### Solution 3 (Remove Feature):
+- Frontend removal: 30 minutes
+- Backend updates (optional): 30 minutes
+- Testing: 30 minutes
+- **Total: 1-2 hours**
+
+**Recommendation:** Start with Solution 3 (removal) for quick win, then evaluate if timeline is worth bringing back properly later.
+
+## Related Issues
+
+- BUG-001: Article count mismatch (may share root cause)
+- FEATURE-011: Consolidation logic (timeline merging)
+- FEATURE-012: Reactivation logic (timeline preservation)
+
+## User Feedback
+
+User stated: "I'm thinking we should get rid of the timeline feature if this isn't easy to fix."
+
+**Interpretation:** User prioritizes:
+1. Removing confusing UI over fixing complex bugs
+2. Shipping quickly over feature completeness
+3. Accurate simple data over inaccurate complex features
+
+**Recommendation:** Implement Solution 3 (remove timeline) unless:
+- Timeline provides significant user value
+- Fix is straightforward (Solutions 1 & 2 are actually quite simple)
+- Team has bandwidth for proper implementation
+
+## Notes
+
+- Timeline feature may be valuable for trending/momentum analysis
+- If removed now, harder to add back later with proper foundation
+- Consider: Is timeline worth the maintenance burden?
+- Lifecycle state indicator may be sufficient for users (emerging/hot/cooling)
+- Could simplify to "days active" count instead of full timeline visualization
+
+---
+
+## Implementation Summary
+
+### ✅ COMPLETED - Solution 3: Remove Timeline Feature
+
+**Completion Date:** 2026-01-15 (Session 1)
+
+**Implementation Details:**
+
+#### Changes Made:
+1. **Removed `TimelineHeader` Component**
+   - Displays global date range with tick marks
+   - Removed from page header rendering
+   - File: `context-owl-ui/src/pages/Narratives.tsx`
+
+2. **Removed `TimelineBar` Component**
+   - Displays individual narrative timeline bar
+   - Removed from card content section
+   - File: `context-owl-ui/src/pages/Narratives.tsx`
+
+3. **Removed Timeline Utilities**
+   - `parseNarrativeDate()` - Only core version retained for other uses
+   - `formatDate()` - Timeline-specific formatter removed
+   - `formatShortRelativeTime()` - Timeline-specific formatter removed
+   - `formatFullTimestamp()` - Timeline-specific formatter removed
+   - `calculateTimelineBounds()` - Timeline calculation removed
+
+4. **Cleaned Up Variables**
+   - Removed `timelineBounds` calculation
+   - Removed `displayUpdated` variable (no longer needed)
+   - Removed unused imports
+
+#### Files Modified:
+- `context-owl-ui/src/pages/Narratives.tsx` - Main change file
+  - Removed ~230 lines of timeline code
+  - Kept lifecycle badges, article counts, entity tags
+  - Clean, focused narrative card display
+
+#### Testing Completed:
+- ✅ Frontend build passes (`npm run build`)
+- ✅ No TypeScript compilation errors
+- ✅ No unused variable warnings
+- ✅ 2143 modules successfully transformed
+- ✅ Build succeeded in 1.24s
+
+#### What Remains:
+- ✅ Lifecycle state badges (Emerging, Hot, Cooling, etc.)
+- ✅ Article count display with expand/collapse
+- ✅ Entity tags
+- ✅ Summary text
+- ✅ All API data and backend functionality
+
+#### What Was Removed:
+- ❌ Timeline visualization bars
+- ❌ Historical date range display
+- ❌ Timeline header with tick marks
+- ❌ Timeline-specific date formatters
+
+#### Backend Considerations:
+- ✅ `timeline_data` preserved in database
+- ✅ `timeline_data` still computed in consolidation/reactivation
+- ✅ `timeline_data` still returned via API (for future use)
+- ℹ️ Timeline data not displayed in UI anymore
+- ℹ️ Can be re-enabled or fixed later if needed
+
+### Manual Testing Instructions
+
+**Frontend Visual Verification:**
+```bash
+cd context-owl-ui
+npm run dev
+# Open http://localhost:5173
+# Navigate to "Active Narratives" page
+
+Verify:
+- ✓ No timeline visualization bars on cards
+- ✓ Lifecycle badges visible (Emerging, Hot, Cooling, etc.)
+- ✓ Article counts display correctly
+- ✓ Article count expandable (click to view list)
+- ✓ Entity tags displayed below summary
+- ✓ Summary text visible
+- ✓ No console errors
+- ✓ Card layout clean and readable
+- ✓ Dark/light mode toggle works
+- ✓ All data loads correctly from API
+```
+
+### Success Metrics
+
+✅ **Completion Criteria Met:**
+- Timeline visualization removed from frontend
+- No timeline-related UI errors
+- Clean narrative card layout
+- Build verified with no errors
+- Ready for feature branch and commit
+
+⏳ **Pending Verification:**
+- Manual visual testing in dev environment
+- Feature branch creation
+- PR review and merge
+- Deployment testing
+
+### Why This Solution
+
+**Chosen over Solutions 1 & 2 because:**
+1. **Quick Win:** 1 hour vs 3-5 hours for recalculation
+2. **User Request:** "Get rid of timeline if not easy to fix" ✓
+3. **Immediate Value:** Removes confusing UI instantly
+4. **Low Risk:** Preserves backend data for future use
+5. **Maintainability:** Eliminates timeline debugging burden
+
+**If timeline becomes valuable later:**
+- Backend data still being computed
+- Can re-implement UI display
+- Foundation in place for Solutions 1 & 2
+- Decision reversible if needed
+
+---
+
+**Next Steps:**
+1. ✅ Create feature branch: `fix/remove-timeline-feature` - DONE
+2. ✅ Commit with descriptive message - DONE (commit: 4335269)
+3. ✅ Create PR and merge to main - DONE
+4. ✅ Deploy to production - DONE (Deployed to Railway on 2026-01-17)
+5. 🔄 Monitor for user feedback - IN PROGRESS
+6. 🚀 Proceed to BUG-001: Article reference validation - READY TO START
+
+**Commit Details:**
+- Branch: `fix/remove-timeline-feature`
+- Hash: 4335269
+- Message: "fix(ui): remove timeline feature to address date inconsistency"
+- Files changed: 1 (context-owl-ui/src/pages/Narratives.tsx)
+- Status: ✅ Merged to main and deployed to Railway

@@ -1,0 +1,491 @@
+# FEATURE-018: Post-Clustering Validation (Final Quality Gate)
+
+## Context
+- **ADR:** None (Data Quality Safety Net)
+- **Sprint:** Sprint 3 (Data Quality & Stability)
+- **Priority:** P0 (High - Final Quality Gate)
+- **Estimate:** 2-3 hours
+- **Parent Investigation:** FEATURE-014 (Deep-research code audit)
+
+## Background
+
+During BUG-003 investigation, deep-research code audit revealed that **there is no final quality check before articles are assigned to narratives**.
+
+**Architecture Research Completed (Session 14):**
+- ✅ 6-phase article flow mapped: ingestion → extraction → clustering → generation → merging → persistence
+- ✅ Data structures documented at each phase
+- ✅ Current validation gaps identified
+- ✅ Exact integration point identified: `narrative_service.py` lines 175-180
+
+**Current Problem:**
+```python
+# narrative_service.py:120-215 (detect_narratives function)
+# Flow:
+# 1. Backfill narrative data for articles (line 142)
+# 2. Query articles with narrative fields (lines 150-156)
+# 3. Cluster by salience (line 163)
+# 4. Generate narratives from clusters (lines 172-175)  ← Articles collected here
+# 5. Merge shallow narratives (line 180)
+# 6. ❌ NO VALIDATION that articles mention nucleus_entity
+# 7. Save to database (lines 186-214)
+
+# Result: If clustering has edge cases, bad assignments persist to database
+```
+
+**Key Finding:** Article IDs collected at `narrative_themes.py:641` in `generate_narrative_from_cluster()`, but never validated before persistence.
+
+**Why This Matters:**
+Even with FEATURE-016 (entity validation) and FEATURE-017 (salience threshold), edge cases can still slip through:
+- Complex clustering scenarios
+- Multi-entity articles
+- Entity consolidation merges
+- Reactivation logic pulling in loosely related articles
+
+**Real Risk:**
+- Article passes entity extraction (FEATURE-016) ✓
+- Article passes salience threshold (FEATURE-017) ✓
+- Article gets clustered with narrative ✓
+- **But:** Article doesn't actually mention narrative's nucleus_entity
+- **Result:** Irrelevant article assigned
+
+## What to Build
+
+Add **post-clustering validation** as a final safety net before assigning articles to narratives:
+
+1. After clustering creates/updates a narrative
+2. Before final article assignment
+3. Check that **each article actually mentions the narrative's nucleus_entity**
+4. Reject articles that don't mention the nucleus_entity
+5. Log rejected articles for monitoring
+
+**Expected Behavior:**
+```python
+# Narrative: "Coinbase" (nucleus_entity = "Coinbase")
+# Articles in cluster after clustering:
+
+Article 1: "Coinbase Earnings Beat Expectations"
+  - Contains "Coinbase" ✓ → Assign to narrative
+
+Article 2: "Sharps Technology Partners with Solana" 
+  - Does NOT contain "Coinbase" ✗ → Reject
+
+Article 3: "Crypto Market Update: Bitcoin, Coinbase, Ethereum Rally"
+  - Contains "Coinbase" ✓ → Assign to narrative
+
+# Final validation ensures only articles mentioning "Coinbase" are assigned
+```
+
+## Files to Modify
+
+**Primary:**
+- `src/crypto_news_aggregator/services/narrative_service.py`
+  - **Location:** Lines 175-180 (after cluster generation, before merging)
+  - **Function:** `detect_narratives()` (lines 120-215)
+  - **What to add:** Filter `article_ids` in each narrative to only include articles mentioning nucleus_entity
+  - **What to update:** narrative['article_ids'] and narrative['article_count'] after validation
+  - **Add logging:** Log rejected articles and rejection summary per narrative
+
+## Implementation Details
+
+### Step 1: Add Validation Function
+
+```python
+# In narrative_service.py (around line 800, before detect_narratives)
+
+import re
+import logging
+
+logger = logging.getLogger(__name__)
+
+def validate_article_mentions_entity(
+    article: Dict,
+    nucleus_entity: str,
+    require_exact_match: bool = True
+) -> bool:
+    """
+    Validate that article actually mentions the narrative's nucleus entity.
+    
+    This is a final safety check to prevent articles from being assigned to
+    narratives they're not actually about.
+    
+    Args:
+        article: Article document with title and text
+        nucleus_entity: Narrative's nucleus entity (e.g., "Coinbase", "Bitcoin")
+        require_exact_match: If True, require exact entity name match
+        
+    Returns:
+        True if article mentions nucleus_entity, False otherwise
+        
+    Example:
+        >>> article = {"title": "Coinbase Stock Surges", "text": "Coinbase reported..."}
+        >>> validate_article_mentions_entity(article, "Coinbase")
+        True
+        
+        >>> article = {"title": "Sharps Technology", "text": "Sharps announced..."}
+        >>> validate_article_mentions_entity(article, "Coinbase")
+        False
+    """
+    if not nucleus_entity:
+        return False
+    
+    # Get article text
+    title = (article.get("title") or "").lower()
+    text = (article.get("text") or "").lower()
+    entity_lower = nucleus_entity.lower()
+    
+    # Check for exact word boundary match
+    # This prevents "Bit" matching "Bitcoin" or "Coin" matching "Coinbase"
+    pattern = r'\b' + re.escape(entity_lower) + r'\b'
+    
+    found_in_title = bool(re.search(pattern, title))
+    found_in_text = bool(re.search(pattern, text))
+    
+    return found_in_title or found_in_text
+```
+
+### Step 2: Integrate Validation into Narrative Assignment
+
+```python
+# In narrative_service.py (in detect_narratives function, around line 880-1080)
+# Look for where articles are being assigned to narratives
+
+async def detect_narratives(db, articles: List[Dict]) -> List[Dict]:
+    """
+    Detect narratives from articles.
+    
+    Now includes post-clustering validation to ensure article quality.
+    """
+    
+    # ... existing clustering logic ...
+    
+    # After clustering creates narrative
+    for narrative in created_narratives:
+        nucleus_entity = narrative["nucleus_entity"]
+        clustered_articles = narrative["articles"]  # Articles from clustering
+        
+        # NEW: Final validation before assignment
+        validated_articles = []
+        rejected_by_post_cluster = 0
+        
+        for article in clustered_articles:
+            if validate_article_mentions_entity(article, nucleus_entity):
+                # Article mentions nucleus entity - keep it
+                validated_articles.append(article)
+            else:
+                # Article doesn't mention nucleus entity - reject it
+                rejected_by_post_cluster += 1
+                logger.warning(
+                    f"Post-cluster validation rejected article from narrative",
+                    extra={
+                        "narrative_nucleus": nucleus_entity,
+                        "article_title": article.get("title", "")[:100],
+                        "article_id": article.get("id"),
+                        "reason": "nucleus_entity_not_in_text"
+                    }
+                )
+        
+        # Update narrative with validated articles only
+        narrative["articles"] = validated_articles
+        narrative["article_count"] = len(validated_articles)
+        
+        # Log validation summary for this narrative
+        if rejected_by_post_cluster > 0:
+            logger.info(
+                f"Post-cluster validation: {rejected_by_post_cluster} articles rejected from '{nucleus_entity}' narrative",
+                extra={
+                    "narrative_nucleus": nucleus_entity,
+                    "total_clustered": len(clustered_articles),
+                    "validated": len(validated_articles),
+                    "rejected": rejected_by_post_cluster
+                }
+            )
+    
+    # ... rest of function ...
+```
+
+### Step 3: Add Summary Logging
+
+```python
+# At end of detect_narratives function
+
+# Track global rejection stats
+total_rejected_post_cluster = sum(
+    narrative.get("rejected_by_post_cluster", 0) 
+    for narrative in created_narratives
+)
+
+logger.info(
+    "Narrative detection complete",
+    extra={
+        "articles_processed": len(articles),
+        "narratives_created": len(created_narratives),
+        "rejected_post_cluster": total_rejected_post_cluster,
+        "post_cluster_rejection_rate": f"{total_rejected_post_cluster/len(articles)*100:.1f}%"
+    }
+)
+```
+
+### Step 4: Add Tests
+
+```python
+# tests/test_narrative_service.py
+
+def test_validate_article_mentions_entity_success():
+    """Test validation passes when article mentions entity."""
+    article = {
+        "title": "Coinbase Stock Surges After Earnings",
+        "text": "Coinbase reported strong Q4 earnings..."
+    }
+    assert validate_article_mentions_entity(article, "Coinbase") is True
+
+def test_validate_article_mentions_entity_in_body_only():
+    """Test validation passes when entity only in body."""
+    article = {
+        "title": "Crypto Exchange Reports Strong Quarter",
+        "text": "Coinbase led the sector with record trading volume..."
+    }
+    assert validate_article_mentions_entity(article, "Coinbase") is True
+
+def test_validate_article_mentions_entity_failure():
+    """Test validation fails when entity not mentioned."""
+    article = {
+        "title": "Sharps Technology Partners with Solana",
+        "text": "Sharps announced a new blockchain integration..."
+    }
+    assert validate_article_mentions_entity(article, "Coinbase") is False
+
+def test_validate_article_mentions_entity_case_insensitive():
+    """Test validation is case-insensitive."""
+    article = {
+        "title": "COINBASE Stock Update",
+        "text": "coinbase shares rose 5% today..."
+    }
+    assert validate_article_mentions_entity(article, "Coinbase") is True
+
+def test_validate_article_mentions_entity_word_boundary():
+    """Test validation respects word boundaries."""
+    # "Coin" should NOT match "Coinbase"
+    article = {
+        "title": "Coinbase Trading Volume Increases",
+        "text": "Coinbase reported high trading activity..."
+    }
+    assert validate_article_mentions_entity(article, "Coin") is False
+    
+    # "Coinbase" should match "Coinbase"
+    assert validate_article_mentions_entity(article, "Coinbase") is True
+
+def test_post_cluster_validation_integration():
+    """Test post-cluster validation rejects mismatched articles."""
+    articles = [
+        {
+            "id": "1",
+            "title": "Coinbase Earnings Report",
+            "text": "Coinbase beat expectations..."
+        },
+        {
+            "id": "2", 
+            "title": "Sharps Technology News",
+            "text": "Sharps announced partnership..."
+        }
+    ]
+    
+    narrative = {
+        "nucleus_entity": "Coinbase",
+        "articles": articles
+    }
+    
+    # After post-cluster validation
+    validated = [a for a in articles if validate_article_mentions_entity(a, "Coinbase")]
+    
+    assert len(validated) == 1  # Only Coinbase article
+    assert validated[0]["id"] == "1"
+```
+
+## Acceptance Criteria
+
+- [x] `validate_article_mentions_entity()` function implemented
+- [x] Case-insensitive matching (Coinbase = coinbase = COINBASE)
+- [x] Word boundary matching (avoid "Coin" matching "Coinbase")
+- [x] Validation integrated into narrative assignment flow
+- [x] Articles without nucleus_entity mention are rejected
+- [x] Rejected articles logged with narrative and article details
+- [x] Summary logging shows rejection count per narrative
+- [x] Global summary shows total post-cluster rejection rate
+- [x] Unit tests cover success, failure, and edge cases
+- [x] Integration test shows end-to-end validation working
+- [x] Rejection rate is reasonable (1-3% expected)
+
+## Out of Scope
+
+- Synonym matching (e.g., "BTC" matching "Bitcoin")
+- Fuzzy matching or partial matches
+- Multi-entity narrative support (separate nucleus entities)
+- Quote vs. body text weighting
+- Historical article reprocessing (new articles only)
+
+## Dependencies
+
+**Blocked by:** None
+**Complements:**
+- FEATURE-016 (entity extraction validation)
+- FEATURE-017 (actor salience threshold)
+
+**Why all three fixes needed:**
+- FEATURE-016: Prevents hallucinations at extraction
+- FEATURE-017: Filters tangential mentions during clustering
+- **FEATURE-018 (this):** Final safety net catches anything that slips through
+
+## Testing Requirements
+
+### Unit Tests
+See "Step 4: Add Tests" above
+
+### Integration Testing
+```bash
+# Run narrative detection with post-cluster validation
+python -m crypto_news_aggregator.services.narrative_service
+
+# Check logs:
+# 1. How many articles rejected by post-cluster validation
+# 2. Sample rejected articles (should be mismatched entities)
+# 3. Verify narratives only contain articles mentioning nucleus_entity
+```
+
+### Manual Validation
+```python
+# Test with known bad case (Sharps Technology in Coinbase narrative)
+narrative = {
+    "nucleus_entity": "Coinbase",
+    "articles": [
+        {"title": "Coinbase Earnings", "text": "Coinbase reported..."},
+        {"title": "Sharps Technology", "text": "Sharps announced..."}
+    ]
+}
+
+# After validation: Only Coinbase article should remain
+# Sharps article should be rejected (doesn't mention "Coinbase")
+```
+
+### Regression Testing
+```bash
+# Verify major narratives still work correctly
+# Check article counts haven't dropped dramatically
+# Sample articles in each narrative - should all mention nucleus_entity
+```
+
+## Success Metrics
+
+**Target:**
+- Post-cluster rejection rate: 1-3% (catches edge cases)
+- Zero articles in narratives that don't mention nucleus_entity
+- No over-filtering (legitimate articles still assigned)
+
+**Monitoring:**
+```bash
+# Check logs after deployment
+grep "Post-cluster validation rejected" app.log | wc -l
+# Should be low (1-3% of articles)
+
+# Sample rejected articles
+grep "Post-cluster validation rejected" app.log | head -5
+# Verify rejected articles actually don't mention nucleus_entity
+
+# Spot check narratives
+# Pick 5-10 random narratives
+# Verify all articles mention the nucleus_entity
+```
+
+## Environment Variables Required
+
+None (uses existing logging configuration)
+
+## Git Workflow
+
+```bash
+# Create feature branch
+git checkout -b feature/018-post-clustering-validation
+
+# Implement validation
+# Add tests  
+# Test against production data
+
+git add src/crypto_news_aggregator/services/narrative_service.py
+git add tests/test_narrative_service.py
+
+git commit -m "feat(narratives): add post-clustering validation
+
+- Validate articles actually mention narrative's nucleus entity
+- Final quality gate before article assignment
+- Prevents mismatched articles from slipping through
+- Complements entity extraction and salience filtering
+
+Example: Sharps Technology article clustered with Coinbase
+  - Clustering: May group based on broader context
+  - Post-cluster validation: Rejects (doesn't mention 'Coinbase')
+  
+Fixes: BUG-003 (final fix - 3 of 3)
+Related: FEATURE-014, FEATURE-016, FEATURE-017"
+
+git push origin feature/018-post-clustering-validation
+```
+
+## Quick Reference
+
+**Problem:** No final check that articles belong to narrative
+**Solution:** Validate nucleus_entity mention before assignment
+**Location:** `narrative_service.py:880-1080` (detect_narratives)
+**Time:** 2-3 hours (implementation + testing)
+
+**Defense in Depth:**
+1. FEATURE-016: Catch hallucinations at extraction
+2. FEATURE-017: Filter tangential mentions during clustering
+3. **FEATURE-018 (this):** Final validation before assignment
+
+**Expected Rejection Rate:** 1-3% of articles
+
+## Related Tickets
+
+- **FEATURE-014** - Investigation that discovered this issue
+- **BUG-003** - Irrelevant articles in narratives (parent bug)
+- **FEATURE-015** - Database safety hardening (sibling)
+- **FEATURE-016** - Entity extraction validation (first fix)
+- **FEATURE-017** - Actor salience threshold (second fix)
+
+## Notes
+
+This is **Fix 3 of 3** from the BUG-003 investigation:
+- Fix 1: Entity extraction validation (FEATURE-016)
+- Fix 2: Actor salience threshold increase (FEATURE-017)
+- ⭐ **Fix 3 (this):** Post-clustering validation (final safety net)
+
+**Why this is the final fix:**
+- Catches anything that slips through FEATURE-016 and FEATURE-017
+- Defense-in-depth approach to quality
+- Simple validation with high confidence
+- No false positives (entity either is or isn't mentioned)
+
+**Architecture:**
+```
+Article → [FEATURE-016: Entity Extraction Validation] 
+       → [Clustering Logic]
+       → [FEATURE-017: Salience Threshold Filter]
+       → [FEATURE-018: Post-Cluster Validation] ← Final gate
+       → Assign to Narrative
+```
+
+**Combined Impact:**
+With all three fixes:
+- Hallucinations: Blocked by FEATURE-016
+- Tangential mentions: Blocked by FEATURE-017  
+- Edge cases: Blocked by FEATURE-018
+- **Expected quality:** >99% article relevance
+
+**Testing Priority:**
+This is the most important fix to test thoroughly because it's the LAST line of defense. If this validation fails, irrelevant articles will be assigned.
+
+**Future Enhancement:**
+If needed, could add more sophisticated validation:
+- Require entity in first 3 paragraphs
+- Check entity appears multiple times (not just once)
+- Validate entity is a primary subject, not passing mention
+These are out of scope for now (keep validation simple and robust).
