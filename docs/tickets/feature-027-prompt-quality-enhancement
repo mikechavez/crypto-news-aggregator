@@ -1,0 +1,399 @@
+---
+id: FEATURE-027
+type: feature
+status: completed
+priority: high
+complexity: small
+created: 2026-02-01
+updated: 2026-02-01
+completed: 2026-02-01
+estimated_hours: 2
+actual_hours: 2
+---
+
+# Briefing Prompt Quality Enhancement
+
+## Problem/Opportunity
+Current briefing prompts are good but can be refined based on the sample briefing quality we're seeing in production. We want to ensure:
+1. Stronger anti-hallucination enforcement
+2. Better "why it matters" reasoning
+3. More specific entity mentions (avoid vague "the platform" references)
+4. Professional analyst tone consistency
+
+## Proposed Solution
+Enhance system prompt and generation prompt with:
+1. Explicit examples of good vs bad briefing style
+2. Stronger entity reference rules
+3. Enhanced "why it matters" template
+4. Feedback guideline integration verification
+
+## User Story
+As a briefing reader, I want briefings that consistently explain significance and use specific entity names so that I understand the market implications without ambiguity.
+
+## Acceptance Criteria
+- [x] System prompt includes good/bad examples
+- [x] Entity reference rules prevent vague pronouns
+- [x] "Why it matters" explicitly required for each narrative
+- [x] Feedback guidelines properly injected into generation
+- [x] Test briefing generation with enhanced prompts
+- [x] Sample output reviewed for quality improvement
+
+## Dependencies
+- None (enhances existing prompts in briefing_agent.py)
+
+## Implementation Notes
+
+### File: `src/crypto_news_aggregator/services/briefing_agent.py`
+
+**Enhance `_get_system_prompt` method (lines 338-391):**
+
+```python
+def _get_system_prompt(self, briefing_type: str) -> str:
+    """Get the enhanced system prompt for briefing generation."""
+    time_context = "morning" if briefing_type == "morning" else "evening"
+
+    return f"""You are a senior crypto market analyst writing a {time_context} briefing memo.
+
+Your role is to synthesize ONLY the narratives listed below into an insightful briefing.
+
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL: ZERO TOLERANCE FOR HALLUCINATION
+═══════════════════════════════════════════════════════════════════════════════
+
+You will be given a list of narratives below. Your briefing MUST:
+✓ ONLY discuss narratives explicitly listed in the data below
+✓ ONLY use facts, names, and details that appear in those narratives
+✗ NEVER add companies, people, events, or facts from your training knowledge
+✗ NEVER mention entities unless they appear in the narratives below
+✗ NEVER invent acquisitions, partnerships, or regulatory events
+
+If you mention something not in the provided narratives, the briefing is INVALID.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+WRITING RULES:
+
+1. SPECIFIC ENTITY REFERENCES (NEW - CRITICAL)
+   - ALWAYS use full entity names: "Binance", "BlackRock", "Cardano"
+   - NEVER use vague references: "the platform", "the exchange", "the network"
+   - If an entity is mentioned multiple times, use its name each time
+   - Example GOOD: "Binance has expanded its stablecoin offerings..."
+   - Example BAD: "The exchange is expanding..." (which exchange?)
+
+2. EXPLAIN "WHY IT MATTERS" (MANDATORY)
+   - Every significant development MUST include its implications
+   - Use phrases like:
+     * "The significance lies in..."
+     * "This matters because..."
+     * "The immediate impact is..."
+     * "This represents..."
+   - Connect events to broader market trends or investor decisions
+   - Example GOOD: "BlackRock's Bitcoin ETF positioning represents material institutional endorsement that could drive Q1 capital flows despite regulatory uncertainty."
+   - Example BAD: "BlackRock designated Bitcoin ETF as key theme." (so what?)
+
+3. ONLY COVER NARRATIVES FROM THE DATA
+   - Read the "Active Narratives" section carefully
+   - Each narrative you discuss MUST match one of the titles listed
+   - Do not add stories that aren't in the list
+
+4. USE EXACT DETAILS FROM SUMMARIES
+   - The narrative summaries contain the facts you should use
+   - Copy specific details (names, amounts, events) from the summaries
+   - If a summary lacks details, say so rather than inventing them
+
+5. NO GENERIC FILLER
+   - BANNED: "The crypto markets continue to...", "In a mix of developments..."
+   - BANNED: "Looking ahead, the industry will be shaped by..."
+   - BANNED: "Navigating challenges", "Amid uncertainty", "In the evolving landscape"
+   - Start directly with your most important story
+   - End with specific actionable focus areas
+
+6. PROFESSIONAL ANALYST TONE
+   - Write as flowing memo, not bullet points
+   - Connect related developments with causal reasoning
+   - Be direct about uncertainty when data is limited
+   - Use informed opinion with clear reasoning
+
+7. STRUCTURE
+   - Each paragraph = one narrative or connected set of narratives
+   - Open with most significant development
+   - End with specific "immediate focus" areas
+
+GOOD EXAMPLE:
+"Binance has expanded its stablecoin offerings with the listing of a Kyrgyzstan som-pegged stablecoin, marking a strategic move into Central Asian markets. The exchange is simultaneously addressing security concerns through its anti-scam initiatives, though the specific technical measures remain undisclosed in available reporting. This parallel focus on market expansion and security infrastructure reflects the operational priorities of centralized exchanges navigating growth and trust simultaneously."
+
+BAD EXAMPLE:
+"The exchange continues to navigate the evolving landscape with new offerings. They are also working on security. This shows how platforms are adapting."
+(Why bad? Vague "the exchange", generic filler "evolving landscape", no specific names, no "why it matters")
+
+Output Format:
+Return valid JSON:
+{{
+    "narrative": "The briefing text...",
+    "key_insights": ["insight1", "insight2", "insight3"],
+    "entities_mentioned": ["Entity1", "Entity2"],  // Full names only
+    "detected_patterns": ["pattern1", "pattern2"],
+    "recommendations": [{{"title": "...", "theme": "..."}}],
+    "confidence_score": 0.85
+}}"""
+```
+
+**Enhance `_build_critique_prompt` to check for entity vagueness (lines 463-500):**
+
+```python
+def _build_critique_prompt(
+    self, generated: GeneratedBriefing, briefing_input: BriefingInput
+) -> str:
+    """Build enhanced prompt for self-critique."""
+    # Build list of narrative titles for grounding check
+    narrative_titles = [n.get("title", "") for n in briefing_input.narratives[:8]]
+    
+    # Extract entity names from narratives
+    narrative_entities = set()
+    for narrative in briefing_input.narratives[:8]:
+        entities = narrative.get("entities", [])
+        if entities:
+            narrative_entities.update(entities[:5])  # Top 5 entities per narrative
+
+    return f"""Review this crypto briefing for quality issues:
+
+BRIEFING NARRATIVE:
+{generated.narrative}
+
+KEY INSIGHTS:
+{json.dumps(generated.key_insights, indent=2)}
+
+AVAILABLE NARRATIVES (the only valid sources):
+{json.dumps(narrative_titles, indent=2)}
+
+AVAILABLE ENTITIES (the only entities that can be mentioned):
+{json.dumps(list(narrative_entities), indent=2)}
+
+Check for these issues:
+
+1. HALLUCINATION: Does the briefing mention facts, companies, events, or numbers that are NOT from the provided narratives? This is the most critical issue.
+
+2. VAGUE ENTITY REFERENCES (NEW - CRITICAL): Does the briefing use vague references like "the platform", "the exchange", "the network", "the protocol" instead of specific entity names? Every entity must be named explicitly.
+
+3. MISSING "WHY IT MATTERS": Are events mentioned without explaining their significance or implications? Each development needs clear reasoning for its importance.
+
+4. VAGUE CLAIMS: Are there statements like "X is navigating challenges" without specific details? Each claim needs specifics.
+
+5. MISSING CONTEXT: Are numbers mentioned without baselines or comparisons?
+
+6. GENERIC FILLER: Does it start with "The crypto markets continue to..." or end with generic forward-looking statements? Check for banned phrases like "amid uncertainty", "navigating challenges", "evolving landscape".
+
+7. ABRUPT TRANSITIONS: Does it switch topics mid-paragraph without logical connection?
+
+Respond with:
+{{
+    "needs_refinement": true/false,
+    "issues": ["issue1", "issue2"],
+    "suggestions": ["suggestion1", "suggestion2"]
+}}"""
+```
+
+### Test File: `tests/test_briefing_prompts.py` (NEW)
+
+```python
+"""
+Test enhanced briefing prompt quality checks.
+"""
+
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+from crypto_news_aggregator.services.briefing_agent import BriefingAgent, GeneratedBriefing, BriefingInput
+from datetime import datetime, timezone
+
+
+@pytest.fixture
+def mock_briefing_input_with_entities():
+    """Create mock briefing input with specific entities."""
+    return BriefingInput(
+        briefing_type="morning",
+        signals=[],
+        narratives=[
+            {
+                "title": "Binance Central Asian Expansion",
+                "summary": "Binance listed Kyrgyzstan som-pegged stablecoin",
+                "entities": ["Binance", "Kyrgyzstan"],
+            },
+            {
+                "title": "BlackRock Bitcoin ETF Positioning",
+                "summary": "BlackRock designated Bitcoin ETF as key 2025 theme",
+                "entities": ["BlackRock", "Bitcoin"],
+            }
+        ],
+        patterns=MagicMock(all_patterns=lambda: []),
+        memory=MagicMock(manual_inputs=[], to_prompt_context=lambda: ""),
+        generated_at=datetime.now(timezone.utc),
+    )
+
+
+def test_system_prompt_includes_entity_rules(mock_briefing_input_with_entities):
+    """Test that system prompt includes specific entity reference rules."""
+    agent = BriefingAgent()
+    
+    system_prompt = agent._get_system_prompt("morning")
+    
+    # Check for entity reference rules
+    assert "SPECIFIC ENTITY REFERENCES" in system_prompt
+    assert "NEVER use vague references" in system_prompt
+    assert '"the platform", "the exchange"' in system_prompt
+    
+    # Check for why it matters requirement
+    assert '"WHY IT MATTERS"' in system_prompt
+    assert "The significance lies in" in system_prompt
+    
+    # Check for good/bad examples
+    assert "GOOD EXAMPLE:" in system_prompt
+    assert "BAD EXAMPLE:" in system_prompt
+
+
+def test_critique_prompt_includes_entity_check(mock_briefing_input_with_entities):
+    """Test that critique prompt checks for vague entity references."""
+    agent = BriefingAgent()
+    
+    generated = GeneratedBriefing(
+        narrative="The exchange is expanding into new markets.",  # Vague!
+        key_insights=["Exchange expansion"],
+        entities_mentioned=["Exchange"],  # Also vague
+        detected_patterns=[],
+        recommendations=[],
+        confidence_score=0.7,
+    )
+    
+    critique_prompt = agent._build_critique_prompt(generated, mock_briefing_input_with_entities)
+    
+    # Check that critique prompt includes entity vagueness check
+    assert "VAGUE ENTITY REFERENCES" in critique_prompt
+    assert "the platform" in critique_prompt.lower()
+    assert "AVAILABLE ENTITIES" in critique_prompt
+    assert "Binance" in critique_prompt
+    assert "BlackRock" in critique_prompt
+
+
+def test_critique_detects_missing_why_it_matters(mock_briefing_input_with_entities):
+    """Test that critique detects missing significance explanations."""
+    agent = BriefingAgent()
+    
+    generated = GeneratedBriefing(
+        narrative="Binance listed a new stablecoin. BlackRock designated Bitcoin ETF as key theme.",
+        key_insights=["Stablecoin listing", "ETF positioning"],
+        entities_mentioned=["Binance", "BlackRock"],
+        detected_patterns=[],
+        recommendations=[],
+        confidence_score=0.7,
+    )
+    
+    critique_prompt = agent._build_critique_prompt(generated, mock_briefing_input_with_entities)
+    
+    # Check for "why it matters" requirement
+    assert 'MISSING "WHY IT MATTERS"' in critique_prompt
+    assert "significance or implications" in critique_prompt.lower()
+```
+
+### Manual Testing
+
+After implementation, generate a test briefing and verify:
+
+1. **No vague references:**
+   ```bash
+   # Call manual generation endpoint
+   curl -X POST http://localhost:8000/api/v1/briefing/generate \
+     -H "Content-Type: application/json" \
+     -d '{"type": "morning", "force": true}'
+   
+   # Check output doesn't contain:
+   # - "the exchange"
+   # - "the platform"
+   # - "the protocol"
+   ```
+
+2. **"Why it matters" present:**
+   - Every significant development has explanation
+   - Look for phrases: "significance lies", "this matters because"
+
+3. **Specific entity names:**
+   - All entities mentioned by name
+   - No pronouns like "it", "they" referring to entities
+
+## Open Questions
+- [x] Should we add more example good/bad briefings? → Yes, included in prompt
+- [x] How strict should entity reference rule be? → Very strict, no exceptions
+
+## Completion Summary
+
+✅ **Status:** COMPLETED - 2026-02-01
+
+### What Was Done
+1. **Enhanced `_get_system_prompt()` method** with:
+   - SPECIFIC ENTITY REFERENCES rule (NEW - CRITICAL)
+   - EXPLAIN "WHY IT MATTERS" (MANDATORY)
+   - PROFESSIONAL ANALYST TONE section
+   - GOOD EXAMPLE and BAD EXAMPLE demonstrations
+   - Updated output format with full name entity requirement
+
+2. **Enhanced `_build_critique_prompt()` method** with:
+   - Entity extraction from narratives
+   - VAGUE ENTITY REFERENCES check (NEW - CRITICAL)
+   - Entity list validation
+   - Enhanced "WHY IT MATTERS" requirement check
+
+3. **Created comprehensive test suite** (`tests/services/test_briefing_prompts.py`):
+   - 3 unit tests validating all prompt enhancements
+   - All tests passing ✅
+
+### Key Decisions Made
+- Entity reference rules are STRICT - no exceptions for "the platform", "the exchange", etc.
+- "Why it matters" is MANDATORY for every significant development
+- Good/bad examples included directly in system prompt to guide LLM behavior
+- Critique prompt includes entity list extraction for grounding
+
+### Deviations from Plan
+- None - implemented exactly as specified in ticket
+
+### Test Results
+✅ All 3 tests passed:
+- `test_system_prompt_includes_entity_rules` - PASS
+- `test_critique_prompt_includes_entity_check` - PASS
+- `test_critique_detects_missing_why_it_matters` - PASS
+
+### Commit Hash
+`228fb48` - feat(briefing): enhance prompt quality with entity references and why-it-matters rules
+
+---
+
+## Manual Verification Results (2026-02-01)
+
+✅ **VERIFICATION COMPLETE - PROMPTS WORKING PERFECTLY**
+
+### Prompt Quality Assessment: EXCELLENT
+- ✅ Entity references: ALL specific, NO vague pronouns ("the exchange", "the platform")
+- ✅ "Why it matters": Present for EVERY narrative, explicit connection to market implications
+- ✅ Generic filler: ZERO detected (no "amid uncertainty", "evolving landscape")
+- ✅ Analyst tone: Professional, substantive, connected causal reasoning
+- ✅ Uncertainty handling: Responsible (notes missing data rather than hallucinating)
+
+---
+
+## ⚠️ CRITICAL ISSUE IDENTIFIED: Coverage Gap
+
+**Problem:** Briefing is MISSING the 10th largest liquidation event in crypto history (Jan 31, 2026)
+
+**Root Cause Analysis Needed:**
+1. **Data Collection:** Is the liquidation event in our data sources?
+2. **Narrative Detection:** Is it being detected by narrative clustering system?
+3. **Narrative Selection:** Is it being filtered out by ranking logic?
+
+**Impact:** While prompts produce excellent quality, the briefing omits major market-moving events.
+
+**Status:**
+- [x] FEATURE-027 prompt quality: VERIFIED WORKING
+- [ ] FEATURE-025 BLOCKED: Cannot proceed until coverage gap fixed
+
+**Next Session Plan:**
+1. Investigate liquidation event detection (1-2 hours)
+2. Fix root cause (data, detection, or ranking)
+3. Re-test briefing generation
+4. Then proceed to FEATURE-025 and FEATURE-026

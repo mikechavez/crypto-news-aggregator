@@ -1,0 +1,1490 @@
+{
+  "narrative": {
+    "title": "Coinbase's Dual Narratives: Resilience and Controversy",
+    "theme": "Coinbase",
+    "summary": "Coinbase touts financial inclusion efforts while facing allegations of insider trading and corporate governance concerns. Coinbase navigates operational strength and regulatory challenges.",
+    "entities": [
+      "Coinbase",
+      "Marc Andreessen",
+      "GiveDirectly",
+      "Crypto operating businesses",
+      "Coinbase shareholders",
+      "New Yorkers"
+    ],
+    "article_count": 184
+  },
+  "articles": [
+    {
+      "index": 1,
+      "title": "UK bans Coinbase ads that \u2018trivialized\u2019 crypto risks: Report",
+      "source": "cointelegraph",
+      "published_at": "2026-01-28T05:35:28",
+      "url": "https://cointelegraph.com/news/uk-bans-coinbase-ads-trivialized-crypto-risks-report?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "6979a261e8806daa0180801b"
+    },
+    {
+      "index": 2,
+      "title": "Coinbase Shares Extend Losses as It Expands Into New Metal Futures",
+      "source": "decrypt",
+      "published_at": "2026-01-28T05:30:49",
+      "url": "https://decrypt.co/356128/coinbase-shares-tumble-expands-new-metal-futures",
+      "id": "6979a264e8806daa0180801c"
+    },
+    {
+      "index": 3,
+      "title": "Coinbase moves closer toward rolling out \u2018custom stablecoins\u2019",
+      "source": "cointelegraph",
+      "published_at": "2026-01-28T04:51:38",
+      "url": "https://cointelegraph.com/news/coinbase-closer-toward-launching-custom-stablecoins?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "69799b28e8806daa01808011"
+    },
+    {
+      "index": 4,
+      "title": "Coinbase + Glassnode: Charting Crypto Q1 2026",
+      "source": "glassnode",
+      "published_at": "2026-01-27T13:00:00",
+      "url": "https://insights.glassnode.com/coinbase-glassnode-charting-crypto-q1-2026/",
+      "id": "6978de0de8806daa01807ea3"
+    },
+    {
+      "index": 5,
+      "title": "Panic selling Bitcoin on Coinbase triggers a Binance price gap that reveals a \u201cmessy\u201d institutional market failure",
+      "source": "cryptoslate",
+      "published_at": "2026-01-27T10:49:11",
+      "url": "https://cryptoslate.com/bitcoin-is-now-cheaper-on-coinbase-compared-to-binance-and-the-culprit-may-not-be-weak-us-demand/",
+      "id": "69789bdae8806daa01807dd8"
+    },
+    {
+      "index": 6,
+      "title": "60% of top US banks are geared up for Bitcoin: River",
+      "source": "cointelegraph",
+      "published_at": "2026-01-27T06:33:37",
+      "url": "https://cointelegraph.com/news/top-us-banks-bitcoin-services-trading-custody?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "697861ece8806daa01807d88"
+    },
+    {
+      "index": 7,
+      "title": "Coinbase Spotlights Davos Momentum Toward Tokenization and CLARITY Act",
+      "source": "bitcoin.com",
+      "published_at": "2026-01-26T04:30:17",
+      "url": "https://news.bitcoin.com/coinbase-spotlights-davos-momentum-toward-tokenization-and-clarity-act/",
+      "id": "6976effee8806daa01807ae4"
+    },
+    {
+      "index": 8,
+      "title": "Coinbase reportedly set to meet South Korean exchange chiefs amid takeover talk",
+      "source": "dlnews",
+      "published_at": "2026-01-25T11:33:45",
+      "url": "https://www.dlnews.com/articles/markets/coinbase-reportedly-set-to-meet-south-korean-exchange-chiefs/",
+      "id": "6976018de8806daa01807a1d"
+    },
+    {
+      "index": 9,
+      "title": "Coinbase CEO says Big banks now view crypto as an \u2018existential\u2019 threat to their business",
+      "source": "coindesk",
+      "published_at": "2026-01-24T19:22:36",
+      "url": "https://www.coindesk.com/business/2026/01/24/coinbase-ceo-says-big-banks-now-view-crypto-as-an-existential-threat-to-their-business",
+      "id": "697521d0e8806daa0180798f"
+    },
+    {
+      "index": 10,
+      "title": "Bitcoin regret is coming for anyone ignoring Coinbase CEO\u2019s 5% rule as banks fight to cap gains",
+      "source": "cryptoslate",
+      "published_at": "2026-01-23T16:05:52",
+      "url": "https://cryptoslate.com/bitcoin-regret-is-coming-for-anyone-ignoring-brian-armstrongs-5-rule-as-banks-fight-to-cap-your-gains/",
+      "id": "6973a2a4e8806daa018077f9"
+    },
+    {
+      "index": 11,
+      "title": "Coinbase sees constructive Q1 outlook after late 2025 crypto market reset",
+      "source": "theblock",
+      "published_at": "2026-01-23T15:24:27",
+      "url": "https://www.theblock.co/post/386843/coinbase-sees-constructive-q1-outlook-after-late-2025-crypto-market-reset?utm_source=rss&utm_medium=rss",
+      "id": "69739419e8806daa018077de"
+    },
+    {
+      "index": 12,
+      "title": "Coinbase lets users borrow up to $1 million against staked ether without selling",
+      "source": "coindesk",
+      "published_at": "2026-01-23T06:12:32",
+      "url": "https://www.coindesk.com/markets/2026/01/23/coinbase-lets-users-borrow-up-to-usd1-million-against-staked-ether-without-selling",
+      "id": "6973189ae8806daa018076eb"
+    },
+    {
+      "index": 13,
+      "title": "Coinbase Forms Quantum Advisory Board as Post-Quantum Risks Threaten Blockchain Security",
+      "source": "bitcoin.com",
+      "published_at": "2026-01-23T04:30:04",
+      "url": "https://news.bitcoin.com/coinbase-forms-quantum-advisory-board-as-post-quantum-risks-threaten-blockchain-security/",
+      "id": "6972fbb8e8806daa018076c0"
+    },
+    {
+      "index": 14,
+      "title": "Coinbase Creates Advisory Board to Study Quantum Computing Risks to Bitcoin",
+      "source": "decrypt",
+      "published_at": "2026-01-22T23:12:36",
+      "url": "https://decrypt.co/355565/coinbase-advisory-board-quantum-computing-risks-bitcoin",
+      "id": "6972b309e8806daa01807667"
+    },
+    {
+      "index": 15,
+      "title": "Coinbase VP says \u2018fatal flaws\u2019 in Senate crypto bill forced sudden withdrawal of support",
+      "source": "coindesk",
+      "published_at": "2026-01-22T22:27:59",
+      "url": "https://www.coindesk.com/policy/2026/01/22/coinbase-vp-says-fatal-flaws-in-senate-crypto-bill-forced-sudden-withdrawal-of-support",
+      "id": "6972abbae8806daa01807662"
+    },
+    {
+      "index": 16,
+      "title": "Coinbase forms board to assess quantum computing risks to blockchain",
+      "source": "cointelegraph",
+      "published_at": "2026-01-22T20:08:19",
+      "url": "https://cointelegraph.com/news/coinbase-board-quantum-computing-risks-blockchain?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "6972874ee8806daa0180760e"
+    },
+    {
+      "index": 17,
+      "title": "Coinbase Forms Quantum Computing Advisory Board as Bitcoin Security Concerns Grow",
+      "source": "bitcoinmagazine",
+      "published_at": "2026-01-22T18:58:11",
+      "url": "https://bitcoinmagazine.com/news/coinbase-forms-quantum-computing-board",
+      "id": "697278cfe8806daa018075ef"
+    },
+    {
+      "index": 18,
+      "title": "The Base token should give holders voting power over Coinbase itself",
+      "source": "coindesk",
+      "published_at": "2026-01-22T15:00:00",
+      "url": "https://www.coindesk.com/opinion/2026/01/22/the-base-token-should-give-holders-voting-power-over-coinbase-itself",
+      "id": "69723e53e8806daa0180752b"
+    },
+    {
+      "index": 19,
+      "title": "Coinbase CEO Brian Armstrong spars with France\u2019s Central Bank chief at Davos over yield and \u2018bitcoin standard\u2019",
+      "source": "coindesk",
+      "published_at": "2026-01-21T23:26:56",
+      "url": "https://www.coindesk.com/business/2026/01/21/coinbase-ceo-brian-armstrong-spars-with-france-s-central-bank-chief-at-davos-over-the-yield-and-bitcoin-standard",
+      "id": "697164248a250641c7535c16"
+    },
+    {
+      "index": 20,
+      "title": "\u2018Bitcoin Has No Issuer\u2019: Coinbase CEO Clashes With French Central Banker at Davos",
+      "source": "bitcoinmagazine",
+      "published_at": "2026-01-21T14:39:06",
+      "url": "https://bitcoinmagazine.com/news/coinbase-ceo-clashes-bitcoin-davos",
+      "id": "6970e8a68a250641c7535ac8"
+    },
+    {
+      "index": 21,
+      "title": "Netflix Stock Earnings Impress, But Shares Fall on Competitive Pressures",
+      "source": "watcherguru",
+      "published_at": "2026-01-21T06:53:38",
+      "url": "https://watcher.guru/news/netflix-stock-earnings-impress-but-shares-fall-on-competitive-pressures",
+      "id": "69707bb48a250641c75359c8"
+    },
+    {
+      "index": 22,
+      "title": "Coinbase Signals Next Financial Supercycle\u2014Onchain Markets Poised to Reshape Global Wealth Creation",
+      "source": "bitcoin.com",
+      "published_at": "2026-01-21T04:30:11",
+      "url": "https://news.bitcoin.com/coinbase-signals-next-financial-supercycle-onchain-markets-poised-to-reshape-global-wealth-creation/",
+      "id": "697057818a250641c7535980"
+    },
+    {
+      "index": 23,
+      "title": "Coinbase Taps the NBA\u2019s Next Superstars, Quietly Positioning COIN for the Next Cultural Adoption Wave",
+      "source": "bitcoin.com",
+      "published_at": "2026-01-21T02:30:10",
+      "url": "https://news.bitcoin.com/coinbase-taps-the-nbas-next-superstars-quietly-positioning-coin-for-the-next-cultural-adoption-wave/",
+      "id": "69703b138a250641c7535961"
+    },
+    {
+      "index": 24,
+      "title": "Coinbase says capital access beats income in wealth creation",
+      "source": "cointelegraph",
+      "published_at": "2026-01-20T13:18:00",
+      "url": "https://cointelegraph.com/news/coinbase-says-capital-access-beats-income-in-wealth-creation?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "696f86388a250641c7535798"
+    },
+    {
+      "index": 25,
+      "title": "Coinbase CEO Seeks \u2018Win-Win\u2019 on Market Structure Bill in Davos Charm Offensive",
+      "source": "decrypt",
+      "published_at": "2026-01-20T13:07:26",
+      "url": "https://decrypt.co/355117/coinbase-ceo-seeks-win-win-on-market-structure-bill-in-davos-charm-offensive",
+      "id": "696f7ef38a250641c7535784"
+    },
+    {
+      "index": 26,
+      "title": "Coinbase CEO Brian Armstrong to work on market structure bill in Davos",
+      "source": "theblock",
+      "published_at": "2026-01-20T04:31:34",
+      "url": "https://www.theblock.co/post/386178/coinbase-brian-armstrong-market-structure-bill-davos?utm_source=rss&utm_medium=rss",
+      "id": "696f0ad08a250641c75356b9"
+    },
+    {
+      "index": 27,
+      "title": "Coinbase accused of \u201crug pull\u201d as the White House weighs killing the CLARITY Act over yield",
+      "source": "cryptoslate",
+      "published_at": "2026-01-19T09:39:13",
+      "url": "https://cryptoslate.com/coinbase-accused-of-rug-pull-as-the-white-house-weighs-killing-the-clarity-act-over-yield/",
+      "id": "696dfe288a250641c753550d"
+    },
+    {
+      "index": 28,
+      "title": "Coinbase Disputes White House Hostility Claims, Calls Crypto Bill Talks \u2018Super Constructive\u2019",
+      "source": "bitcoin.com",
+      "published_at": "2026-01-19T04:30:04",
+      "url": "https://news.bitcoin.com/coinbase-disputes-white-house-hostility-claims-calls-crypto-bill-talks-super-constructive/",
+      "id": "696db5ae8a250641c75354b4"
+    },
+    {
+      "index": 29,
+      "title": "Coinbase denies White House split claims as Clarity Act divisions deepen",
+      "source": "dlnews",
+      "published_at": "2026-01-18T11:07:42",
+      "url": "https://www.dlnews.com/articles/markets/coinbase-denies-white-house-split-claims-as-clarity-act-divisions-deepen/",
+      "id": "696cc6e18a250641c75353fe"
+    },
+    {
+      "index": 30,
+      "title": "Stablecoin yield fight threatens to sink CLARITY Act as Coinbase and White House clash",
+      "source": "theblock",
+      "published_at": "2026-01-17T23:16:41",
+      "url": "https://www.theblock.co/post/386061/stablecoin-yield-fight-threatens-to-sink-clarity-act-as-coinbase-and-white-house-clash?utm_source=rss&utm_medium=rss",
+      "id": "696c19958a250641c75353a1"
+    },
+    {
+      "index": 31,
+      "title": "Coinbase CEO denies White House clash, says negotiations are ongoing",
+      "source": "cointelegraph",
+      "published_at": "2026-01-17T22:06:24",
+      "url": "https://cointelegraph.com/news/coinbase-ceo-denies-white-house-clash-negotiation-ongoing?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "696c0b118a250641c7535396"
+    },
+    {
+      "index": 32,
+      "title": "Coinbase refutes rumors of White House's threat to pull support for crypto bill",
+      "source": "coindesk",
+      "published_at": "2026-01-17T21:16:26",
+      "url": "https://www.coindesk.com/policy/2026/01/17/coinbase-refutes-rumors-of-white-house-s-threat-to-pull-support-for-crypto-bill",
+      "id": "696bfc928a250641c7535386"
+    },
+    {
+      "index": 33,
+      "title": "White House threatens to pull support for crypto bill after Coinbase standoff: Report",
+      "source": "cointelegraph",
+      "published_at": "2026-01-17T06:44:04",
+      "url": "https://cointelegraph.com/news/white-house-considers-dropping-crypto-bill-after-coinbase-withdrawal?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "696b331d2ae4e4082064bfc8"
+    },
+    {
+      "index": 34,
+      "title": "Coinbase CEO Brian Armstrong Accuses Banks of Undermining Trump\u2019s Crypto Agenda",
+      "source": "bitcoinmagazine",
+      "published_at": "2026-01-16T21:31:57",
+      "url": "https://bitcoinmagazine.com/news/coinbase-ceo-accuses-banks-crypto",
+      "id": "696ab0eb2ae4e4082064bf63"
+    },
+    {
+      "index": 35,
+      "title": "The US government just caved to a crypto exchange pulling support for legislation that changes everything for investors",
+      "source": "cryptoslate",
+      "published_at": "2026-01-16T18:00:40",
+      "url": "https://cryptoslate.com/coinbase-veto-clarity-act-crypto-regulation-delay/",
+      "id": "696a7df52ae4e4082064bed5"
+    },
+    {
+      "index": 36,
+      "title": "Tokenization firms reject Coinbase's crypto bill equities claims",
+      "source": "coindesk",
+      "published_at": "2026-01-15T22:01:16",
+      "url": "https://www.coindesk.com/policy/2026/01/15/tokenization-firms-reject-coinbase-s-crypto-bill-equities-claims",
+      "id": "69696a1f2ae4e4082064bd02"
+    },
+    {
+      "index": 37,
+      "title": "Coinbase CEO Brian Armstrong says company opposed crypto bill to protect consumers",
+      "source": "coindesk",
+      "published_at": "2026-01-15T20:59:08",
+      "url": "https://www.coindesk.com/policy/2026/01/15/coinbase-ceo-brian-armstrong-says-company-opposed-crypto-bill-to-protect-consumers",
+      "id": "69695b972ae4e4082064bcd9"
+    },
+    {
+      "index": 38,
+      "title": "Coinbase CEO expects market structure bill markup \u2018in a few weeks\u2018",
+      "source": "cointelegraph",
+      "published_at": "2026-01-15T20:36:08",
+      "url": "https://cointelegraph.com/news/coinbase-ceo-crypto-market-structure-bill-markup?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "696954472ae4e4082064bcc9"
+    },
+    {
+      "index": 39,
+      "title": "Cantor Equity Partners II stock gains as Citron says Coinbase fears tokenization rival",
+      "source": "coindesk",
+      "published_at": "2026-01-15T17:30:17",
+      "url": "https://www.coindesk.com/markets/2026/01/15/cantor-equity-partners-ii-stock-gains-as-citron-says-coinbase-fears-tokenization-rival",
+      "id": "696928ecae10ba27cc4c0093"
+    },
+    {
+      "index": 40,
+      "title": "Coinbase (COIN) Stock Falls After CEO pulls Crypto Bill Support",
+      "source": "watcherguru",
+      "published_at": "2026-01-15T17:29:00",
+      "url": "https://watcher.guru/news/coinbase-coin-stock-falls-after-ceo-pulls-crypto-bill-support",
+      "id": "6969290aae10ba27cc4c0097"
+    },
+    {
+      "index": 41,
+      "title": "Massive Coinbase News! Bitcoin Rips to $96,750! Football.Fun TGE Interview with Founder!",
+      "source": "decrypt",
+      "published_at": "2026-01-15T16:49:34",
+      "url": "https://decrypt.co/videos/interviews/9g4stfJX/massive-coinbase-news-bitcoin-rips-to-96-750-footballfun-tge-interview-with-founder",
+      "id": "696921a5ae10ba27cc4c0074"
+    },
+    {
+      "index": 42,
+      "title": "Morning Minute: Coinbase Withdraws Support of Clarity Act, Markup Delayed",
+      "source": "decrypt",
+      "published_at": "2026-01-15T14:24:20",
+      "url": "https://decrypt.co/354713/morning-minute-coinbase-withdraws-support-of-clarity-act-markup-delayed",
+      "id": "6968fd26ae10ba27cc4bfff1"
+    },
+    {
+      "index": 43,
+      "title": "Crypto slump hits ARK ETFs in Q4, Coinbase becomes top detractor",
+      "source": "cointelegraph",
+      "published_at": "2026-01-15T08:13:06",
+      "url": "https://cointelegraph.com/news/crypto-market-slide-hits-ark-etfs-coinbase-roblox-drag?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "6968a557ae10ba27cc4bfeb1"
+    },
+    {
+      "index": 44,
+      "title": "Crypto slump hits ARK ETFs in Q4, Coinbase becomes top detractor",
+      "source": "cointelegraph",
+      "published_at": "2026-01-15T08:13:06",
+      "url": "https://ct.com/news/crypto-market-slide-hits-ark-etfs-coinbase-roblox-drag?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "6968df89ae10ba27cc4bff29"
+    },
+    {
+      "index": 45,
+      "title": "Coinbase pulled support for Senate crypto legislation \u2014 here\u2019s what happened",
+      "source": "theblock",
+      "published_at": "2026-01-15T04:34:05",
+      "url": "https://www.theblock.co/post/385704/coinbase-pulled-support-what-happened?utm_source=rss&utm_medium=rss",
+      "id": "6968731cae10ba27cc4bfe67"
+    },
+    {
+      "index": 46,
+      "title": "Coinbase pulls support for major crypto bill. Here's what it means for the industry",
+      "source": "coindesk",
+      "published_at": "2026-01-15T01:03:57",
+      "url": "https://www.coindesk.com/policy/2026/01/14/coinbase-pulled-support-for-key-crypto-bill-here-s-what-it-means-for-the-industry",
+      "id": "69684140ae10ba27cc4bfe23"
+    },
+    {
+      "index": 47,
+      "title": "Coinbase pulls support for crypto bill: \u2018no bill\u2019 better than \u2018bad bill\u2019",
+      "source": "cointelegraph",
+      "published_at": "2026-01-15T00:52:34",
+      "url": "https://ct.com/news/clarity-act-crypto-market-structure-coinbase-brian-armstrong?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "6968df8aae10ba27cc4bff34"
+    },
+    {
+      "index": 48,
+      "title": "Coinbase pulls support for crypto bill: 'no bill' better than 'bad bill'",
+      "source": "cointelegraph",
+      "published_at": "2026-01-15T00:52:34",
+      "url": "https://cointelegraph.com/news/clarity-act-crypto-market-structure-coinbase-brian-armstrong?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "69684141ae10ba27cc4bfe25"
+    },
+    {
+      "index": 49,
+      "title": "Coinbase CEO Strongly Opposes Senate\u2019s Crypto Bill Draft",
+      "source": "thedefiant",
+      "published_at": "2026-01-14T22:42:02",
+      "url": "https://thedefiant.io/news/regulation/coinbase-ceo-strongly-opposes-senate-s-crypto-bill-draft",
+      "id": "69681db3ae10ba27cc4bfdf7"
+    },
+    {
+      "index": 50,
+      "title": "Coinbase, CEO Armstrong Do Not Support Senate Crypto Bill",
+      "source": "watcherguru",
+      "published_at": "2026-01-14T22:36:28",
+      "url": "https://watcher.guru/news/coinbase-ceo-armstrong-do-not-support-senate-crypto-bill",
+      "id": "69681db3ae10ba27cc4bfdf6"
+    },
+    {
+      "index": 51,
+      "title": "Coinbase CEO Brian Armstrong pulls support for crypto bill on eve of Senate vote",
+      "source": "dlnews",
+      "published_at": "2026-01-14T22:30:48",
+      "url": "https://www.dlnews.com/articles/regulation/coinbase-ceo-pulls-support-for-crypto-bill-on-eve-of-vote/",
+      "id": "69681db0ae10ba27cc4bfdf5"
+    },
+    {
+      "index": 52,
+      "title": "Coinbase Withdraws Support for Crypto Bill on Eve of Key Senate Vote",
+      "source": "decrypt",
+      "published_at": "2026-01-14T22:06:24",
+      "url": "https://decrypt.co/354668/coinbase-pulls-support-crypto-market-structure-bill-senate-vote",
+      "id": "69681681ae10ba27cc4bfddb"
+    },
+    {
+      "index": 53,
+      "title": "Coinbase says it won\u2019t back Senate crypto bill ahead of banking committee vote",
+      "source": "theblock",
+      "published_at": "2026-01-14T21:55:51",
+      "url": "https://www.theblock.co/post/385673/coinbase-says-wont-back-senate-crypto-bill-ahead-banking-committee-vote?utm_source=rss&utm_medium=rss",
+      "id": "69681683ae10ba27cc4bfddf"
+    },
+    {
+      "index": 54,
+      "title": "Coinbase Says \u2018No\u2019 to CLARITY Act, Citing Crypto Restrictions",
+      "source": "bitcoinmagazine",
+      "published_at": "2026-01-14T21:50:47",
+      "url": "https://bitcoinmagazine.com/news/coinbase-says-no-to-clarity-act",
+      "id": "69681683ae10ba27cc4bfddd"
+    },
+    {
+      "index": 55,
+      "title": "Coinbase pulls support from crypto market structure bill",
+      "source": "coindesk",
+      "published_at": "2026-01-14T21:38:31",
+      "url": "https://www.coindesk.com/policy/2026/01/14/coinbase-pulls-support-from-crypto-market-structure-bill",
+      "id": "69680f54ae10ba27cc4bfdc0"
+    },
+    {
+      "index": 56,
+      "title": "Stablecoin rewards provisions face industry test in Senate crypto bill",
+      "source": "cointelegraph",
+      "published_at": "2026-01-13T17:52:50",
+      "url": "https://cointelegraph.com/news/reactions-market-structure-stablecoin-rewards?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "69668daeae10ba27cc4bfa59"
+    },
+    {
+      "index": 57,
+      "title": "Coinbase Threatens to Pull Support for Crypto Bill Over Stablecoin Rewards",
+      "source": "bitcoin.com",
+      "published_at": "2026-01-12T22:45:13",
+      "url": "https://news.bitcoin.com/coinbase-threatens-to-pull-support-for-crypto-bill-over-stablecoin-rewards/",
+      "id": "69657ca6ae10ba27cc4bf840"
+    },
+    {
+      "index": 58,
+      "title": "Coinbase May Drop Support for CLARITY Act Over Stablecoin Conflicts",
+      "source": "bitcoinmagazine",
+      "published_at": "2026-01-12T17:42:43",
+      "url": "https://bitcoinmagazine.com/news/coinbase-may-drop-support-for-clarity-act",
+      "id": "6965339cae10ba27cc4bf777"
+    },
+    {
+      "index": 59,
+      "title": "Solana treasury company Sharps Technology taps Coinbase to launch validator",
+      "source": "theblock",
+      "published_at": "2026-01-12T15:27:11",
+      "url": "https://www.theblock.co/post/385132/solana-treasury-sharps-coinbase-launch-validator?utm_source=rss&utm_medium=rss",
+      "id": "69651631ae10ba27cc4bf71c"
+    },
+    {
+      "index": 60,
+      "title": "Coinbase pushes back against banks to keep rewarding users for holding stablecoins",
+      "source": "coindesk",
+      "published_at": "2026-01-12T09:27:34",
+      "url": "https://www.coindesk.com/business/2026/01/12/coinbase-pushes-back-against-banks-to-keep-rewarding-users-for-holding-stablecoins",
+      "id": "6964be97ae10ba27cc4bf627"
+    },
+    {
+      "index": 61,
+      "title": "Coinbase may reconsider support for US market structure bill: Bloomberg",
+      "source": "theblock",
+      "published_at": "2026-01-12T03:07:01",
+      "url": "https://www.theblock.co/post/385028/coinbase-market-structure-bill?utm_source=rss&utm_medium=rss",
+      "id": "696467beae10ba27cc4bf5c1"
+    },
+    {
+      "index": 62,
+      "title": "Coinbase could pull CLARITY Act support over stablecoin rewards ban",
+      "source": "cointelegraph",
+      "published_at": "2026-01-12T02:16:28",
+      "url": "https://cointelegraph.com/news/coinbase-could-pull-clarity-act-support-over-stablecoin-rewards-ban?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "69646072ae10ba27cc4bf5b2"
+    },
+    {
+      "index": 63,
+      "title": "Bank of America, Goldman Sachs Upgrade Coinbase (COIN) Stock to \u2018Buy\u2019",
+      "source": "bitcoin.com",
+      "published_at": "2026-01-11T06:30:03",
+      "url": "https://news.bitcoin.com/bank-of-america-goldman-sachs-upgrade-coinbase-coin-stock-to-buy/",
+      "id": "696346d8ae10ba27cc4bf4eb"
+    },
+    {
+      "index": 64,
+      "title": "Coinbase Outlines Bullish Markets Outlook as Global Liquidity and Scale Accelerate",
+      "source": "bitcoin.com",
+      "published_at": "2026-01-11T04:30:30",
+      "url": "https://news.bitcoin.com/coinbase-outlines-bullish-markets-outlook-as-global-liquidity-and-scale-accelerate/",
+      "id": "696329ffae10ba27cc4bf4e0"
+    },
+    {
+      "index": 65,
+      "title": "Coinbase lands 2nd \u2018buy\u2019 rating in a week, with BofA seeing 38% upside",
+      "source": "cointelegraph",
+      "published_at": "2026-01-09T01:33:26",
+      "url": "https://cointelegraph.com/news/bank-of-america-upgrades-coinbase-buy?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "69605d03ae10ba27cc4bf1d7"
+    },
+    {
+      "index": 66,
+      "title": "BofA upgrades Coinbase after pullback, says crypto adoption still in \u2018early innings\u2019",
+      "source": "theblock",
+      "published_at": "2026-01-08T21:43:00",
+      "url": "https://www.theblock.co/post/384837/bofa-upgrades-coinbase-after-pullback-crypto-adoption-still-early-innings?utm_source=rss&utm_medium=rss",
+      "id": "696028323ee16c02ef431caa"
+    },
+    {
+      "index": 67,
+      "title": "Bank of America upgrades Coinbase to 'buy' as exchange moves beyond crypto",
+      "source": "coindesk",
+      "published_at": "2026-01-08T20:11:44",
+      "url": "https://www.coindesk.com/markets/2026/01/08/bank-of-america-upgrades-coinbase-to-buy-as-exchange-moves-beyond-crypto",
+      "id": "696012483ee16c02ef431c6f"
+    },
+    {
+      "index": 68,
+      "title": "Bank of America Upgrades Coinbase to 'Buy' on Base Prospects, Tokenization Tailwinds",
+      "source": "decrypt",
+      "published_at": "2026-01-08T16:47:59",
+      "url": "https://decrypt.co/353989/bank-america-upgrades-coinbase-buy-base-prospects-tokenization-tailwinds",
+      "id": "695fe65e3ee16c02ef431bfa"
+    },
+    {
+      "index": 69,
+      "title": "2026 Is the Year Coinbase Stops Being Crypto Exchange and Starts Acting Like Global Market Operator",
+      "source": "bitcoin.com",
+      "published_at": "2026-01-08T05:30:11",
+      "url": "https://news.bitcoin.com/2026-is-the-year-coinbase-stops-being-crypto-exchange-and-starts-acting-like-global-market-operator/",
+      "id": "695f453f3ee16c02ef431a91"
+    },
+    {
+      "index": 70,
+      "title": "Coinbase and Gemini face divided outlook as analysts weigh exchange expansions beyond crypto",
+      "source": "theblock",
+      "published_at": "2026-01-06T21:38:09",
+      "url": "https://www.theblock.co/post/384536/coinbase-gemini-divided-outlook-analysts-exchange-expansion-beyond-crypto?utm_source=rss&utm_medium=rss",
+      "id": "695d8335db84ae0af52131eb"
+    },
+    {
+      "index": 71,
+      "title": "Coinbase Suspends USDC on-Ramping Services in Argentina",
+      "source": "bitcoin.com",
+      "published_at": "2026-01-06T10:30:26",
+      "url": "https://news.bitcoin.com/coinbase-suspends-usdc-on-ramping-services-in-argentina/",
+      "id": "695ce863a2384346367f13de"
+    },
+    {
+      "index": 72,
+      "title": "Coinbase Shares Top Priorities for 2026 \u2014 A Major Shift Is Coming",
+      "source": "bitcoin.com",
+      "published_at": "2026-01-06T05:30:10",
+      "url": "https://news.bitcoin.com/coinbase-shares-top-priorities-for-2026-a-major-shift-is-coming/",
+      "id": "695c9fd6a2384346367f1394"
+    },
+    {
+      "index": 73,
+      "title": "Coinbase rallies 8% after Goldman Sachs upgrades stock to \u2018buy\u2019",
+      "source": "cointelegraph",
+      "published_at": "2026-01-06T02:20:59",
+      "url": "https://cointelegraph.com/news/coinbase-soars-8-goldman-sachs-upgrades-stock-buy?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "695c7459a2384346367f135f"
+    },
+    {
+      "index": 74,
+      "title": "Goldman Sachs Upgrades Coinbase, Downgrades eToro\u2014Here's Why",
+      "source": "decrypt",
+      "published_at": "2026-01-05T22:19:41",
+      "url": "https://decrypt.co/353658/goldman-sachs-upgrades-coinbase-downgrades-etoro-why",
+      "id": "695c3dfdf06eaf9493f69c61"
+    },
+    {
+      "index": 75,
+      "title": "Goldman upgrades Coinbase stock to Buy, flags execution risks and growing competition",
+      "source": "theblock",
+      "published_at": "2026-01-05T18:57:34",
+      "url": "https://www.theblock.co/post/384369/goldman-upgrades-coinbase-stock-buy-flags-execution-risks-competition?utm_source=rss&utm_medium=rss",
+      "id": "695c0a646b400934526a2987"
+    },
+    {
+      "index": 76,
+      "title": "Goldman Sachs upgrades Coinbase to buy, cuts eToro to neutral",
+      "source": "coindesk",
+      "published_at": "2026-01-05T14:09:32",
+      "url": "https://www.coindesk.com/markets/2026/01/05/goldman-sachs-upgrades-coinbase-to-buy-cuts-etoro-to-neutral",
+      "id": "695bc90af06eaf9493f69b38"
+    },
+    {
+      "index": 77,
+      "title": "Coinbase drops peso-based services in Argentina less than a year after market entry",
+      "source": "coindesk",
+      "published_at": "2026-01-05T12:21:42",
+      "url": "https://www.coindesk.com/policy/2026/01/05/coinbase-drops-peso-based-services-in-argentina-less-than-a-year-after-market-entry",
+      "id": "695bb301f06eaf9493f69ae4"
+    },
+    {
+      "index": 78,
+      "title": "Coinbase to pause peso-based services in Argentina just one year after launch",
+      "source": "theblock",
+      "published_at": "2026-01-04T18:48:29",
+      "url": "https://www.theblock.co/post/384205/coinbase-to-pause-peso-based-services-in-argentina-just-one-year-after-launch?utm_source=rss&utm_medium=rss",
+      "id": "695aeba5e029c38344d1ad5f"
+    },
+    {
+      "index": 79,
+      "title": "Coinbase says it plans to return to Argentina ahead of \u2018temporary\u2019 exit",
+      "source": "dlnews",
+      "published_at": "2026-01-04T14:17:31",
+      "url": "https://www.dlnews.com/articles/markets/coinbase-wants-argentina-return-after-temporary-exit/",
+      "id": "695aebb1e029c38344d1ad76"
+    },
+    {
+      "index": 80,
+      "title": "Coinbase pauses local fiat rails in Argentina less than a year after its arrival",
+      "source": "cointelegraph",
+      "published_at": "2026-01-04T08:17:40",
+      "url": "https://cointelegraph.com/news/coinbase-pauses-fiat-operations-argentina-2026?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "695aeb89e029c38344d1ad4f"
+    },
+    {
+      "index": 81,
+      "title": "Coinbase exec defends CLARITY Act delay: 'I completely understand'",
+      "source": "cointelegraph",
+      "published_at": "2026-01-03T03:23:39",
+      "url": "https://cointelegraph.com/news/coinbase-clarity-act-delay-genius-act-united-states?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "69588e75be4357ee2c462602"
+    },
+    {
+      "index": 82,
+      "title": "Coinbase Targeting Stablecoin Growth, Onchain Adoption in 2026: Brian Armstrong",
+      "source": "decrypt",
+      "published_at": "2026-01-02T15:01:03",
+      "url": "https://decrypt.co/353503/coinbase-targeting-stablecoin-growth-onchain-adoption-in-2026-brian-armstrong",
+      "id": "6957e093be4357ee2c462544"
+    },
+    {
+      "index": 83,
+      "title": "Coinbase bets on stablecoins, Base and 'everything exchange' for 2026",
+      "source": "cointelegraph",
+      "published_at": "2026-01-02T10:33:48",
+      "url": "https://cointelegraph.com/news/coinbase-bets-on-stablecoins-base-and-everything-exchange-for-2026?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "6957a695be4357ee2c4624fe"
+    },
+    {
+      "index": 84,
+      "title": "Crypto forces to compound in 2026, accelerating adoption: Coinbase",
+      "source": "cointelegraph",
+      "published_at": "2026-01-01T04:58:31",
+      "url": "https://cointelegraph.com/news/crypto-forces-compound-2026-adoption?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "69560300be4357ee2c46239a"
+    },
+    {
+      "index": 85,
+      "title": "Coinbase Partners With BC Card to Pilot a USDC-Based Payment Solution in Korea",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-31T08:30:05",
+      "url": "https://news.bitcoin.com/coinbase-partners-with-bc-card-to-pilot-a-usdc-based-payment-solution-in-korea/",
+      "id": "6954e137be4357ee2c46223c"
+    },
+    {
+      "index": 86,
+      "title": "Coinbase exec warns Senate stablecoin misstep could hand China global edge",
+      "source": "cointelegraph",
+      "published_at": "2025-12-31T07:41:17",
+      "url": "https://cointelegraph.com/news/coinbase-exec-warns-senate-stablecoin-misstep-could-hand-china-a-global-edge?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "6954d9eebe4357ee2c462232"
+    },
+    {
+      "index": 87,
+      "title": "China gains major advantage if US bans interest on stablecoins, Coinbase exec warns",
+      "source": "theblock",
+      "published_at": "2025-12-31T05:56:16",
+      "url": "https://www.theblock.co/post/384032/coinbase-warns-us-restricts-stablecoin-interest?utm_source=rss&utm_medium=rss",
+      "id": "6954bcedbe4357ee2c46220c"
+    },
+    {
+      "index": 88,
+      "title": "Fake Coinbase support scammer allegedly stole $2M from users",
+      "source": "cointelegraph",
+      "published_at": "2025-12-30T01:46:31",
+      "url": "https://cointelegraph.com/news/fake-coinbase-help-desk-scammer-allegedly-stole-2m?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "69533341ce3591a32cf10d55"
+    },
+    {
+      "index": 89,
+      "title": "Daycare Fraud Journalist Tokenizes Content on Base",
+      "source": "thedefiant",
+      "published_at": "2025-12-29T22:17:52",
+      "url": "https://thedefiant.io/news/defi/daycare-fraud-journalist-tokenizes-content-on-base",
+      "id": "695300dbce3591a32cf10d3f"
+    },
+    {
+      "index": 90,
+      "title": "Coinbase claims arrest in the $355 million insider extortion scheme that targeted nearly 70,000 customers",
+      "source": "cryptoslate",
+      "published_at": "2025-12-28T18:45:05",
+      "url": "https://cryptoslate.com/coinbase-reveals-arrest-in-the-355-million-insider-extortion-scheme-that-targeted-nearly-70000-customers/",
+      "id": "69517ced0fb32992e5d9f7df"
+    },
+    {
+      "index": 91,
+      "title": "Coinbase says three areas will dominate the crypto market in 2026",
+      "source": "coindesk",
+      "published_at": "2025-12-28T08:29:19",
+      "url": "https://www.coindesk.com/markets/2025/12/28/coinbase-says-three-areas-will-dominate-the-crypto-market-in-2026",
+      "id": "6950ec6b0fb32992e5d9f77a"
+    },
+    {
+      "index": 92,
+      "title": "Coinbase CEO announces first arrest in India over insider data breach: \u2018More still to come\u2019",
+      "source": "theblock",
+      "published_at": "2025-12-27T17:01:49",
+      "url": "https://www.theblock.co/post/383790/coinbase-ceo-announces-first-arrest-in-india-over-insider-data-breach-more-still-to-come?utm_source=rss&utm_medium=rss",
+      "id": "695015a0f57650e47193d48f"
+    },
+    {
+      "index": 93,
+      "title": "Ex-Coinbase employee arrested in India over $400m heist",
+      "source": "dlnews",
+      "published_at": "2025-12-27T12:55:21",
+      "url": "https://www.dlnews.com/articles/regulation/coinbase-worker-arrested-india/",
+      "id": "694fdbdbf57650e47193d469"
+    },
+    {
+      "index": 94,
+      "title": "Coinbase CEO says reopening GENIUS Act is \u2018red line,\u2019 slams bank lobbying",
+      "source": "cointelegraph",
+      "published_at": "2025-12-27T12:24:30",
+      "url": "https://cointelegraph.com/news/coinbase-ceo-genius-act-red-line-bank-lobbying-stablecoins?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "694fd493f57650e47193d45f"
+    },
+    {
+      "index": 95,
+      "title": "Coinbase 2026 Outlook Sees Crypto Entering Finance Core in \u2018Extraordinary and Transformative\u2019 Shift",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-27T00:30:08",
+      "url": "https://news.bitcoin.com/coinbase-2026-outlook-sees-crypto-entering-finance-core-in-extraordinary-and-transformative-shift/",
+      "id": "694f2cdff753635775f03fba"
+    },
+    {
+      "index": 96,
+      "title": "Coinbase named a top three 2026 fintech pick at Clear Street",
+      "source": "coindesk",
+      "published_at": "2025-12-26T15:23:13",
+      "url": "https://www.coindesk.com/markets/2025/12/26/coinbase-named-a-top-three-2026-fintech-pick-at-clear-street",
+      "id": "694eae5cf753635775f03b07"
+    },
+    {
+      "index": 97,
+      "title": "Coinbase Pushes Prediction Markets Deeper Onchain as Clearing Company Deal Signals Breakout Expansion",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-23T03:30:42",
+      "url": "https://news.bitcoin.com/coinbase-pushes-prediction-markets-deeper-onchain-as-clearing-company-deal-signals-breakout-expansion/",
+      "id": "694a10df685168a89ca100ba"
+    },
+    {
+      "index": 98,
+      "title": "Coinbase agrees to buy The Clearing Company to deepen prediction markets push",
+      "source": "coindesk",
+      "published_at": "2025-12-22T17:01:27",
+      "url": "https://www.coindesk.com/business/2025/12/22/coinbase-agrees-to-buy-the-clearing-company-to-deepen-prediction-markets-push",
+      "id": "69497dc8685168a89ca1006c"
+    },
+    {
+      "index": 99,
+      "title": "Coinbase: Illinois Gaming Authority legal action on prediction market is \u2018imminent\u2019 and \u2018existential\u2019",
+      "source": "dlnews",
+      "published_at": "2025-12-22T16:50:25",
+      "url": "https://www.dlnews.com/articles/regulation/coinbase-calls-legal-action-on-prediction-product-imminent/",
+      "id": "69497df7685168a89ca10071"
+    },
+    {
+      "index": 100,
+      "title": "Coinbase to acquire The Clearing Company in prediction markets push",
+      "source": "cointelegraph",
+      "published_at": "2025-12-22T15:04:43",
+      "url": "https://cointelegraph.com/news/coinbase-acquires-clearing-company-prediction-markets?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "694963709eccade71afcd849"
+    },
+    {
+      "index": 101,
+      "title": "Coinbase to acquire prediction markets startup The Clearing Company",
+      "source": "theblock",
+      "published_at": "2025-12-22T15:00:00",
+      "url": "https://www.theblock.co/post/383497/coinbase-to-acquire-prediction-markets-startup-the-clearing-company?utm_source=rss&utm_medium=rss",
+      "id": "694963799eccade71afcd84b"
+    },
+    {
+      "index": 102,
+      "title": "Coinbase CEO Debates Base App\u2019s Strategic Focus",
+      "source": "thedefiant",
+      "published_at": "2025-12-22T14:47:21",
+      "url": "https://thedefiant.io/news/cefi/coinbase-ceo-debates-base-app-s-strategic-focus",
+      "id": "69495c4c9eccade71afcd841"
+    },
+    {
+      "index": 103,
+      "title": "Prediction markets may offer a tax loophole for gamblers under Trump\u2019s Big Beautiful Bill, Coinbase says",
+      "source": "coindesk",
+      "published_at": "2025-12-22T13:59:31",
+      "url": "https://www.coindesk.com/markets/2025/12/19/prediction-markets-may-offer-tax-loophole-for-gamblers-under-trump-s-crypto-law-coinbase-says",
+      "id": "694954cb9eccade71afcd81f"
+    },
+    {
+      "index": 104,
+      "title": "Coinbase Super App Bid, Saylor $1B Buy, and More \u2014 Week in Review",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-21T21:11:17",
+      "url": "https://news.bitcoin.com/coinbase-super-app-bid-saylor-1b-buy-and-more-week-in-review/",
+      "id": "694866469eccade71afcd749"
+    },
+    {
+      "index": 105,
+      "title": "Fake Coinbase staffer \u2018stole $16m in crypto\u2019 and blew loot in online casinos \u2013 prosecutors",
+      "source": "dlnews",
+      "published_at": "2025-12-21T10:35:41",
+      "url": "https://www.dlnews.com/articles/people-culture/fake-coinbase-staffer-stole-16m-in-crypto/",
+      "id": "6947cecd9eccade71afcd6eb"
+    },
+    {
+      "index": 106,
+      "title": "Coinbase Issues Direct Warning: \u2018If You Try to Steal From Our Customers,\u2019 Law Enforcement Will Close in",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-20T22:30:28",
+      "url": "https://news.bitcoin.com/coinbase-issues-direct-warning-if-you-try-to-steal-from-our-customers-law-enforcement-will-close-in/",
+      "id": "694729059eccade71afcd6b5"
+    },
+    {
+      "index": 107,
+      "title": "Coinbase Security Impersonation Scheme Exposed as Authorities Claim Nearly $16M Was Siphoned",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-20T08:30:30",
+      "url": "https://news.bitcoin.com/coinbase-security-impersonation-scheme-exposed-as-authorities-claim-nearly-16m-was-siphoned/",
+      "id": "694665cb9eccade71afcd611"
+    },
+    {
+      "index": 108,
+      "title": "Coinbase Sues 3 States as Prediction Markets Trigger Federal Versus Gambling Law Clash",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-20T05:30:24",
+      "url": "https://news.bitcoin.com/coinbase-sues-3-states-as-prediction-markets-trigger-federal-versus-gambling-law-clash/",
+      "id": "69463a809eccade71afcd5f6"
+    },
+    {
+      "index": 109,
+      "title": "Coinbase says Trump\u2019s Big Beautiful Bill could push gamblers into arms of prediction markets",
+      "source": "theblock",
+      "published_at": "2025-12-19T18:55:10",
+      "url": "https://www.theblock.co/post/383369/coinbase-trump-big-beautiful-bill-gamblers-prediction-markets?utm_source=rss&utm_medium=rss",
+      "id": "6945a29a9eccade71afcd55d"
+    },
+    {
+      "index": 110,
+      "title": "Coinbase \u2018cautiously optimistic\u2019 on 2026 as crypto nears institutional inflection point",
+      "source": "cointelegraph",
+      "published_at": "2025-12-19T17:55:00",
+      "url": "https://cointelegraph.com/news/coinbase-2026-crypto-outlook-institutional-adoption-regulation?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "694593f49eccade71afcd52c"
+    },
+    {
+      "index": 111,
+      "title": "Coinbase Sues Three States Over Prediction Market Restrictions",
+      "source": "thedefiant",
+      "published_at": "2025-12-19T17:23:53",
+      "url": "https://thedefiant.io/news/regulation/coinbase-prediction-market-state-vs-federal-regulations",
+      "id": "69458cd59eccade71afcd524"
+    },
+    {
+      "index": 112,
+      "title": "OpenAI bailed out? Trump Media stock up 40%! Wallet Connect Interview",
+      "source": "decrypt",
+      "published_at": "2025-12-19T16:37:12",
+      "url": "https://decrypt.co/videos/interviews/9X1oVPuq/openai-bailed-out-trump-media-stock-up-40-wallet-connect-interview",
+      "id": "6945854c9eccade71afcd503"
+    },
+    {
+      "index": 113,
+      "title": "Morning Minute: Coinbase Wants to Be the Everything Exchange",
+      "source": "decrypt",
+      "published_at": "2025-12-19T13:46:02",
+      "url": "https://decrypt.co/352987/morning-minute-coinbase-wants-to-be-the-everything-exchange",
+      "id": "694559909eccade71afcd4a4"
+    },
+    {
+      "index": 114,
+      "title": "Coinbase Sues Three States Over Prediction Market Regulation",
+      "source": "decrypt",
+      "published_at": "2025-12-19T13:03:05",
+      "url": "https://decrypt.co/352984/coinbase-sues-three-states-over-prediction-market-regulation",
+      "id": "6945524b9eccade71afcd494"
+    },
+    {
+      "index": 115,
+      "title": "Coinbase files lawsuits in 3 states over attempts to regulate prediction markets",
+      "source": "coindesk",
+      "published_at": "2025-12-19T10:09:56",
+      "url": "https://www.coindesk.com/policy/2025/12/19/coinbase-files-lawsuits-in-3-states-over-attempts-to-regulate-prediction-markets",
+      "id": "694526a09eccade71afcd43b"
+    },
+    {
+      "index": 116,
+      "title": "Coinbase borrows Kalshi\u2019s playbook, sues three states over prediction markets",
+      "source": "cointelegraph",
+      "published_at": "2025-12-19T08:01:57",
+      "url": "https://cointelegraph.com/news/coinbase-sues-states-prediction-markets?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "6945099a9eccade71afcd410"
+    },
+    {
+      "index": 117,
+      "title": "Coinbase sues Michigan, Illinois and Connecticut over prediction market oversight",
+      "source": "theblock",
+      "published_at": "2025-12-19T05:28:09",
+      "url": "https://www.theblock.co/post/383257/coinbase-sues-three-states-prediction-market?utm_source=rss&utm_medium=rss",
+      "id": "6944e5669eccade71afcd3f4"
+    },
+    {
+      "index": 118,
+      "title": "Base App Goes Live Across 140+ Countries as Coinbase Pushes Social Trading Toward the Mainstream",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-19T02:30:16",
+      "url": "https://news.bitcoin.com/base-app-goes-live-across-140-countries-as-coinbase-pushes-social-trading-toward-the-mainstream/",
+      "id": "6944b9f29eccade71afcd3bc"
+    },
+    {
+      "index": 119,
+      "title": "Coinbase appoints former UK minister George Osborne to chair advisory council",
+      "source": "cointelegraph",
+      "published_at": "2025-12-18T21:59:06",
+      "url": "https://cointelegraph.com/news/coinbase-george-osborne-uk-minister-advisory-council?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "694480089eccade71afcd378"
+    },
+    {
+      "index": 120,
+      "title": "Coinbase\u2019s new product rollout strengthens bull case with upside not fully reflected, analysts say",
+      "source": "theblock",
+      "published_at": "2025-12-18T20:12:34",
+      "url": "https://www.theblock.co/post/383225/coinbase-product-rollout-bull-case-upside-not-fully-reflected-jpmorgan-benchmark?utm_source=rss&utm_medium=rss",
+      "id": "694462d99eccade71afcd337"
+    },
+    {
+      "index": 121,
+      "title": "The Daily: Coinbase expands into stocks and prediction markets, SEC issues crypto custody guidance, SoFi launches a stablecoin, and more",
+      "source": "theblock",
+      "published_at": "2025-12-18T19:17:21",
+      "url": "https://www.theblock.co/post/383227/the-daily-coinbase-stocks-prediction-markets-sec-crypto-custody-guidance-sofi-launches-stablecoin-more?utm_source=rss&utm_medium=rss",
+      "id": "694454549eccade71afcd312"
+    },
+    {
+      "index": 122,
+      "title": "Coinbase (COIN) to Expand into \u201cEverything App,\u201d Stock Rallies",
+      "source": "watcherguru",
+      "published_at": "2025-12-18T17:43:00",
+      "url": "https://watcher.guru/news/coinbase-coin-to-expand-into-everything-app-stock-rallies",
+      "id": "69443e619eccade71afcd2cd"
+    },
+    {
+      "index": 123,
+      "title": "Coinbase Enters New Era as Stocks and Prediction Markets Power Its Bid for the World\u2019s #1 Financial Services App",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-18T16:30:19",
+      "url": "https://news.bitcoin.com/coinbase-enters-new-era-as-stocks-and-prediction-markets-power-its-bid-for-the-worlds-1-financial-services-app/",
+      "id": "69442fa89eccade71afcd2a2"
+    },
+    {
+      "index": 124,
+      "title": "Coinbase & Robinhood Big Announcements! BTC falls then bounces!",
+      "source": "decrypt",
+      "published_at": "2025-12-18T16:25:36",
+      "url": "https://decrypt.co/videos/interviews/hqcQGHlZ/coinbase-robinhood-big-announcements-btc-falls-then-bounces",
+      "id": "694436f69eccade71afcd2b0"
+    },
+    {
+      "index": 125,
+      "title": "Coinbase Unveils 'End-to-End' RWA Tokenization Platform",
+      "source": "thedefiant",
+      "published_at": "2025-12-18T15:32:30",
+      "url": "https://thedefiant.io/news/cefi/coinbase-unveils-coinbase-tokenize",
+      "id": "694421139eccade71afcd27c"
+    },
+    {
+      "index": 126,
+      "title": "Coinbase shares rise as \u2018ambitious expansion\u2019 wins analyst praise",
+      "source": "coindesk",
+      "published_at": "2025-12-18T15:12:00",
+      "url": "https://www.coindesk.com/markets/2025/12/18/coinbase-shares-rise-as-ambitious-expansion-wins-analyst-praise",
+      "id": "694420f49eccade71afcd276"
+    },
+    {
+      "index": 127,
+      "title": "Coinbase expands in Poland with Blik mobile payments integration",
+      "source": "cointelegraph",
+      "published_at": "2025-12-18T10:55:45",
+      "url": "https://cointelegraph.com/news/coinbase-expands-poland-blik-mobile-payments?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "6943deed9eccade71afcd199"
+    },
+    {
+      "index": 128,
+      "title": "Coinbase deepens India presence after approval of CoinDCX deal",
+      "source": "coindesk",
+      "published_at": "2025-12-18T08:01:51",
+      "url": "https://www.coindesk.com/markets/2025/12/18/coinbase-deepens-india-presence-after-approval-of-coindcx-deal",
+      "id": "6943bac79eccade71afcd17d"
+    },
+    {
+      "index": 129,
+      "title": "India's Competition Regulator Clears Coinbase's Minority Stake in CoinDCX",
+      "source": "decrypt",
+      "published_at": "2025-12-18T06:09:25",
+      "url": "https://decrypt.co/352838/indias-competition-regulator-clears-coinbases-minority-stake-coindcx",
+      "id": "69439de69eccade71afcd165"
+    },
+    {
+      "index": 130,
+      "title": "India clears Coinbase\u2019s minority stake acquisition in CoinDCX",
+      "source": "theblock",
+      "published_at": "2025-12-18T04:44:57",
+      "url": "https://www.theblock.co/post/383109/india-coinbase-coindcx-investment?utm_source=rss&utm_medium=rss",
+      "id": "694388179eccade71afcd142"
+    },
+    {
+      "index": 131,
+      "title": "Coinbase to launch stock trading, prediction market, AI \u2018advisor\u2019",
+      "source": "dlnews",
+      "published_at": "2025-12-18T02:59:01",
+      "url": "https://www.dlnews.com/articles/markets/coinbase-to-launch-stock-trading-prediction-market-ai-advisor/",
+      "id": "6943726a9eccade71afcd128"
+    },
+    {
+      "index": 132,
+      "title": "Robo-advisers, custom stablecoins: 8 things Coinbase is cooking up",
+      "source": "cointelegraph",
+      "published_at": "2025-12-18T02:55:04",
+      "url": "https://cointelegraph.com/news/top-announcements-coinbase-system-update?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "6943725d9eccade71afcd127"
+    },
+    {
+      "index": 133,
+      "title": "Coinbase Unveils Prediction Markets, Stock Trading and Solana DeFi Integration",
+      "source": "decrypt",
+      "published_at": "2025-12-17T23:01:02",
+      "url": "https://decrypt.co/352800/coinbase-unveils-prediction-markets-stock-trading-solana-defi-integration",
+      "id": "694338a19eccade71afcd0f6"
+    },
+    {
+      "index": 134,
+      "title": "Coinbase expands into stocks, prediction markets, Solana DEX trading via Jupiter, and more in \u2018everything exchange\u2019 push",
+      "source": "theblock",
+      "published_at": "2025-12-17T23:00:00",
+      "url": "https://www.theblock.co/post/383068/coinbase-stocks-prediction-markets-solana-dex-jupiter-everything-exchange?utm_source=rss&utm_medium=rss",
+      "id": "694355899eccade71afcd10e"
+    },
+    {
+      "index": 135,
+      "title": "Coinbase adds stock trading, prediction markets in \u2018everything app\u2019 push",
+      "source": "cointelegraph",
+      "published_at": "2025-12-17T22:54:17",
+      "url": "https://cointelegraph.com/news/coinbase-stock-trading-prediction-markets-in-everything-app-push?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "6943389e9eccade71afcd0f5"
+    },
+    {
+      "index": 136,
+      "title": "Why Coinbase Says Younger Investors Are Betting on Crypto First",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-17T22:40:26",
+      "url": "https://news.bitcoin.com/why-coinbase-says-younger-investors-are-betting-on-crypto-first/",
+      "id": "694338ab9eccade71afcd0f7"
+    },
+    {
+      "index": 137,
+      "title": "Coinbase rolls out stock trading, prediction markets and more in bid to become the \u2018Everything Exchange\u2019",
+      "source": "coindesk",
+      "published_at": "2025-12-17T22:33:50",
+      "url": "https://www.coindesk.com/business/2025/12/17/coinbase-rolls-out-stock-trading-prediction-markets-and-more-in-bid-to-become-the-everything-exchange",
+      "id": "694331549eccade71afcd0e7"
+    },
+    {
+      "index": 138,
+      "title": "Coinbase gets nod from Indian regulators to acquire CoinDCX stake",
+      "source": "cointelegraph",
+      "published_at": "2025-12-17T22:04:05",
+      "url": "https://cointelegraph.com/news/coinbase-indian-regulators-coindcx-stake?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "694331569eccade71afcd0e8"
+    },
+    {
+      "index": 139,
+      "title": "Deutsche Bank initiates coverage of Coinbase with Buy rating, sees 40% upside to $340",
+      "source": "theblock",
+      "published_at": "2025-12-17T21:48:48",
+      "url": "https://www.theblock.co/post/383065/deutsche-bank-40-upside-coinbase-stock-everything-exchange-push?utm_source=rss&utm_medium=rss",
+      "id": "69432a139eccade71afcd0d5"
+    },
+    {
+      "index": 140,
+      "title": "New Coinbase report points to \u2018broken\u2019 traditional finance system: Armstrong",
+      "source": "cointelegraph",
+      "published_at": "2025-12-17T12:53:52",
+      "url": "https://cointelegraph.com/news/new-coinbase-report-broken-traditional-finance?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "6942ad9e9eccade71afccf6c"
+    },
+    {
+      "index": 141,
+      "title": "Coinbase: Why AI will \u2018revolutionise\u2019 crypto markets in 2026 amidst $565m startup boom",
+      "source": "dlnews",
+      "published_at": "2025-12-17T12:18:10",
+      "url": "https://www.dlnews.com/articles/markets/coinbase-why-ai-will-revolutionise-crypto-markets-in-2026-amidst-565-million-startup-boom/",
+      "id": "6942a6649eccade71afccf5a"
+    },
+    {
+      "index": 142,
+      "title": "Coinbase Risks Crypto 'Cannibalization' With Prediction Market Push: Mizuho",
+      "source": "decrypt",
+      "published_at": "2025-12-16T17:07:19",
+      "url": "https://decrypt.co/352554/coinbase-risks-crypto-cannibalization-prediction-market-push-mizuho",
+      "id": "694195e89eccade71afccd58"
+    },
+    {
+      "index": 143,
+      "title": "\u2018Much more than a backend refresh\u2019: Coinbase\u2019s fintech pivot hits milestone",
+      "source": "coindesk",
+      "published_at": "2025-12-15T21:04:11",
+      "url": "https://www.coindesk.com/markets/2025/12/15/much-more-than-a-backend-refresh-coinbase-s-fintech-pivot-hits-milestone",
+      "id": "69407d1f9eccade71afccb21"
+    },
+    {
+      "index": 144,
+      "title": "Coinbase (COIN), Strategy (MSTR) Dip, Crypto Liquidation Surges",
+      "source": "watcherguru",
+      "published_at": "2025-12-15T21:04:00",
+      "url": "https://watcher.guru/news/coinbase-coin-strategy-mstr-dip-crypto-liquidation-surges",
+      "id": "69407d269eccade71afccb23"
+    },
+    {
+      "index": 145,
+      "title": "Compass Point Cuts Coinbase Price Target Ahead of Expected Stocks, Prediction Market Reveal",
+      "source": "decrypt",
+      "published_at": "2025-12-15T19:48:43",
+      "url": "https://decrypt.co/352427/compass-point-cuts-coinbase-price-target-stocks-prediction-markets",
+      "id": "694067a79eccade71afccaec"
+    },
+    {
+      "index": 146,
+      "title": "Coinbase Update, U.S. Jobs, Bank of Japan: Crypto Week Ahead",
+      "source": "coindesk",
+      "published_at": "2025-12-15T09:00:00",
+      "url": "https://www.coindesk.com/markets/2025/12/15/coinbase-update-u-s-jobs-bank-of-japan-crypto-week-ahead",
+      "id": "693fcf6f9eccade71afcc981"
+    },
+    {
+      "index": 147,
+      "title": "Coinbase Preps Prediction Market, Tokenized Equities Launch for December 17: Report",
+      "source": "decrypt",
+      "published_at": "2025-12-12T20:33:59",
+      "url": "https://decrypt.co/352224/coinbase-prediction-market-tokenized-equities-launch-december-17",
+      "id": "693c83219eccade71afcc798"
+    },
+    {
+      "index": 148,
+      "title": "Coinbase is About to Launch Prediction Markets and Tokenized Stocks: Report",
+      "source": "bitcoinmagazine",
+      "published_at": "2025-12-12T20:00:56",
+      "url": "https://bitcoinmagazine.com/news/coinbase-prediction-tokenized-stocks",
+      "id": "693c748f9eccade71afcc769"
+    },
+    {
+      "index": 149,
+      "title": "Coinbase may debut prediction markets, tokenized stocks on Wednesday: Report",
+      "source": "cointelegraph",
+      "published_at": "2025-12-12T09:20:29",
+      "url": "https://cointelegraph.com/news/coinbase-prediction-markets-tokenized-stocks-december-17-report?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "693be2aa9eccade71afcc5f4"
+    },
+    {
+      "index": 150,
+      "title": "Coinbase to unveil prediction markets and tokenized equities next week: Bloomberg",
+      "source": "theblock",
+      "published_at": "2025-12-12T09:20:23",
+      "url": "https://www.theblock.co/post/382291/coinbase-prediction-markets-tokenized-equities?utm_source=rss&utm_medium=rss",
+      "id": "693be2b39eccade71afcc5f7"
+    },
+    {
+      "index": 151,
+      "title": "Standard Chartered, Coinbase Expand Crypto Prime Services for Institutions",
+      "source": "coindesk",
+      "published_at": "2025-12-12T09:04:36",
+      "url": "https://www.coindesk.com/business/2025/12/12/standard-chartered-coinbase-expand-crypto-prime-services-for-institutions",
+      "id": "693be2a89eccade71afcc5f3"
+    },
+    {
+      "index": 152,
+      "title": "Coinbase Expands Reach of Stablecoin-Based AI Agent Payments Tool",
+      "source": "coindesk",
+      "published_at": "2025-12-11T19:52:07",
+      "url": "https://www.coindesk.com/tech/2025/12/11/coinbase-expands-the-reach-of-its-stablecoin-based-ai-agent-payments-tool",
+      "id": "693b26739eccade71afcc4ed"
+    },
+    {
+      "index": 153,
+      "title": "Coinbase Says It\u2019s \u2018Expanding to Solana\u2019 with Native DEX Trading",
+      "source": "thedefiant",
+      "published_at": "2025-12-11T17:39:19",
+      "url": "https://thedefiant.io/news/defi/coinbase-adds-native-solana-dex-trading",
+      "id": "693b09539eccade71afcc491"
+    },
+    {
+      "index": 154,
+      "title": "Coinbase taps Chainlink CCIP to expand wrapped assets like cbBTC and cbXRP to new chains",
+      "source": "theblock",
+      "published_at": "2025-12-11T16:29:20",
+      "url": "https://www.theblock.co/post/382230/coinbase-chainlink-ccip-wrapped-assets-exclusive-deal?utm_source=rss&utm_medium=rss",
+      "id": "693af3399eccade71afcc446"
+    },
+    {
+      "index": 155,
+      "title": "Coinbase Taps Chainlink CCIP as Sole Bridge for $7B in Wrapped Tokens Across Chains",
+      "source": "coindesk",
+      "published_at": "2025-12-11T15:00:00",
+      "url": "https://www.coindesk.com/web3/2025/12/11/coinbase-taps-chainlink-ccip-as-sole-bridge-for-usd7b-in-wrapped-tokens-across-chains",
+      "id": "693add259eccade71afcc3ee"
+    },
+    {
+      "index": 156,
+      "title": "Coinbase Ending USDC Rewards for Free Users, Will Only Be for Paid Members",
+      "source": "decrypt",
+      "published_at": "2025-12-11T14:50:25",
+      "url": "https://decrypt.co/351946/coinbase-ending-usdc-rewards-free-users-only-paid-members",
+      "id": "693add2a9eccade71afcc3f4"
+    },
+    {
+      "index": 157,
+      "title": "Coinbase opens Solana DEX access as CeFi and DeFi converge",
+      "source": "cointelegraph",
+      "published_at": "2025-12-11T12:14:03",
+      "url": "https://cointelegraph.com/news/coinbase-joins-the-cex-dex-convergence-with-solana-integration?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "693ab8849eccade71afcc36e"
+    },
+    {
+      "index": 158,
+      "title": "Coinbase paywalls USDC rewards as Fed cuts interest rates",
+      "source": "dlnews",
+      "published_at": "2025-12-11T11:10:12",
+      "url": "https://www.dlnews.com/articles/web3/coinbase-ends-usdc-rewards-for-non-paying-customers/",
+      "id": "693aaa039eccade71afcc34f"
+    },
+    {
+      "index": 159,
+      "title": "Coinbase Drives a New Institutional Milestone With PNC Bitcoin Access",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-10T04:30:21",
+      "url": "https://news.bitcoin.com/coinbase-drives-a-new-institutional-milestone-with-pnc-bitcoin-access/",
+      "id": "6938fc9d9eccade71afcc000"
+    },
+    {
+      "index": 160,
+      "title": "Coinbase Rebuilds India Crypto Presence With Fresh Onboarding Momentum",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-09T02:30:01",
+      "url": "https://news.bitcoin.com/coinbase-rebuilds-india-crypto-presence-with-fresh-onboarding-momentum/",
+      "id": "69378a129eccade71afcbd0c"
+    },
+    {
+      "index": 161,
+      "title": "Coinbase mounts a cautious comeback in India, two years after exit",
+      "source": "cointelegraph",
+      "published_at": "2025-12-08T08:36:49",
+      "url": "https://cointelegraph.com/news/coinbase-india-relaunch-two-years-market-exit?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "693694bd9eccade71afcbac8"
+    },
+    {
+      "index": 162,
+      "title": "Coinbase Reopens India Signups, Targets Fiat On-Ramp in 2026 After Two-Year Freeze",
+      "source": "coindesk",
+      "published_at": "2025-12-08T06:10:27",
+      "url": "https://www.coindesk.com/markets/2025/12/08/coinbase-reopens-india-signups-targets-fiat-on-ramp-in-2026-after-two-year-freeze",
+      "id": "693670989eccade71afcbaaa"
+    },
+    {
+      "index": 163,
+      "title": "Coinbase Reopens India Access, Sets 2026 Target for Cash-to-Crypto Purchases",
+      "source": "decrypt",
+      "published_at": "2025-12-08T04:36:48",
+      "url": "https://decrypt.co/351391/coinbase-reopens-india-access-sets-2026-target-cash-crypto",
+      "id": "69365ad29eccade71afcba78"
+    },
+    {
+      "index": 164,
+      "title": "Coinbase reopens app in India after two-year hiatus: report",
+      "source": "theblock",
+      "published_at": "2025-12-08T04:29:37",
+      "url": "https://www.theblock.co/post/381644/coinbase-resumes-user-onboarding-india?utm_source=rss&utm_medium=rss",
+      "id": "69365ad89eccade71afcba79"
+    },
+    {
+      "index": 165,
+      "title": "Crypto Poised for December Recovery as Coinbase Spots Momentum Shift",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-07T02:30:40",
+      "url": "https://news.bitcoin.com/crypto-poised-for-december-recovery-as-coinbase-spots-momentum-shift/",
+      "id": "6934eb109eccade71afcb998"
+    },
+    {
+      "index": 166,
+      "title": "Coinbase Opens 24/7 Trading for All Altcoin Monthly Futures, Perpetuals Next",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-06T20:35:48",
+      "url": "https://news.bitcoin.com/coinbase-opens-24-7-trading-for-all-altcoin-monthly-futures-perpetuals-next/",
+      "id": "693494a09eccade71afcb96d"
+    },
+    {
+      "index": 167,
+      "title": "Coinbase Sees Crypto Recovery Ahead as Liquidity Improves and Fed Rate Cut Odds Climb",
+      "source": "coindesk",
+      "published_at": "2025-12-06T15:46:33",
+      "url": "https://www.coindesk.com/markets/2025/12/06/coinbase-sees-crypto-recovery-ahead-as-liquidity-improves-and-fed-rate-cut-odds-climb",
+      "id": "693453ac9eccade71afcb943"
+    },
+    {
+      "index": 168,
+      "title": "Coinbase CEO Explains Crypto\u2019s Future And the Coming Mega-Boom",
+      "source": "watcherguru",
+      "published_at": "2025-12-05T08:01:00",
+      "url": "https://watcher.guru/news/coinbase-ceo-explains-cryptos-future-and-the-coming-mega-boom",
+      "id": "6932937a9eccade71afcb74a"
+    },
+    {
+      "index": 169,
+      "title": "Coinbase, Chainlink Introduce Base-Solana Bridge to Link Ecosystems",
+      "source": "coindesk",
+      "published_at": "2025-12-04T19:00:00",
+      "url": "https://www.coindesk.com/web3/2025/12/04/coinbase-chainlink-introduce-base-solana-bridge-to-link-ecosystems",
+      "id": "6931de569eccade71afcb63e"
+    },
+    {
+      "index": 170,
+      "title": "2012 Video Resurfaces of Coinbase CEO Brian Armstrong Pitching What Became America\u2019s Largest Bitcoin Exchange",
+      "source": "bitcoinmagazine",
+      "published_at": "2025-12-04T18:49:14",
+      "url": "https://bitcoinmagazine.com/culture/coinbase-ceo-brian-armstrong-pitch-video",
+      "id": "6931de5e9eccade71afcb63f"
+    },
+    {
+      "index": 171,
+      "title": "Crypto Is Edging Further Into Mainstream Finance, BlackRock and Coinbase Chiefs Say",
+      "source": "decrypt",
+      "published_at": "2025-12-04T03:35:18",
+      "url": "https://decrypt.co/350878/crypto-further-mainstream-finance-blackrock-coinbase-chiefs",
+      "id": "6931040a9eccade71afcb3b1"
+    },
+    {
+      "index": 172,
+      "title": "Coinbase Explains Why Bitcoin Price Dumps With Whale Selling Pressure",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-04T03:30:24",
+      "url": "https://news.bitcoin.com/coinbase-explains-why-bitcoin-price-dumps-with-whale-selling-pressure/",
+      "id": "693104139eccade71afcb3b2"
+    },
+    {
+      "index": 173,
+      "title": "Major banks running stablecoin, crypto-trading pilots with Coinbase, Armstrong says",
+      "source": "cointelegraph",
+      "published_at": "2025-12-03T21:12:30",
+      "url": "https://cointelegraph.com/news/major-banks-stablecoin-trading-coinbase-armstrong-says?utm_source=rss_feed&utm_medium=rss%3Fceid%3DUS%3Aen%26gl%3DUS%26qhl%3Den-US&utm_campaign=rss_partner_inbound",
+      "id": "69310b3f9eccade71afcb3c5"
+    },
+    {
+      "index": 174,
+      "title": "Major banks running stablecoin, crypto-trading pilots with Coinbase, Armstrong says",
+      "source": "cointelegraph",
+      "published_at": "2025-12-03T21:12:30",
+      "url": "https://cointelegraph.com/news/major-banks-stablecoin-trading-coinbase-armstrong-says?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "6930ad329eccade71afcb329"
+    },
+    {
+      "index": 175,
+      "title": "Coinbase CEO Armstrong Says Banks That Don't Adapt Stablecoin Will be 'Left Behind'",
+      "source": "coindesk",
+      "published_at": "2025-12-03T19:33:29",
+      "url": "https://www.coindesk.com/business/2025/12/03/coinbase-is-partnering-with-major-u-s-banks-on-stablecoin-and-crypto-pilots",
+      "id": "693097759eccade71afcb2ff"
+    },
+    {
+      "index": 176,
+      "title": "Coinbase (COIN) Stock Rises After Crypto Rally, BlackRock Report",
+      "source": "watcherguru",
+      "published_at": "2025-12-03T18:27:00",
+      "url": "https://watcher.guru/news/coinbase-coin-stock-rises-after-crypto-rally-blackrock-report",
+      "id": "693081c89eccade71afcb2c3"
+    },
+    {
+      "index": 177,
+      "title": "Coinbase Turns up the Heat With Worldwide Rollouts and Prime-Grade Assets",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-03T04:30:56",
+      "url": "https://news.bitcoin.com/coinbase-turns-up-the-heat-with-worldwide-rollouts-and-prime-grade-assets/",
+      "id": "692fbd569eccade71afcb0f6"
+    },
+    {
+      "index": 178,
+      "title": "Coinbase Launches Instant Unstaking as Demand for Yield Rises",
+      "source": "bitcoin.com",
+      "published_at": "2025-12-02T23:45:19",
+      "url": "https://news.bitcoin.com/coinbase-launches-instant-unstaking-as-demand-for-yield-rises/",
+      "id": "692f7c609eccade71afcb0be"
+    },
+    {
+      "index": 179,
+      "title": "Why Coinbase Shares Still Have 90% Upside Despite Crypto Pullback, According to Wall Street Analyst",
+      "source": "coindesk",
+      "published_at": "2025-12-02T17:22:40",
+      "url": "https://www.coindesk.com/markets/2025/12/02/why-coinbase-shares-still-have-90-upside-despite-crypto-pullback-according-to-wall-street-analyst",
+      "id": "692f24f39eccade71afcaff1"
+    },
+    {
+      "index": 180,
+      "title": "Coinbase\u2019s x402 adds identity checks to power AI stablecoin payments",
+      "source": "cointelegraph",
+      "published_at": "2025-12-02T15:01:00",
+      "url": "https://cointelegraph.com/news/coinbase-x402-ai-stablecoin-payments-id-age-verification?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "692f077e9eccade71afcaf7f"
+    },
+    {
+      "index": 181,
+      "title": "Most of Coinbase\u2019s 2025 law enforcement requests came from outside the US",
+      "source": "cointelegraph",
+      "published_at": "2025-12-01T20:44:47",
+      "url": "https://cointelegraph.com/news/coinbase-law-enforcement-requests-surged?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "id": "692e025d9eccade71afcad95"
+    },
+    {
+      "index": 182,
+      "title": "Coinbase C-Suite, Marc Andreessen Sued for Billions Over Alleged Insider Trading Scheme",
+      "source": "decrypt",
+      "published_at": "2025-12-01T20:03:46",
+      "url": "https://decrypt.co/350490/coinbase-c-suite-andreessen-sued-billions-alleged-insider-trading",
+      "id": "692dfb1b9eccade71afcad86"
+    },
+    {
+      "index": 183,
+      "title": "Crypto operating businesses \u2018look strong,\u2019 despite weak price action: Bernstein",
+      "source": "theblock",
+      "published_at": "2025-12-01T12:23:30",
+      "url": "https://www.theblock.co/post/380883/crypto-operating-businesses-look-strong-weak-price-action?utm_source=rss&utm_medium=rss",
+      "id": "692d8d899eccade71afcac54"
+    },
+    {
+      "index": 184,
+      "title": "Coinbase Funds Crypto Basic Income Pilot in New York",
+      "source": "bitcoin.com",
+      "published_at": "2025-11-30T10:30:16",
+      "url": "https://news.bitcoin.com/coinbase-funds-crypto-basic-income-pilot-in-new-york/",
+      "id": "692c21a29eccade71afc819b"
+    }
+  ]
+}

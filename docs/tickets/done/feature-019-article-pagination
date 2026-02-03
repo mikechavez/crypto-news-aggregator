@@ -1,0 +1,604 @@
+# [FEATURE-019] Article Pagination - Bug Fix & Verification Guide
+
+**Status:** 🔴 **99% COMPLETE - 1-LINE BUG FIX REQUIRED**
+**Priority:** P0 (CRITICAL - Blocking all pagination features)
+**Estimated Effort:** 5 minutes to fix, 5 minutes to test
+**Sprint:** Sprint 4 (UX Enhancements)
+**Last Updated:** 2026-01-30 (Evening - Bug Found via Code Review)
+
+---
+
+## Executive Summary
+
+**Good News:** The pagination implementation is 99% complete! Backend, API client, and frontend are all correctly implemented.
+
+**Bad News:** There's a 1-line bug in the frontend that causes incorrect total article counts.
+
+**The Bug:** Line 116 in `Narratives.tsx` uses wrong fallback logic
+**The Fix:** Change 1 line to use `narrative.article_count` as fallback
+**Time:** 5 minutes to fix, 5 minutes to test
+**Impact:** Once fixed, all pagination features work immediately
+
+---
+
+## Current Implementation Status
+
+### ✅ Backend - 100% Complete
+**File:** `backend/api/v1/endpoints/narratives.py`
+
+1. **Function Exists:** `get_articles_paginated()` at lines 76-172
+   - Validates offset >= 0, limit 1-50
+   - Fetches narrative and article_ids
+   - Slices article_ids based on offset/limit
+   - Returns pagination response with has_more flag
+
+2. **Endpoint Exists:** GET `/api/v1/narratives/{narrative_id}/articles` at lines 870-912
+   - Accepts query params: offset (default 0), limit (default 20, max 50)
+   - Returns: `{articles, total_count, offset, limit, has_more}`
+   - Proper error handling (400, 404, 500)
+
+3. **Response Format:** Perfect
+   ```json
+   {
+     "articles": [...],
+     "total_count": 69,
+     "offset": 0,
+     "limit": 20,
+     "has_more": true
+   }
+   ```
+
+### ✅ Frontend API Client - 100% Complete
+**File:** `context-owl-ui/src/api/narratives.ts`
+
+1. **Interface Exists:** `PaginatedArticlesResponse` at lines 4-13
+   ```typescript
+   export interface PaginatedArticlesResponse {
+     articles: Array<{...}>;
+     total_count: number;
+     offset: number;
+     limit: number;
+     has_more: boolean;
+   }
+   ```
+
+2. **Method Exists:** `getArticlesPaginated()` at lines 32-40
+   ```typescript
+   getArticlesPaginated: async (
+     narrativeId: string | number,
+     offset: number = 0,
+     limit: number = 20
+   ): Promise<PaginatedArticlesResponse> => {
+     return apiClient.get<PaginatedArticlesResponse>(
+       `/api/v1/narratives/${narrativeId}/articles?offset=${offset}&limit=${limit}`
+     );
+   }
+   ```
+
+### 🔴 Frontend Component - 99% Complete (1-Line Bug)
+**File:** `context-owl-ui/src/pages/Narratives.tsx`
+
+**What's Working:**
+- ✅ PaginationState interface (lines 45-48)
+- ✅ State management with Map (line 55)
+- ✅ Initial article load with pagination (line 134)
+- ✅ Load More function (lines 159-189)
+- ✅ "Showing X of Y" badge (lines 260-264)
+- ✅ Load More button (lines 311-321)
+- ✅ Skeleton loaders (lines 272-276, 302-308)
+
+**The Bug:** Line 116
+```typescript
+// CURRENT (WRONG)
+const totalArticles = paginationInfo?.totalCount || articles.length;
+```
+
+**The Problem:**
+- When narrative is first expanded, `paginationInfo` is undefined
+- Falls back to `articles.length` which is 20 (from initial narrative object)
+- Should use `narrative.article_count` (69) from the backend
+- This makes `hasMore` calculate as `false` (20 < 20 = false)
+- "Load More" button doesn't appear
+
+**The Fix:**
+```typescript
+// CORRECT
+const totalArticles = paginationInfo?.totalCount || narrative.article_count || articles.length;
+```
+
+**Why This Works:**
+- Uses `narrative.article_count` (69) from the narratives list API
+- This value is correct and available immediately
+- Provides accurate total before pagination state initializes
+- After first load, `paginationInfo.totalCount` takes over
+
+---
+
+## Implementation Instructions
+
+### Step 1: Apply The Bug Fix (1 minute)
+
+**File:** `context-owl-ui/src/pages/Narratives.tsx`
+
+**Find Line 116:**
+```typescript
+const paginationInfo = paginationState.get(narrativeId);
+const totalArticles = paginationInfo?.totalCount || articles.length;  // ← LINE 116 (WRONG)
+const hasMore = articles.length < totalArticles;
+```
+
+**Change Line 116 To:**
+```typescript
+const paginationInfo = paginationState.get(narrativeId);
+const totalArticles = paginationInfo?.totalCount || narrative.article_count || articles.length;  // ← FIXED
+const hasMore = articles.length < totalArticles;
+```
+
+**That's It!** One line changed. Save the file.
+
+---
+
+### Step 2: Test The Fix (5 minutes)
+
+**Manual Testing Steps:**
+
+1. **Start Development Server:**
+   ```bash
+   cd context-owl-ui
+   npm run dev
+   ```
+
+2. **Navigate to Narratives Page:**
+   - Open http://localhost:5173/narratives
+
+3. **Find High-Article Narrative:**
+   - Look for narrative with article_count > 20
+   - Example: "Bitcoin Accumulation" with 69 articles
+
+4. **Test Initial Load:**
+   - Click to expand the narrative
+   - ✅ **VERIFY:** Badge shows "Showing 20 of 69 Articles" (NOT "20 of 20")
+   - ✅ **VERIFY:** "Load More" button is visible
+   - ✅ **VERIFY:** Console shows correct total_count from API
+
+5. **Test Load More:**
+   - Click "Load More" button
+   - ✅ **VERIFY:** Button shows "Loading..." and is disabled
+   - ✅ **VERIFY:** Skeleton loaders appear
+   - ✅ **VERIFY:** Badge updates to "Showing 40 of 69 Articles"
+   - ✅ **VERIFY:** "Load More" button still visible (hasMore = true)
+
+6. **Test Continued Loading:**
+   - Click "Load More" again
+   - ✅ **VERIFY:** Badge shows "Showing 60 of 69 Articles"
+   - Click one more time
+   - ✅ **VERIFY:** Badge shows "Showing 69 of 69 Articles"
+   - ✅ **VERIFY:** "Load More" button disappears (hasMore = false)
+
+7. **Test State Persistence:**
+   - Collapse the narrative (click header)
+   - Re-expand the narrative
+   - ✅ **VERIFY:** Still shows "Showing 69 of 69 Articles"
+   - ✅ **VERIFY:** All 69 articles still visible
+   - ✅ **VERIFY:** No duplicate API calls
+
+8. **Test With Small Narrative:**
+   - Find narrative with article_count < 20 (e.g., 15 articles)
+   - Expand it
+   - ✅ **VERIFY:** Badge shows "Showing 15 of 15 Articles"
+   - ✅ **VERIFY:** No "Load More" button appears
+   - ✅ **VERIFY:** All articles displayed immediately
+
+---
+
+### Step 3: Verify Console Logs (Optional)
+
+**Open Browser DevTools → Console**
+
+When expanding narrative, you should see:
+```
+[DEBUG] Card clicked - Narrative ID: 678f... Title: Bitcoin Accumulation
+[DEBUG] Expanding card at index: 2
+[DEBUG] Fetching articles for narrative: 678f...
+[DEBUG] API Response: {articles: Array(20), total_count: 69, offset: 0, limit: 20, has_more: true}
+[DEBUG] Articles in response: 20
+[DEBUG] Total count: 69
+```
+
+**Key Values to Verify:**
+- ✅ `total_count: 69` (correct total from backend)
+- ✅ `has_more: true` (more articles available)
+- ✅ `articles: Array(20)` (first page loaded)
+
+When clicking "Load More":
+```
+[DEBUG] Loading more articles - offset: 20 narrativeId: 678f...
+[DEBUG] Load more response: {articles: Array(20), total_count: 69, offset: 20, limit: 20, has_more: true}
+```
+
+---
+
+### Step 4: Commit The Fix (2 minutes)
+
+**Git Commands:**
+```bash
+cd context-owl-ui
+
+# Check status
+git status
+
+# Should show:
+# modified:   src/pages/Narratives.tsx
+
+# Stage the change
+git add src/pages/Narratives.tsx
+
+# Commit with descriptive message
+git commit -m "fix(ui): use narrative.article_count as fallback for total articles
+
+- Fixed incorrect totalArticles calculation on line 116
+- Now uses narrative.article_count before falling back to articles.length
+- Resolves 'Showing 20 of 20' bug when narrative has 69+ articles
+- Load More button now appears correctly when hasMore is true
+
+Previously, when paginationInfo was undefined (before first article load),
+totalArticles would fall back to articles.length (20 from initial narrative
+object), instead of narrative.article_count (69 from backend). This caused
+hasMore to calculate as false (20 < 20), hiding the Load More button.
+
+With this fix, pagination now works correctly for all narratives.
+
+Fixes pagination display bug discovered in testing"
+
+# Push to remote
+git push origin feature/article-pagination
+```
+
+---
+
+## What Was Already Implemented
+
+This section documents what was already working before the bug fix.
+
+### Backend Implementation (Already Complete)
+
+**File:** `backend/api/v1/endpoints/narratives.py`
+
+**Function:** `get_articles_paginated()` (lines 76-172)
+```python
+async def get_articles_paginated(
+    narrative_id: str,
+    offset: int,
+    limit: int,
+    db: Any
+) -> Dict[str, Any]:
+    """
+    Fetch paginated articles for a narrative with total count and has_more flag.
+    
+    Returns:
+        Dict with:
+        - articles: List of article dicts
+        - total_count: Total number of articles
+        - offset: Requested offset
+        - limit: Requested limit
+        - has_more: Boolean indicating if more articles exist
+    """
+    # Validation
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="Offset cannot be negative")
+    if limit <= 0:
+        raise HTTPException(status_code=400, detail="Limit must be greater than 0")
+    if limit > 50:
+        raise HTTPException(status_code=400, detail="Limit cannot exceed 50")
+    
+    # Fetch narrative
+    narrative_obj_id = ObjectId(narrative_id)
+    narrative = await narratives_collection.find_one({"_id": narrative_obj_id})
+    
+    if not narrative:
+        raise HTTPException(status_code=404, detail="Narrative not found")
+    
+    # Get article IDs and total count
+    article_ids = narrative.get("article_ids", [])
+    total_count = len(article_ids)
+    
+    # Slice article IDs based on offset and limit
+    sliced_article_ids = article_ids[offset:offset + limit]
+    
+    # Fetch article details
+    articles = []
+    if sliced_article_ids:
+        # Convert to ObjectIds and fetch from DB
+        # ... (implementation details)
+    
+    # Calculate has_more
+    has_more = (offset + limit) < total_count
+    
+    return {
+        "articles": articles,
+        "total_count": total_count,
+        "offset": offset,
+        "limit": limit,
+        "has_more": has_more
+    }
+```
+
+**Endpoint:** GET `/api/v1/narratives/{narrative_id}/articles` (lines 870-912)
+```python
+@router.get("/{narrative_id}/articles")
+async def get_narrative_articles_endpoint(
+    narrative_id: str,
+    offset: int = Query(0, ge=0, description="Number of articles to skip"),
+    limit: int = Query(20, ge=1, le=50, description="Maximum number of articles to return")
+):
+    """Get paginated articles for a specific narrative."""
+    try:
+        db = await mongo_manager.get_async_database()
+        result = await get_articles_paginated(
+            narrative_id=narrative_id,
+            offset=offset,
+            limit=limit,
+            db=db
+        )
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error fetching paginated articles: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch articles")
+```
+
+### Frontend API Client (Already Complete)
+
+**File:** `context-owl-ui/src/api/narratives.ts`
+
+**Interface:**
+```typescript
+export interface PaginatedArticlesResponse {
+  articles: Array<{
+    title: string;
+    url: string;
+    source: string;
+    published_at: string;
+  }>;
+  total_count: number;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+}
+```
+
+**Method:**
+```typescript
+export const narrativesAPI = {
+  getArticlesPaginated: async (
+    narrativeId: string | number,
+    offset: number = 0,
+    limit: number = 20
+  ): Promise<PaginatedArticlesResponse> => {
+    return apiClient.get<PaginatedArticlesResponse>(
+      `/api/v1/narratives/${narrativeId}/articles?offset=${offset}&limit=${limit}`
+    );
+  },
+  // ... other methods
+};
+```
+
+### Frontend Component (99% Complete)
+
+**File:** `context-owl-ui/src/pages/Narratives.tsx`
+
+**State Management:**
+```typescript
+interface PaginationState {
+  offset: number;
+  totalCount: number;
+}
+
+export function Narratives() {
+  const [narrativeArticles, setNarrativeArticles] = useState<Map<string, any[]>>(new Map());
+  const [loadingArticles, setLoadingArticles] = useState<Set<string>>(new Set());
+  const [loadingMore, setLoadingMore] = useState<Set<string>>(new Set());
+  const [paginationState, setPaginationState] = useState<Map<string, PaginationState>>(new Map());
+  const ARTICLES_PER_PAGE = 20;
+  // ...
+}
+```
+
+**Initial Article Load:**
+```typescript
+const toggleExpanded = async () => {
+  // ... expand/collapse logic
+  
+  if (narrativeId && !narrativeArticles.has(narrativeId) && !loadingArticles.has(narrativeId)) {
+    setLoadingArticles(prev => new Set(prev).add(narrativeId));
+    try {
+      const response = await narrativesAPI.getArticlesPaginated(narrativeId, 0, ARTICLES_PER_PAGE);
+      setNarrativeArticles(prev => new Map(prev).set(narrativeId, response.articles || []));
+      setPaginationState(prev => new Map(prev).set(narrativeId, {
+        offset: response.offset + response.limit,
+        totalCount: response.total_count
+      }));
+    } catch (error) {
+      console.error('[ERROR] Failed to fetch articles:', error);
+    } finally {
+      setLoadingArticles(prev => {
+        const next = new Set(prev);
+        next.delete(narrativeId);
+        return next;
+      });
+    }
+  }
+};
+```
+
+**Load More Function:**
+```typescript
+const loadMoreArticles = async () => {
+  if (!narrativeId || !paginationInfo) return;
+
+  const nextOffset = paginationInfo.offset;
+  setLoadingMore(prev => new Set(prev).add(narrativeId));
+
+  try {
+    const response = await narrativesAPI.getArticlesPaginated(narrativeId, nextOffset, ARTICLES_PER_PAGE);
+
+    // Append new articles
+    setNarrativeArticles(prev => {
+      const existing = prev.get(narrativeId) || [];
+      return new Map(prev).set(narrativeId, [...existing, ...response.articles]);
+    });
+
+    // Update pagination state
+    setPaginationState(prev => new Map(prev).set(narrativeId, {
+      offset: response.offset + response.limit,
+      totalCount: response.total_count
+    }));
+  } catch (error) {
+    console.error('[ERROR] Failed to load more articles:', error);
+  } finally {
+    setLoadingMore(prev => {
+      const next = new Set(prev);
+      next.delete(narrativeId);
+      return next;
+    });
+  }
+};
+```
+
+**UI Rendering:**
+```typescript
+{/* Showing X of Y Articles badge */}
+{isExpanded && articles.length > 0 && (
+  <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full">
+    Showing {formatNumber(articles.length)} of {formatNumber(totalArticles)}
+  </span>
+)}
+
+{/* Load More button */}
+{hasMore && (
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      loadMoreArticles();
+    }}
+    className="w-full mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded transition-colors"
+  >
+    Load More
+  </button>
+)}
+```
+
+---
+
+## Testing Checklist
+
+### Before Fix (Current Bug Behavior)
+- ❌ Badge shows "Showing 20 of 20 Articles" (should be "20 of 69")
+- ❌ "Load More" button doesn't appear (hasMore = false)
+- ❌ Cannot access articles 21-69
+
+### After Fix (Expected Behavior)
+- ✅ Badge shows "Showing 20 of 69 Articles" on first load
+- ✅ "Load More" button appears (hasMore = true)
+- ✅ Clicking "Load More" shows "Showing 40 of 69 Articles"
+- ✅ Can continue loading until "Showing 69 of 69 Articles"
+- ✅ "Load More" button disappears when all loaded
+- ✅ State persists on collapse/re-expand
+- ✅ Works for narratives with <20, =20, and >20 articles
+- ✅ No console errors
+- ✅ Skeleton loaders appear during loading
+
+---
+
+## Acceptance Criteria
+
+### Backend (Already Met ✅)
+- ✅ Endpoint accepts `offset` and `limit` query parameters
+- ✅ Validates offset >= 0, limit 1-50
+- ✅ Returns `{articles, total_count, offset, limit, has_more}`
+- ✅ Handles errors gracefully (400, 404, 500)
+- ✅ Slices article_ids correctly based on pagination
+- ✅ Calculates has_more accurately
+
+### Frontend API Client (Already Met ✅)
+- ✅ Method `getArticlesPaginated()` exists
+- ✅ Accepts narrativeId, offset, limit
+- ✅ Returns typed `PaginatedArticlesResponse`
+- ✅ Calls correct endpoint with query params
+
+### Frontend Component (After 1-Line Fix ✅)
+- ✅ Displays "Showing X of Y Articles" when expanded
+- ✅ Uses correct total from `narrative.article_count` or `paginationInfo.totalCount`
+- ✅ Shows "Load More" button when `has_more` is true
+- ✅ Clicking "Load More" fetches next 20 articles
+- ✅ New articles append to existing list (no duplicates)
+- ✅ Button disables during loading
+- ✅ Skeleton loaders show during fetch
+- ✅ Button disappears when all articles loaded
+- ✅ Works for narratives with <20, =20, and >20 articles
+- ✅ State persists when collapsing/re-expanding
+- ✅ Multiple narratives can be paginated independently
+- ✅ No console errors
+- ✅ Cross-browser compatible
+- ✅ Mobile responsive
+
+---
+
+## Success Metrics
+
+After fix is deployed:
+- ✅ "Load More" click rate (% of users who load >20 articles)
+- ✅ Average articles loaded per narrative
+- ✅ Error rate (<1% target)
+- ✅ Page performance (<1sec for "Load More")
+- ✅ User complaints about "missing articles" (should be 0)
+
+---
+
+## Related Tickets
+
+- **FEATURE-020:** Skeleton Loaders ✅ (Complete - depends on this)
+- **FEATURE-021:** Error Handling with Retry 📝 (Ready after this fix)
+- **FEATURE-022:** Progress Indicator 📝 (Ready after this fix)
+- **FEATURE-023:** State Preservation ✅ (Already done)
+- **FEATURE-024:** Smooth Scrolling 📝 (Ready after this fix)
+
+---
+
+## Notes for Developer
+
+### Why The Bug Existed
+
+The original implementation correctly set up pagination state after the first article load. However, the `totalArticles` calculation needed to handle the case BEFORE pagination state exists (i.e., when the narrative is first expanded but articles haven't been fetched yet).
+
+The bug was using `articles.length` as the fallback, which was 20 (from the initial narrative object's article preview), instead of using `narrative.article_count` which contains the actual total count (69) from the backend.
+
+### Why The Fix Works
+
+The fixed line uses this fallback chain:
+1. **First choice:** `paginationInfo?.totalCount` - Use from pagination state (after first load)
+2. **Second choice:** `narrative.article_count` - Use total from narratives list API (before first load)
+3. **Last resort:** `articles.length` - Only if neither above exists (edge case)
+
+This ensures `totalArticles` is always correct, whether:
+- Before first article load (uses narrative.article_count = 69)
+- After first article load (uses paginationInfo.totalCount = 69)
+- For narratives with 0 articles (falls back to articles.length = 0)
+
+### Debugging Tips
+
+If pagination still doesn't work after the fix:
+1. Check browser console for API errors
+2. Verify `response.total_count` is correct in console logs
+3. Check Network tab for `/articles` endpoint responses
+4. Verify `paginationInfo` is being set correctly in state
+5. Confirm `hasMore` calculation: `articles.length < totalArticles`
+
+---
+
+**Implementation Time:** 1 minute to fix  
+**Testing Time:** 5 minutes  
+**Total:** 6 minutes  
+
+**Status:** ✅ Ready for immediate fix - just change 1 line and test!

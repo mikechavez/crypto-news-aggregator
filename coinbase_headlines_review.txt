@@ -1,0 +1,933 @@
+COINBASE NARRATIVE REVIEW
+========================================================================================================================
+
+Narrative Title: Coinbase's Dual Narratives: Resilience and Controversy
+Theme: Coinbase
+Summary: Coinbase touts financial inclusion efforts while facing allegations of insider trading and corporate governance concerns. Coinbase navigates operational strength and regulatory challenges.
+Entities: Coinbase, Marc Andreessen, GiveDirectly, Crypto operating businesses, Coinbase shareholders, New Yorkers
+Total Articles: 184
+
+========================================================================================================================
+HEADLINES (Total: 184)
+========================================================================================================================
+
+1. UK bans Coinbase ads that ‘trivialized’ crypto risks: Report
+   Source: cointelegraph
+   Published: 2026-01-28T05:35:28
+   URL: https://cointelegraph.com/news/uk-bans-coinbase-ads-trivialized-crypto-risks-report?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+2. Coinbase Shares Extend Losses as It Expands Into New Metal Futures
+   Source: decrypt
+   Published: 2026-01-28T05:30:49
+   URL: https://decrypt.co/356128/coinbase-shares-tumble-expands-new-metal-futures
+
+3. Coinbase moves closer toward rolling out ‘custom stablecoins’
+   Source: cointelegraph
+   Published: 2026-01-28T04:51:38
+   URL: https://cointelegraph.com/news/coinbase-closer-toward-launching-custom-stablecoins?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+4. Coinbase + Glassnode: Charting Crypto Q1 2026
+   Source: glassnode
+   Published: 2026-01-27T13:00:00
+   URL: https://insights.glassnode.com/coinbase-glassnode-charting-crypto-q1-2026/
+
+5. Panic selling Bitcoin on Coinbase triggers a Binance price gap that reveals a “messy” institutional market failure
+   Source: cryptoslate
+   Published: 2026-01-27T10:49:11
+   URL: https://cryptoslate.com/bitcoin-is-now-cheaper-on-coinbase-compared-to-binance-and-the-culprit-may-not-be-weak-us-demand/
+
+6. 60% of top US banks are geared up for Bitcoin: River
+   Source: cointelegraph
+   Published: 2026-01-27T06:33:37
+   URL: https://cointelegraph.com/news/top-us-banks-bitcoin-services-trading-custody?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+7. Coinbase Spotlights Davos Momentum Toward Tokenization and CLARITY Act
+   Source: bitcoin.com
+   Published: 2026-01-26T04:30:17
+   URL: https://news.bitcoin.com/coinbase-spotlights-davos-momentum-toward-tokenization-and-clarity-act/
+
+8. Coinbase reportedly set to meet South Korean exchange chiefs amid takeover talk
+   Source: dlnews
+   Published: 2026-01-25T11:33:45
+   URL: https://www.dlnews.com/articles/markets/coinbase-reportedly-set-to-meet-south-korean-exchange-chiefs/
+
+9. Coinbase CEO says Big banks now view crypto as an ‘existential’ threat to their business
+   Source: coindesk
+   Published: 2026-01-24T19:22:36
+   URL: https://www.coindesk.com/business/2026/01/24/coinbase-ceo-says-big-banks-now-view-crypto-as-an-existential-threat-to-their-business
+
+10. Bitcoin regret is coming for anyone ignoring Coinbase CEO’s 5% rule as banks fight to cap gains
+   Source: cryptoslate
+   Published: 2026-01-23T16:05:52
+   URL: https://cryptoslate.com/bitcoin-regret-is-coming-for-anyone-ignoring-brian-armstrongs-5-rule-as-banks-fight-to-cap-your-gains/
+
+11. Coinbase sees constructive Q1 outlook after late 2025 crypto market reset
+   Source: theblock
+   Published: 2026-01-23T15:24:27
+   URL: https://www.theblock.co/post/386843/coinbase-sees-constructive-q1-outlook-after-late-2025-crypto-market-reset?utm_source=rss&utm_medium=rss
+
+12. Coinbase lets users borrow up to $1 million against staked ether without selling
+   Source: coindesk
+   Published: 2026-01-23T06:12:32
+   URL: https://www.coindesk.com/markets/2026/01/23/coinbase-lets-users-borrow-up-to-usd1-million-against-staked-ether-without-selling
+
+13. Coinbase Forms Quantum Advisory Board as Post-Quantum Risks Threaten Blockchain Security
+   Source: bitcoin.com
+   Published: 2026-01-23T04:30:04
+   URL: https://news.bitcoin.com/coinbase-forms-quantum-advisory-board-as-post-quantum-risks-threaten-blockchain-security/
+
+14. Coinbase Creates Advisory Board to Study Quantum Computing Risks to Bitcoin
+   Source: decrypt
+   Published: 2026-01-22T23:12:36
+   URL: https://decrypt.co/355565/coinbase-advisory-board-quantum-computing-risks-bitcoin
+
+15. Coinbase VP says ‘fatal flaws’ in Senate crypto bill forced sudden withdrawal of support
+   Source: coindesk
+   Published: 2026-01-22T22:27:59
+   URL: https://www.coindesk.com/policy/2026/01/22/coinbase-vp-says-fatal-flaws-in-senate-crypto-bill-forced-sudden-withdrawal-of-support
+
+16. Coinbase forms board to assess quantum computing risks to blockchain
+   Source: cointelegraph
+   Published: 2026-01-22T20:08:19
+   URL: https://cointelegraph.com/news/coinbase-board-quantum-computing-risks-blockchain?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+17. Coinbase Forms Quantum Computing Advisory Board as Bitcoin Security Concerns Grow
+   Source: bitcoinmagazine
+   Published: 2026-01-22T18:58:11
+   URL: https://bitcoinmagazine.com/news/coinbase-forms-quantum-computing-board
+
+18. The Base token should give holders voting power over Coinbase itself
+   Source: coindesk
+   Published: 2026-01-22T15:00:00
+   URL: https://www.coindesk.com/opinion/2026/01/22/the-base-token-should-give-holders-voting-power-over-coinbase-itself
+
+19. Coinbase CEO Brian Armstrong spars with France’s Central Bank chief at Davos over yield and ‘bitcoin standard’
+   Source: coindesk
+   Published: 2026-01-21T23:26:56
+   URL: https://www.coindesk.com/business/2026/01/21/coinbase-ceo-brian-armstrong-spars-with-france-s-central-bank-chief-at-davos-over-the-yield-and-bitcoin-standard
+
+20. ‘Bitcoin Has No Issuer’: Coinbase CEO Clashes With French Central Banker at Davos
+   Source: bitcoinmagazine
+   Published: 2026-01-21T14:39:06
+   URL: https://bitcoinmagazine.com/news/coinbase-ceo-clashes-bitcoin-davos
+
+21. Netflix Stock Earnings Impress, But Shares Fall on Competitive Pressures
+   Source: watcherguru
+   Published: 2026-01-21T06:53:38
+   URL: https://watcher.guru/news/netflix-stock-earnings-impress-but-shares-fall-on-competitive-pressures
+
+22. Coinbase Signals Next Financial Supercycle—Onchain Markets Poised to Reshape Global Wealth Creation
+   Source: bitcoin.com
+   Published: 2026-01-21T04:30:11
+   URL: https://news.bitcoin.com/coinbase-signals-next-financial-supercycle-onchain-markets-poised-to-reshape-global-wealth-creation/
+
+23. Coinbase Taps the NBA’s Next Superstars, Quietly Positioning COIN for the Next Cultural Adoption Wave
+   Source: bitcoin.com
+   Published: 2026-01-21T02:30:10
+   URL: https://news.bitcoin.com/coinbase-taps-the-nbas-next-superstars-quietly-positioning-coin-for-the-next-cultural-adoption-wave/
+
+24. Coinbase says capital access beats income in wealth creation
+   Source: cointelegraph
+   Published: 2026-01-20T13:18:00
+   URL: https://cointelegraph.com/news/coinbase-says-capital-access-beats-income-in-wealth-creation?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+25. Coinbase CEO Seeks ‘Win-Win’ on Market Structure Bill in Davos Charm Offensive
+   Source: decrypt
+   Published: 2026-01-20T13:07:26
+   URL: https://decrypt.co/355117/coinbase-ceo-seeks-win-win-on-market-structure-bill-in-davos-charm-offensive
+
+26. Coinbase CEO Brian Armstrong to work on market structure bill in Davos
+   Source: theblock
+   Published: 2026-01-20T04:31:34
+   URL: https://www.theblock.co/post/386178/coinbase-brian-armstrong-market-structure-bill-davos?utm_source=rss&utm_medium=rss
+
+27. Coinbase accused of “rug pull” as the White House weighs killing the CLARITY Act over yield
+   Source: cryptoslate
+   Published: 2026-01-19T09:39:13
+   URL: https://cryptoslate.com/coinbase-accused-of-rug-pull-as-the-white-house-weighs-killing-the-clarity-act-over-yield/
+
+28. Coinbase Disputes White House Hostility Claims, Calls Crypto Bill Talks ‘Super Constructive’
+   Source: bitcoin.com
+   Published: 2026-01-19T04:30:04
+   URL: https://news.bitcoin.com/coinbase-disputes-white-house-hostility-claims-calls-crypto-bill-talks-super-constructive/
+
+29. Coinbase denies White House split claims as Clarity Act divisions deepen
+   Source: dlnews
+   Published: 2026-01-18T11:07:42
+   URL: https://www.dlnews.com/articles/markets/coinbase-denies-white-house-split-claims-as-clarity-act-divisions-deepen/
+
+30. Stablecoin yield fight threatens to sink CLARITY Act as Coinbase and White House clash
+   Source: theblock
+   Published: 2026-01-17T23:16:41
+   URL: https://www.theblock.co/post/386061/stablecoin-yield-fight-threatens-to-sink-clarity-act-as-coinbase-and-white-house-clash?utm_source=rss&utm_medium=rss
+
+31. Coinbase CEO denies White House clash, says negotiations are ongoing
+   Source: cointelegraph
+   Published: 2026-01-17T22:06:24
+   URL: https://cointelegraph.com/news/coinbase-ceo-denies-white-house-clash-negotiation-ongoing?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+32. Coinbase refutes rumors of White House's threat to pull support for crypto bill
+   Source: coindesk
+   Published: 2026-01-17T21:16:26
+   URL: https://www.coindesk.com/policy/2026/01/17/coinbase-refutes-rumors-of-white-house-s-threat-to-pull-support-for-crypto-bill
+
+33. White House threatens to pull support for crypto bill after Coinbase standoff: Report
+   Source: cointelegraph
+   Published: 2026-01-17T06:44:04
+   URL: https://cointelegraph.com/news/white-house-considers-dropping-crypto-bill-after-coinbase-withdrawal?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+34. Coinbase CEO Brian Armstrong Accuses Banks of Undermining Trump’s Crypto Agenda
+   Source: bitcoinmagazine
+   Published: 2026-01-16T21:31:57
+   URL: https://bitcoinmagazine.com/news/coinbase-ceo-accuses-banks-crypto
+
+35. The US government just caved to a crypto exchange pulling support for legislation that changes everything for investors
+   Source: cryptoslate
+   Published: 2026-01-16T18:00:40
+   URL: https://cryptoslate.com/coinbase-veto-clarity-act-crypto-regulation-delay/
+
+36. Tokenization firms reject Coinbase's crypto bill equities claims
+   Source: coindesk
+   Published: 2026-01-15T22:01:16
+   URL: https://www.coindesk.com/policy/2026/01/15/tokenization-firms-reject-coinbase-s-crypto-bill-equities-claims
+
+37. Coinbase CEO Brian Armstrong says company opposed crypto bill to protect consumers
+   Source: coindesk
+   Published: 2026-01-15T20:59:08
+   URL: https://www.coindesk.com/policy/2026/01/15/coinbase-ceo-brian-armstrong-says-company-opposed-crypto-bill-to-protect-consumers
+
+38. Coinbase CEO expects market structure bill markup ‘in a few weeks‘
+   Source: cointelegraph
+   Published: 2026-01-15T20:36:08
+   URL: https://cointelegraph.com/news/coinbase-ceo-crypto-market-structure-bill-markup?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+39. Cantor Equity Partners II stock gains as Citron says Coinbase fears tokenization rival
+   Source: coindesk
+   Published: 2026-01-15T17:30:17
+   URL: https://www.coindesk.com/markets/2026/01/15/cantor-equity-partners-ii-stock-gains-as-citron-says-coinbase-fears-tokenization-rival
+
+40. Coinbase (COIN) Stock Falls After CEO pulls Crypto Bill Support
+   Source: watcherguru
+   Published: 2026-01-15T17:29:00
+   URL: https://watcher.guru/news/coinbase-coin-stock-falls-after-ceo-pulls-crypto-bill-support
+
+41. Massive Coinbase News! Bitcoin Rips to $96,750! Football.Fun TGE Interview with Founder!
+   Source: decrypt
+   Published: 2026-01-15T16:49:34
+   URL: https://decrypt.co/videos/interviews/9g4stfJX/massive-coinbase-news-bitcoin-rips-to-96-750-footballfun-tge-interview-with-founder
+
+42. Morning Minute: Coinbase Withdraws Support of Clarity Act, Markup Delayed
+   Source: decrypt
+   Published: 2026-01-15T14:24:20
+   URL: https://decrypt.co/354713/morning-minute-coinbase-withdraws-support-of-clarity-act-markup-delayed
+
+43. Crypto slump hits ARK ETFs in Q4, Coinbase becomes top detractor
+   Source: cointelegraph
+   Published: 2026-01-15T08:13:06
+   URL: https://cointelegraph.com/news/crypto-market-slide-hits-ark-etfs-coinbase-roblox-drag?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+44. Crypto slump hits ARK ETFs in Q4, Coinbase becomes top detractor
+   Source: cointelegraph
+   Published: 2026-01-15T08:13:06
+   URL: https://ct.com/news/crypto-market-slide-hits-ark-etfs-coinbase-roblox-drag?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+45. Coinbase pulled support for Senate crypto legislation — here’s what happened
+   Source: theblock
+   Published: 2026-01-15T04:34:05
+   URL: https://www.theblock.co/post/385704/coinbase-pulled-support-what-happened?utm_source=rss&utm_medium=rss
+
+46. Coinbase pulls support for major crypto bill. Here's what it means for the industry
+   Source: coindesk
+   Published: 2026-01-15T01:03:57
+   URL: https://www.coindesk.com/policy/2026/01/14/coinbase-pulled-support-for-key-crypto-bill-here-s-what-it-means-for-the-industry
+
+47. Coinbase pulls support for crypto bill: ‘no bill’ better than ‘bad bill’
+   Source: cointelegraph
+   Published: 2026-01-15T00:52:34
+   URL: https://ct.com/news/clarity-act-crypto-market-structure-coinbase-brian-armstrong?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+48. Coinbase pulls support for crypto bill: 'no bill' better than 'bad bill'
+   Source: cointelegraph
+   Published: 2026-01-15T00:52:34
+   URL: https://cointelegraph.com/news/clarity-act-crypto-market-structure-coinbase-brian-armstrong?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+49. Coinbase CEO Strongly Opposes Senate’s Crypto Bill Draft
+   Source: thedefiant
+   Published: 2026-01-14T22:42:02
+   URL: https://thedefiant.io/news/regulation/coinbase-ceo-strongly-opposes-senate-s-crypto-bill-draft
+
+50. Coinbase, CEO Armstrong Do Not Support Senate Crypto Bill
+   Source: watcherguru
+   Published: 2026-01-14T22:36:28
+   URL: https://watcher.guru/news/coinbase-ceo-armstrong-do-not-support-senate-crypto-bill
+
+51. Coinbase CEO Brian Armstrong pulls support for crypto bill on eve of Senate vote
+   Source: dlnews
+   Published: 2026-01-14T22:30:48
+   URL: https://www.dlnews.com/articles/regulation/coinbase-ceo-pulls-support-for-crypto-bill-on-eve-of-vote/
+
+52. Coinbase Withdraws Support for Crypto Bill on Eve of Key Senate Vote
+   Source: decrypt
+   Published: 2026-01-14T22:06:24
+   URL: https://decrypt.co/354668/coinbase-pulls-support-crypto-market-structure-bill-senate-vote
+
+53. Coinbase says it won’t back Senate crypto bill ahead of banking committee vote
+   Source: theblock
+   Published: 2026-01-14T21:55:51
+   URL: https://www.theblock.co/post/385673/coinbase-says-wont-back-senate-crypto-bill-ahead-banking-committee-vote?utm_source=rss&utm_medium=rss
+
+54. Coinbase Says ‘No’ to CLARITY Act, Citing Crypto Restrictions
+   Source: bitcoinmagazine
+   Published: 2026-01-14T21:50:47
+   URL: https://bitcoinmagazine.com/news/coinbase-says-no-to-clarity-act
+
+55. Coinbase pulls support from crypto market structure bill
+   Source: coindesk
+   Published: 2026-01-14T21:38:31
+   URL: https://www.coindesk.com/policy/2026/01/14/coinbase-pulls-support-from-crypto-market-structure-bill
+
+56. Stablecoin rewards provisions face industry test in Senate crypto bill
+   Source: cointelegraph
+   Published: 2026-01-13T17:52:50
+   URL: https://cointelegraph.com/news/reactions-market-structure-stablecoin-rewards?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+57. Coinbase Threatens to Pull Support for Crypto Bill Over Stablecoin Rewards
+   Source: bitcoin.com
+   Published: 2026-01-12T22:45:13
+   URL: https://news.bitcoin.com/coinbase-threatens-to-pull-support-for-crypto-bill-over-stablecoin-rewards/
+
+58. Coinbase May Drop Support for CLARITY Act Over Stablecoin Conflicts
+   Source: bitcoinmagazine
+   Published: 2026-01-12T17:42:43
+   URL: https://bitcoinmagazine.com/news/coinbase-may-drop-support-for-clarity-act
+
+59. Solana treasury company Sharps Technology taps Coinbase to launch validator
+   Source: theblock
+   Published: 2026-01-12T15:27:11
+   URL: https://www.theblock.co/post/385132/solana-treasury-sharps-coinbase-launch-validator?utm_source=rss&utm_medium=rss
+
+60. Coinbase pushes back against banks to keep rewarding users for holding stablecoins
+   Source: coindesk
+   Published: 2026-01-12T09:27:34
+   URL: https://www.coindesk.com/business/2026/01/12/coinbase-pushes-back-against-banks-to-keep-rewarding-users-for-holding-stablecoins
+
+61. Coinbase may reconsider support for US market structure bill: Bloomberg
+   Source: theblock
+   Published: 2026-01-12T03:07:01
+   URL: https://www.theblock.co/post/385028/coinbase-market-structure-bill?utm_source=rss&utm_medium=rss
+
+62. Coinbase could pull CLARITY Act support over stablecoin rewards ban
+   Source: cointelegraph
+   Published: 2026-01-12T02:16:28
+   URL: https://cointelegraph.com/news/coinbase-could-pull-clarity-act-support-over-stablecoin-rewards-ban?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+63. Bank of America, Goldman Sachs Upgrade Coinbase (COIN) Stock to ‘Buy’
+   Source: bitcoin.com
+   Published: 2026-01-11T06:30:03
+   URL: https://news.bitcoin.com/bank-of-america-goldman-sachs-upgrade-coinbase-coin-stock-to-buy/
+
+64. Coinbase Outlines Bullish Markets Outlook as Global Liquidity and Scale Accelerate
+   Source: bitcoin.com
+   Published: 2026-01-11T04:30:30
+   URL: https://news.bitcoin.com/coinbase-outlines-bullish-markets-outlook-as-global-liquidity-and-scale-accelerate/
+
+65. Coinbase lands 2nd ‘buy’ rating in a week, with BofA seeing 38% upside
+   Source: cointelegraph
+   Published: 2026-01-09T01:33:26
+   URL: https://cointelegraph.com/news/bank-of-america-upgrades-coinbase-buy?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+66. BofA upgrades Coinbase after pullback, says crypto adoption still in ‘early innings’
+   Source: theblock
+   Published: 2026-01-08T21:43:00
+   URL: https://www.theblock.co/post/384837/bofa-upgrades-coinbase-after-pullback-crypto-adoption-still-early-innings?utm_source=rss&utm_medium=rss
+
+67. Bank of America upgrades Coinbase to 'buy' as exchange moves beyond crypto
+   Source: coindesk
+   Published: 2026-01-08T20:11:44
+   URL: https://www.coindesk.com/markets/2026/01/08/bank-of-america-upgrades-coinbase-to-buy-as-exchange-moves-beyond-crypto
+
+68. Bank of America Upgrades Coinbase to 'Buy' on Base Prospects, Tokenization Tailwinds
+   Source: decrypt
+   Published: 2026-01-08T16:47:59
+   URL: https://decrypt.co/353989/bank-america-upgrades-coinbase-buy-base-prospects-tokenization-tailwinds
+
+69. 2026 Is the Year Coinbase Stops Being Crypto Exchange and Starts Acting Like Global Market Operator
+   Source: bitcoin.com
+   Published: 2026-01-08T05:30:11
+   URL: https://news.bitcoin.com/2026-is-the-year-coinbase-stops-being-crypto-exchange-and-starts-acting-like-global-market-operator/
+
+70. Coinbase and Gemini face divided outlook as analysts weigh exchange expansions beyond crypto
+   Source: theblock
+   Published: 2026-01-06T21:38:09
+   URL: https://www.theblock.co/post/384536/coinbase-gemini-divided-outlook-analysts-exchange-expansion-beyond-crypto?utm_source=rss&utm_medium=rss
+
+71. Coinbase Suspends USDC on-Ramping Services in Argentina
+   Source: bitcoin.com
+   Published: 2026-01-06T10:30:26
+   URL: https://news.bitcoin.com/coinbase-suspends-usdc-on-ramping-services-in-argentina/
+
+72. Coinbase Shares Top Priorities for 2026 — A Major Shift Is Coming
+   Source: bitcoin.com
+   Published: 2026-01-06T05:30:10
+   URL: https://news.bitcoin.com/coinbase-shares-top-priorities-for-2026-a-major-shift-is-coming/
+
+73. Coinbase rallies 8% after Goldman Sachs upgrades stock to ‘buy’
+   Source: cointelegraph
+   Published: 2026-01-06T02:20:59
+   URL: https://cointelegraph.com/news/coinbase-soars-8-goldman-sachs-upgrades-stock-buy?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+74. Goldman Sachs Upgrades Coinbase, Downgrades eToro—Here's Why
+   Source: decrypt
+   Published: 2026-01-05T22:19:41
+   URL: https://decrypt.co/353658/goldman-sachs-upgrades-coinbase-downgrades-etoro-why
+
+75. Goldman upgrades Coinbase stock to Buy, flags execution risks and growing competition
+   Source: theblock
+   Published: 2026-01-05T18:57:34
+   URL: https://www.theblock.co/post/384369/goldman-upgrades-coinbase-stock-buy-flags-execution-risks-competition?utm_source=rss&utm_medium=rss
+
+76. Goldman Sachs upgrades Coinbase to buy, cuts eToro to neutral
+   Source: coindesk
+   Published: 2026-01-05T14:09:32
+   URL: https://www.coindesk.com/markets/2026/01/05/goldman-sachs-upgrades-coinbase-to-buy-cuts-etoro-to-neutral
+
+77. Coinbase drops peso-based services in Argentina less than a year after market entry
+   Source: coindesk
+   Published: 2026-01-05T12:21:42
+   URL: https://www.coindesk.com/policy/2026/01/05/coinbase-drops-peso-based-services-in-argentina-less-than-a-year-after-market-entry
+
+78. Coinbase to pause peso-based services in Argentina just one year after launch
+   Source: theblock
+   Published: 2026-01-04T18:48:29
+   URL: https://www.theblock.co/post/384205/coinbase-to-pause-peso-based-services-in-argentina-just-one-year-after-launch?utm_source=rss&utm_medium=rss
+
+79. Coinbase says it plans to return to Argentina ahead of ‘temporary’ exit
+   Source: dlnews
+   Published: 2026-01-04T14:17:31
+   URL: https://www.dlnews.com/articles/markets/coinbase-wants-argentina-return-after-temporary-exit/
+
+80. Coinbase pauses local fiat rails in Argentina less than a year after its arrival
+   Source: cointelegraph
+   Published: 2026-01-04T08:17:40
+   URL: https://cointelegraph.com/news/coinbase-pauses-fiat-operations-argentina-2026?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+81. Coinbase exec defends CLARITY Act delay: 'I completely understand'
+   Source: cointelegraph
+   Published: 2026-01-03T03:23:39
+   URL: https://cointelegraph.com/news/coinbase-clarity-act-delay-genius-act-united-states?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+82. Coinbase Targeting Stablecoin Growth, Onchain Adoption in 2026: Brian Armstrong
+   Source: decrypt
+   Published: 2026-01-02T15:01:03
+   URL: https://decrypt.co/353503/coinbase-targeting-stablecoin-growth-onchain-adoption-in-2026-brian-armstrong
+
+83. Coinbase bets on stablecoins, Base and 'everything exchange' for 2026
+   Source: cointelegraph
+   Published: 2026-01-02T10:33:48
+   URL: https://cointelegraph.com/news/coinbase-bets-on-stablecoins-base-and-everything-exchange-for-2026?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+84. Crypto forces to compound in 2026, accelerating adoption: Coinbase
+   Source: cointelegraph
+   Published: 2026-01-01T04:58:31
+   URL: https://cointelegraph.com/news/crypto-forces-compound-2026-adoption?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+85. Coinbase Partners With BC Card to Pilot a USDC-Based Payment Solution in Korea
+   Source: bitcoin.com
+   Published: 2025-12-31T08:30:05
+   URL: https://news.bitcoin.com/coinbase-partners-with-bc-card-to-pilot-a-usdc-based-payment-solution-in-korea/
+
+86. Coinbase exec warns Senate stablecoin misstep could hand China global edge
+   Source: cointelegraph
+   Published: 2025-12-31T07:41:17
+   URL: https://cointelegraph.com/news/coinbase-exec-warns-senate-stablecoin-misstep-could-hand-china-a-global-edge?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+87. China gains major advantage if US bans interest on stablecoins, Coinbase exec warns
+   Source: theblock
+   Published: 2025-12-31T05:56:16
+   URL: https://www.theblock.co/post/384032/coinbase-warns-us-restricts-stablecoin-interest?utm_source=rss&utm_medium=rss
+
+88. Fake Coinbase support scammer allegedly stole $2M from users
+   Source: cointelegraph
+   Published: 2025-12-30T01:46:31
+   URL: https://cointelegraph.com/news/fake-coinbase-help-desk-scammer-allegedly-stole-2m?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+89. Daycare Fraud Journalist Tokenizes Content on Base
+   Source: thedefiant
+   Published: 2025-12-29T22:17:52
+   URL: https://thedefiant.io/news/defi/daycare-fraud-journalist-tokenizes-content-on-base
+
+90. Coinbase claims arrest in the $355 million insider extortion scheme that targeted nearly 70,000 customers
+   Source: cryptoslate
+   Published: 2025-12-28T18:45:05
+   URL: https://cryptoslate.com/coinbase-reveals-arrest-in-the-355-million-insider-extortion-scheme-that-targeted-nearly-70000-customers/
+
+91. Coinbase says three areas will dominate the crypto market in 2026
+   Source: coindesk
+   Published: 2025-12-28T08:29:19
+   URL: https://www.coindesk.com/markets/2025/12/28/coinbase-says-three-areas-will-dominate-the-crypto-market-in-2026
+
+92. Coinbase CEO announces first arrest in India over insider data breach: ‘More still to come’
+   Source: theblock
+   Published: 2025-12-27T17:01:49
+   URL: https://www.theblock.co/post/383790/coinbase-ceo-announces-first-arrest-in-india-over-insider-data-breach-more-still-to-come?utm_source=rss&utm_medium=rss
+
+93. Ex-Coinbase employee arrested in India over $400m heist
+   Source: dlnews
+   Published: 2025-12-27T12:55:21
+   URL: https://www.dlnews.com/articles/regulation/coinbase-worker-arrested-india/
+
+94. Coinbase CEO says reopening GENIUS Act is ‘red line,’ slams bank lobbying
+   Source: cointelegraph
+   Published: 2025-12-27T12:24:30
+   URL: https://cointelegraph.com/news/coinbase-ceo-genius-act-red-line-bank-lobbying-stablecoins?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+95. Coinbase 2026 Outlook Sees Crypto Entering Finance Core in ‘Extraordinary and Transformative’ Shift
+   Source: bitcoin.com
+   Published: 2025-12-27T00:30:08
+   URL: https://news.bitcoin.com/coinbase-2026-outlook-sees-crypto-entering-finance-core-in-extraordinary-and-transformative-shift/
+
+96. Coinbase named a top three 2026 fintech pick at Clear Street
+   Source: coindesk
+   Published: 2025-12-26T15:23:13
+   URL: https://www.coindesk.com/markets/2025/12/26/coinbase-named-a-top-three-2026-fintech-pick-at-clear-street
+
+97. Coinbase Pushes Prediction Markets Deeper Onchain as Clearing Company Deal Signals Breakout Expansion
+   Source: bitcoin.com
+   Published: 2025-12-23T03:30:42
+   URL: https://news.bitcoin.com/coinbase-pushes-prediction-markets-deeper-onchain-as-clearing-company-deal-signals-breakout-expansion/
+
+98. Coinbase agrees to buy The Clearing Company to deepen prediction markets push
+   Source: coindesk
+   Published: 2025-12-22T17:01:27
+   URL: https://www.coindesk.com/business/2025/12/22/coinbase-agrees-to-buy-the-clearing-company-to-deepen-prediction-markets-push
+
+99. Coinbase: Illinois Gaming Authority legal action on prediction market is ‘imminent’ and ‘existential’
+   Source: dlnews
+   Published: 2025-12-22T16:50:25
+   URL: https://www.dlnews.com/articles/regulation/coinbase-calls-legal-action-on-prediction-product-imminent/
+
+100. Coinbase to acquire The Clearing Company in prediction markets push
+   Source: cointelegraph
+   Published: 2025-12-22T15:04:43
+   URL: https://cointelegraph.com/news/coinbase-acquires-clearing-company-prediction-markets?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+101. Coinbase to acquire prediction markets startup The Clearing Company
+   Source: theblock
+   Published: 2025-12-22T15:00:00
+   URL: https://www.theblock.co/post/383497/coinbase-to-acquire-prediction-markets-startup-the-clearing-company?utm_source=rss&utm_medium=rss
+
+102. Coinbase CEO Debates Base App’s Strategic Focus
+   Source: thedefiant
+   Published: 2025-12-22T14:47:21
+   URL: https://thedefiant.io/news/cefi/coinbase-ceo-debates-base-app-s-strategic-focus
+
+103. Prediction markets may offer a tax loophole for gamblers under Trump’s Big Beautiful Bill, Coinbase says
+   Source: coindesk
+   Published: 2025-12-22T13:59:31
+   URL: https://www.coindesk.com/markets/2025/12/19/prediction-markets-may-offer-tax-loophole-for-gamblers-under-trump-s-crypto-law-coinbase-says
+
+104. Coinbase Super App Bid, Saylor $1B Buy, and More — Week in Review
+   Source: bitcoin.com
+   Published: 2025-12-21T21:11:17
+   URL: https://news.bitcoin.com/coinbase-super-app-bid-saylor-1b-buy-and-more-week-in-review/
+
+105. Fake Coinbase staffer ‘stole $16m in crypto’ and blew loot in online casinos – prosecutors
+   Source: dlnews
+   Published: 2025-12-21T10:35:41
+   URL: https://www.dlnews.com/articles/people-culture/fake-coinbase-staffer-stole-16m-in-crypto/
+
+106. Coinbase Issues Direct Warning: ‘If You Try to Steal From Our Customers,’ Law Enforcement Will Close in
+   Source: bitcoin.com
+   Published: 2025-12-20T22:30:28
+   URL: https://news.bitcoin.com/coinbase-issues-direct-warning-if-you-try-to-steal-from-our-customers-law-enforcement-will-close-in/
+
+107. Coinbase Security Impersonation Scheme Exposed as Authorities Claim Nearly $16M Was Siphoned
+   Source: bitcoin.com
+   Published: 2025-12-20T08:30:30
+   URL: https://news.bitcoin.com/coinbase-security-impersonation-scheme-exposed-as-authorities-claim-nearly-16m-was-siphoned/
+
+108. Coinbase Sues 3 States as Prediction Markets Trigger Federal Versus Gambling Law Clash
+   Source: bitcoin.com
+   Published: 2025-12-20T05:30:24
+   URL: https://news.bitcoin.com/coinbase-sues-3-states-as-prediction-markets-trigger-federal-versus-gambling-law-clash/
+
+109. Coinbase says Trump’s Big Beautiful Bill could push gamblers into arms of prediction markets
+   Source: theblock
+   Published: 2025-12-19T18:55:10
+   URL: https://www.theblock.co/post/383369/coinbase-trump-big-beautiful-bill-gamblers-prediction-markets?utm_source=rss&utm_medium=rss
+
+110. Coinbase ‘cautiously optimistic’ on 2026 as crypto nears institutional inflection point
+   Source: cointelegraph
+   Published: 2025-12-19T17:55:00
+   URL: https://cointelegraph.com/news/coinbase-2026-crypto-outlook-institutional-adoption-regulation?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+111. Coinbase Sues Three States Over Prediction Market Restrictions
+   Source: thedefiant
+   Published: 2025-12-19T17:23:53
+   URL: https://thedefiant.io/news/regulation/coinbase-prediction-market-state-vs-federal-regulations
+
+112. OpenAI bailed out? Trump Media stock up 40%! Wallet Connect Interview
+   Source: decrypt
+   Published: 2025-12-19T16:37:12
+   URL: https://decrypt.co/videos/interviews/9X1oVPuq/openai-bailed-out-trump-media-stock-up-40-wallet-connect-interview
+
+113. Morning Minute: Coinbase Wants to Be the Everything Exchange
+   Source: decrypt
+   Published: 2025-12-19T13:46:02
+   URL: https://decrypt.co/352987/morning-minute-coinbase-wants-to-be-the-everything-exchange
+
+114. Coinbase Sues Three States Over Prediction Market Regulation
+   Source: decrypt
+   Published: 2025-12-19T13:03:05
+   URL: https://decrypt.co/352984/coinbase-sues-three-states-over-prediction-market-regulation
+
+115. Coinbase files lawsuits in 3 states over attempts to regulate prediction markets
+   Source: coindesk
+   Published: 2025-12-19T10:09:56
+   URL: https://www.coindesk.com/policy/2025/12/19/coinbase-files-lawsuits-in-3-states-over-attempts-to-regulate-prediction-markets
+
+116. Coinbase borrows Kalshi’s playbook, sues three states over prediction markets
+   Source: cointelegraph
+   Published: 2025-12-19T08:01:57
+   URL: https://cointelegraph.com/news/coinbase-sues-states-prediction-markets?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+117. Coinbase sues Michigan, Illinois and Connecticut over prediction market oversight
+   Source: theblock
+   Published: 2025-12-19T05:28:09
+   URL: https://www.theblock.co/post/383257/coinbase-sues-three-states-prediction-market?utm_source=rss&utm_medium=rss
+
+118. Base App Goes Live Across 140+ Countries as Coinbase Pushes Social Trading Toward the Mainstream
+   Source: bitcoin.com
+   Published: 2025-12-19T02:30:16
+   URL: https://news.bitcoin.com/base-app-goes-live-across-140-countries-as-coinbase-pushes-social-trading-toward-the-mainstream/
+
+119. Coinbase appoints former UK minister George Osborne to chair advisory council
+   Source: cointelegraph
+   Published: 2025-12-18T21:59:06
+   URL: https://cointelegraph.com/news/coinbase-george-osborne-uk-minister-advisory-council?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+120. Coinbase’s new product rollout strengthens bull case with upside not fully reflected, analysts say
+   Source: theblock
+   Published: 2025-12-18T20:12:34
+   URL: https://www.theblock.co/post/383225/coinbase-product-rollout-bull-case-upside-not-fully-reflected-jpmorgan-benchmark?utm_source=rss&utm_medium=rss
+
+121. The Daily: Coinbase expands into stocks and prediction markets, SEC issues crypto custody guidance, SoFi launches a stablecoin, and more
+   Source: theblock
+   Published: 2025-12-18T19:17:21
+   URL: https://www.theblock.co/post/383227/the-daily-coinbase-stocks-prediction-markets-sec-crypto-custody-guidance-sofi-launches-stablecoin-more?utm_source=rss&utm_medium=rss
+
+122. Coinbase (COIN) to Expand into “Everything App,” Stock Rallies
+   Source: watcherguru
+   Published: 2025-12-18T17:43:00
+   URL: https://watcher.guru/news/coinbase-coin-to-expand-into-everything-app-stock-rallies
+
+123. Coinbase Enters New Era as Stocks and Prediction Markets Power Its Bid for the World’s #1 Financial Services App
+   Source: bitcoin.com
+   Published: 2025-12-18T16:30:19
+   URL: https://news.bitcoin.com/coinbase-enters-new-era-as-stocks-and-prediction-markets-power-its-bid-for-the-worlds-1-financial-services-app/
+
+124. Coinbase & Robinhood Big Announcements! BTC falls then bounces!
+   Source: decrypt
+   Published: 2025-12-18T16:25:36
+   URL: https://decrypt.co/videos/interviews/hqcQGHlZ/coinbase-robinhood-big-announcements-btc-falls-then-bounces
+
+125. Coinbase Unveils 'End-to-End' RWA Tokenization Platform
+   Source: thedefiant
+   Published: 2025-12-18T15:32:30
+   URL: https://thedefiant.io/news/cefi/coinbase-unveils-coinbase-tokenize
+
+126. Coinbase shares rise as ‘ambitious expansion’ wins analyst praise
+   Source: coindesk
+   Published: 2025-12-18T15:12:00
+   URL: https://www.coindesk.com/markets/2025/12/18/coinbase-shares-rise-as-ambitious-expansion-wins-analyst-praise
+
+127. Coinbase expands in Poland with Blik mobile payments integration
+   Source: cointelegraph
+   Published: 2025-12-18T10:55:45
+   URL: https://cointelegraph.com/news/coinbase-expands-poland-blik-mobile-payments?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+128. Coinbase deepens India presence after approval of CoinDCX deal
+   Source: coindesk
+   Published: 2025-12-18T08:01:51
+   URL: https://www.coindesk.com/markets/2025/12/18/coinbase-deepens-india-presence-after-approval-of-coindcx-deal
+
+129. India's Competition Regulator Clears Coinbase's Minority Stake in CoinDCX
+   Source: decrypt
+   Published: 2025-12-18T06:09:25
+   URL: https://decrypt.co/352838/indias-competition-regulator-clears-coinbases-minority-stake-coindcx
+
+130. India clears Coinbase’s minority stake acquisition in CoinDCX
+   Source: theblock
+   Published: 2025-12-18T04:44:57
+   URL: https://www.theblock.co/post/383109/india-coinbase-coindcx-investment?utm_source=rss&utm_medium=rss
+
+131. Coinbase to launch stock trading, prediction market, AI ‘advisor’
+   Source: dlnews
+   Published: 2025-12-18T02:59:01
+   URL: https://www.dlnews.com/articles/markets/coinbase-to-launch-stock-trading-prediction-market-ai-advisor/
+
+132. Robo-advisers, custom stablecoins: 8 things Coinbase is cooking up
+   Source: cointelegraph
+   Published: 2025-12-18T02:55:04
+   URL: https://cointelegraph.com/news/top-announcements-coinbase-system-update?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+133. Coinbase Unveils Prediction Markets, Stock Trading and Solana DeFi Integration
+   Source: decrypt
+   Published: 2025-12-17T23:01:02
+   URL: https://decrypt.co/352800/coinbase-unveils-prediction-markets-stock-trading-solana-defi-integration
+
+134. Coinbase expands into stocks, prediction markets, Solana DEX trading via Jupiter, and more in ‘everything exchange’ push
+   Source: theblock
+   Published: 2025-12-17T23:00:00
+   URL: https://www.theblock.co/post/383068/coinbase-stocks-prediction-markets-solana-dex-jupiter-everything-exchange?utm_source=rss&utm_medium=rss
+
+135. Coinbase adds stock trading, prediction markets in ‘everything app’ push
+   Source: cointelegraph
+   Published: 2025-12-17T22:54:17
+   URL: https://cointelegraph.com/news/coinbase-stock-trading-prediction-markets-in-everything-app-push?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+136. Why Coinbase Says Younger Investors Are Betting on Crypto First
+   Source: bitcoin.com
+   Published: 2025-12-17T22:40:26
+   URL: https://news.bitcoin.com/why-coinbase-says-younger-investors-are-betting-on-crypto-first/
+
+137. Coinbase rolls out stock trading, prediction markets and more in bid to become the ‘Everything Exchange’
+   Source: coindesk
+   Published: 2025-12-17T22:33:50
+   URL: https://www.coindesk.com/business/2025/12/17/coinbase-rolls-out-stock-trading-prediction-markets-and-more-in-bid-to-become-the-everything-exchange
+
+138. Coinbase gets nod from Indian regulators to acquire CoinDCX stake
+   Source: cointelegraph
+   Published: 2025-12-17T22:04:05
+   URL: https://cointelegraph.com/news/coinbase-indian-regulators-coindcx-stake?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+139. Deutsche Bank initiates coverage of Coinbase with Buy rating, sees 40% upside to $340
+   Source: theblock
+   Published: 2025-12-17T21:48:48
+   URL: https://www.theblock.co/post/383065/deutsche-bank-40-upside-coinbase-stock-everything-exchange-push?utm_source=rss&utm_medium=rss
+
+140. New Coinbase report points to ‘broken’ traditional finance system: Armstrong
+   Source: cointelegraph
+   Published: 2025-12-17T12:53:52
+   URL: https://cointelegraph.com/news/new-coinbase-report-broken-traditional-finance?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+141. Coinbase: Why AI will ‘revolutionise’ crypto markets in 2026 amidst $565m startup boom
+   Source: dlnews
+   Published: 2025-12-17T12:18:10
+   URL: https://www.dlnews.com/articles/markets/coinbase-why-ai-will-revolutionise-crypto-markets-in-2026-amidst-565-million-startup-boom/
+
+142. Coinbase Risks Crypto 'Cannibalization' With Prediction Market Push: Mizuho
+   Source: decrypt
+   Published: 2025-12-16T17:07:19
+   URL: https://decrypt.co/352554/coinbase-risks-crypto-cannibalization-prediction-market-push-mizuho
+
+143. ‘Much more than a backend refresh’: Coinbase’s fintech pivot hits milestone
+   Source: coindesk
+   Published: 2025-12-15T21:04:11
+   URL: https://www.coindesk.com/markets/2025/12/15/much-more-than-a-backend-refresh-coinbase-s-fintech-pivot-hits-milestone
+
+144. Coinbase (COIN), Strategy (MSTR) Dip, Crypto Liquidation Surges
+   Source: watcherguru
+   Published: 2025-12-15T21:04:00
+   URL: https://watcher.guru/news/coinbase-coin-strategy-mstr-dip-crypto-liquidation-surges
+
+145. Compass Point Cuts Coinbase Price Target Ahead of Expected Stocks, Prediction Market Reveal
+   Source: decrypt
+   Published: 2025-12-15T19:48:43
+   URL: https://decrypt.co/352427/compass-point-cuts-coinbase-price-target-stocks-prediction-markets
+
+146. Coinbase Update, U.S. Jobs, Bank of Japan: Crypto Week Ahead
+   Source: coindesk
+   Published: 2025-12-15T09:00:00
+   URL: https://www.coindesk.com/markets/2025/12/15/coinbase-update-u-s-jobs-bank-of-japan-crypto-week-ahead
+
+147. Coinbase Preps Prediction Market, Tokenized Equities Launch for December 17: Report
+   Source: decrypt
+   Published: 2025-12-12T20:33:59
+   URL: https://decrypt.co/352224/coinbase-prediction-market-tokenized-equities-launch-december-17
+
+148. Coinbase is About to Launch Prediction Markets and Tokenized Stocks: Report
+   Source: bitcoinmagazine
+   Published: 2025-12-12T20:00:56
+   URL: https://bitcoinmagazine.com/news/coinbase-prediction-tokenized-stocks
+
+149. Coinbase may debut prediction markets, tokenized stocks on Wednesday: Report
+   Source: cointelegraph
+   Published: 2025-12-12T09:20:29
+   URL: https://cointelegraph.com/news/coinbase-prediction-markets-tokenized-stocks-december-17-report?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+150. Coinbase to unveil prediction markets and tokenized equities next week: Bloomberg
+   Source: theblock
+   Published: 2025-12-12T09:20:23
+   URL: https://www.theblock.co/post/382291/coinbase-prediction-markets-tokenized-equities?utm_source=rss&utm_medium=rss
+
+151. Standard Chartered, Coinbase Expand Crypto Prime Services for Institutions
+   Source: coindesk
+   Published: 2025-12-12T09:04:36
+   URL: https://www.coindesk.com/business/2025/12/12/standard-chartered-coinbase-expand-crypto-prime-services-for-institutions
+
+152. Coinbase Expands Reach of Stablecoin-Based AI Agent Payments Tool
+   Source: coindesk
+   Published: 2025-12-11T19:52:07
+   URL: https://www.coindesk.com/tech/2025/12/11/coinbase-expands-the-reach-of-its-stablecoin-based-ai-agent-payments-tool
+
+153. Coinbase Says It’s ‘Expanding to Solana’ with Native DEX Trading
+   Source: thedefiant
+   Published: 2025-12-11T17:39:19
+   URL: https://thedefiant.io/news/defi/coinbase-adds-native-solana-dex-trading
+
+154. Coinbase taps Chainlink CCIP to expand wrapped assets like cbBTC and cbXRP to new chains
+   Source: theblock
+   Published: 2025-12-11T16:29:20
+   URL: https://www.theblock.co/post/382230/coinbase-chainlink-ccip-wrapped-assets-exclusive-deal?utm_source=rss&utm_medium=rss
+
+155. Coinbase Taps Chainlink CCIP as Sole Bridge for $7B in Wrapped Tokens Across Chains
+   Source: coindesk
+   Published: 2025-12-11T15:00:00
+   URL: https://www.coindesk.com/web3/2025/12/11/coinbase-taps-chainlink-ccip-as-sole-bridge-for-usd7b-in-wrapped-tokens-across-chains
+
+156. Coinbase Ending USDC Rewards for Free Users, Will Only Be for Paid Members
+   Source: decrypt
+   Published: 2025-12-11T14:50:25
+   URL: https://decrypt.co/351946/coinbase-ending-usdc-rewards-free-users-only-paid-members
+
+157. Coinbase opens Solana DEX access as CeFi and DeFi converge
+   Source: cointelegraph
+   Published: 2025-12-11T12:14:03
+   URL: https://cointelegraph.com/news/coinbase-joins-the-cex-dex-convergence-with-solana-integration?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+158. Coinbase paywalls USDC rewards as Fed cuts interest rates
+   Source: dlnews
+   Published: 2025-12-11T11:10:12
+   URL: https://www.dlnews.com/articles/web3/coinbase-ends-usdc-rewards-for-non-paying-customers/
+
+159. Coinbase Drives a New Institutional Milestone With PNC Bitcoin Access
+   Source: bitcoin.com
+   Published: 2025-12-10T04:30:21
+   URL: https://news.bitcoin.com/coinbase-drives-a-new-institutional-milestone-with-pnc-bitcoin-access/
+
+160. Coinbase Rebuilds India Crypto Presence With Fresh Onboarding Momentum
+   Source: bitcoin.com
+   Published: 2025-12-09T02:30:01
+   URL: https://news.bitcoin.com/coinbase-rebuilds-india-crypto-presence-with-fresh-onboarding-momentum/
+
+161. Coinbase mounts a cautious comeback in India, two years after exit
+   Source: cointelegraph
+   Published: 2025-12-08T08:36:49
+   URL: https://cointelegraph.com/news/coinbase-india-relaunch-two-years-market-exit?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+162. Coinbase Reopens India Signups, Targets Fiat On-Ramp in 2026 After Two-Year Freeze
+   Source: coindesk
+   Published: 2025-12-08T06:10:27
+   URL: https://www.coindesk.com/markets/2025/12/08/coinbase-reopens-india-signups-targets-fiat-on-ramp-in-2026-after-two-year-freeze
+
+163. Coinbase Reopens India Access, Sets 2026 Target for Cash-to-Crypto Purchases
+   Source: decrypt
+   Published: 2025-12-08T04:36:48
+   URL: https://decrypt.co/351391/coinbase-reopens-india-access-sets-2026-target-cash-crypto
+
+164. Coinbase reopens app in India after two-year hiatus: report
+   Source: theblock
+   Published: 2025-12-08T04:29:37
+   URL: https://www.theblock.co/post/381644/coinbase-resumes-user-onboarding-india?utm_source=rss&utm_medium=rss
+
+165. Crypto Poised for December Recovery as Coinbase Spots Momentum Shift
+   Source: bitcoin.com
+   Published: 2025-12-07T02:30:40
+   URL: https://news.bitcoin.com/crypto-poised-for-december-recovery-as-coinbase-spots-momentum-shift/
+
+166. Coinbase Opens 24/7 Trading for All Altcoin Monthly Futures, Perpetuals Next
+   Source: bitcoin.com
+   Published: 2025-12-06T20:35:48
+   URL: https://news.bitcoin.com/coinbase-opens-24-7-trading-for-all-altcoin-monthly-futures-perpetuals-next/
+
+167. Coinbase Sees Crypto Recovery Ahead as Liquidity Improves and Fed Rate Cut Odds Climb
+   Source: coindesk
+   Published: 2025-12-06T15:46:33
+   URL: https://www.coindesk.com/markets/2025/12/06/coinbase-sees-crypto-recovery-ahead-as-liquidity-improves-and-fed-rate-cut-odds-climb
+
+168. Coinbase CEO Explains Crypto’s Future And the Coming Mega-Boom
+   Source: watcherguru
+   Published: 2025-12-05T08:01:00
+   URL: https://watcher.guru/news/coinbase-ceo-explains-cryptos-future-and-the-coming-mega-boom
+
+169. Coinbase, Chainlink Introduce Base-Solana Bridge to Link Ecosystems
+   Source: coindesk
+   Published: 2025-12-04T19:00:00
+   URL: https://www.coindesk.com/web3/2025/12/04/coinbase-chainlink-introduce-base-solana-bridge-to-link-ecosystems
+
+170. 2012 Video Resurfaces of Coinbase CEO Brian Armstrong Pitching What Became America’s Largest Bitcoin Exchange
+   Source: bitcoinmagazine
+   Published: 2025-12-04T18:49:14
+   URL: https://bitcoinmagazine.com/culture/coinbase-ceo-brian-armstrong-pitch-video
+
+171. Crypto Is Edging Further Into Mainstream Finance, BlackRock and Coinbase Chiefs Say
+   Source: decrypt
+   Published: 2025-12-04T03:35:18
+   URL: https://decrypt.co/350878/crypto-further-mainstream-finance-blackrock-coinbase-chiefs
+
+172. Coinbase Explains Why Bitcoin Price Dumps With Whale Selling Pressure
+   Source: bitcoin.com
+   Published: 2025-12-04T03:30:24
+   URL: https://news.bitcoin.com/coinbase-explains-why-bitcoin-price-dumps-with-whale-selling-pressure/
+
+173. Major banks running stablecoin, crypto-trading pilots with Coinbase, Armstrong says
+   Source: cointelegraph
+   Published: 2025-12-03T21:12:30
+   URL: https://cointelegraph.com/news/major-banks-stablecoin-trading-coinbase-armstrong-says?utm_source=rss_feed&utm_medium=rss%3Fceid%3DUS%3Aen%26gl%3DUS%26qhl%3Den-US&utm_campaign=rss_partner_inbound
+
+174. Major banks running stablecoin, crypto-trading pilots with Coinbase, Armstrong says
+   Source: cointelegraph
+   Published: 2025-12-03T21:12:30
+   URL: https://cointelegraph.com/news/major-banks-stablecoin-trading-coinbase-armstrong-says?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+175. Coinbase CEO Armstrong Says Banks That Don't Adapt Stablecoin Will be 'Left Behind'
+   Source: coindesk
+   Published: 2025-12-03T19:33:29
+   URL: https://www.coindesk.com/business/2025/12/03/coinbase-is-partnering-with-major-u-s-banks-on-stablecoin-and-crypto-pilots
+
+176. Coinbase (COIN) Stock Rises After Crypto Rally, BlackRock Report
+   Source: watcherguru
+   Published: 2025-12-03T18:27:00
+   URL: https://watcher.guru/news/coinbase-coin-stock-rises-after-crypto-rally-blackrock-report
+
+177. Coinbase Turns up the Heat With Worldwide Rollouts and Prime-Grade Assets
+   Source: bitcoin.com
+   Published: 2025-12-03T04:30:56
+   URL: https://news.bitcoin.com/coinbase-turns-up-the-heat-with-worldwide-rollouts-and-prime-grade-assets/
+
+178. Coinbase Launches Instant Unstaking as Demand for Yield Rises
+   Source: bitcoin.com
+   Published: 2025-12-02T23:45:19
+   URL: https://news.bitcoin.com/coinbase-launches-instant-unstaking-as-demand-for-yield-rises/
+
+179. Why Coinbase Shares Still Have 90% Upside Despite Crypto Pullback, According to Wall Street Analyst
+   Source: coindesk
+   Published: 2025-12-02T17:22:40
+   URL: https://www.coindesk.com/markets/2025/12/02/why-coinbase-shares-still-have-90-upside-despite-crypto-pullback-according-to-wall-street-analyst
+
+180. Coinbase’s x402 adds identity checks to power AI stablecoin payments
+   Source: cointelegraph
+   Published: 2025-12-02T15:01:00
+   URL: https://cointelegraph.com/news/coinbase-x402-ai-stablecoin-payments-id-age-verification?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+181. Most of Coinbase’s 2025 law enforcement requests came from outside the US
+   Source: cointelegraph
+   Published: 2025-12-01T20:44:47
+   URL: https://cointelegraph.com/news/coinbase-law-enforcement-requests-surged?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+
+182. Coinbase C-Suite, Marc Andreessen Sued for Billions Over Alleged Insider Trading Scheme
+   Source: decrypt
+   Published: 2025-12-01T20:03:46
+   URL: https://decrypt.co/350490/coinbase-c-suite-andreessen-sued-billions-alleged-insider-trading
+
+183. Crypto operating businesses ‘look strong,’ despite weak price action: Bernstein
+   Source: theblock
+   Published: 2025-12-01T12:23:30
+   URL: https://www.theblock.co/post/380883/crypto-operating-businesses-look-strong-weak-price-action?utm_source=rss&utm_medium=rss
+
+184. Coinbase Funds Crypto Basic Income Pilot in New York
+   Source: bitcoin.com
+   Published: 2025-11-30T10:30:16
+   URL: https://news.bitcoin.com/coinbase-funds-crypto-basic-income-pilot-in-new-york/
+

@@ -1,0 +1,496 @@
+---
+id: FEATURE-031
+type: feature
+status: backlog
+priority: medium
+complexity: medium
+created: 2026-02-05
+updated: 2026-02-05
+sprint: Sprint 6
+estimated_hours: 3
+dependencies: FEATURE-028, FEATURE-029, FEATURE-030
+---
+
+# Cost Monitor Dashboard Enhancement
+
+## Problem/Opportunity
+Cost Monitor UI exists but displays no data because tracking wasn't implemented. After FEATURE-028/029/030, we have real cost data flowing to MongoDB.
+
+Dashboard needs focused redesign to show only what matters:
+- Monthly budget progress ($10 target)
+- Daily cost trends
+- Alert if costs too high (>$0.50/day)
+- Operation and model breakdowns
+- Cache effectiveness
+
+Current dashboard may have unnecessary complexity or missing key metrics.
+
+## Proposed Solution
+Streamline Cost Monitor UI with focused metrics:
+
+**Primary Section (Top):**
+- Big progress bar: Month-to-date vs $10 budget
+- Alert banner if projected monthly > $10 or daily > $0.50
+- Days remaining in month
+- Status indicator (🟢 On Track / 🟡 Warning / 🔴 Over Budget)
+
+**Secondary Section (Middle):**
+- Daily trend chart (last 7 days)
+- Cost by operation breakdown
+- Cost by model breakdown
+- Cache hit rate percentage
+
+**Details Section (Bottom, collapsible):**
+- Token usage stats
+- Individual operation details
+- Cache performance metrics
+
+## User Story
+As a product owner, I want a clear dashboard showing if I'm on track for my $10/month budget so that I can quickly see spending status and take action if needed.
+
+## Acceptance Criteria
+- [x] Dashboard fetches real data from `/admin/api-costs/*` endpoints
+- [x] Budget progress bar shows month-to-date vs $10 target
+- [x] Alert displays if projected monthly > $10 or daily > $0.50
+- [x] Daily trend chart shows last 7 days with costs
+- [x] Operation breakdown shows cost per operation type
+- [x] Model breakdown shows cost per model
+- [x] Cache hit rate percentage displayed prominently
+- [x] UI updates automatically every 30 seconds
+- [x] Mobile responsive design
+- [x] Loading states for all data fetches
+- [x] Error handling for API failures
+
+## Dependencies
+- FEATURE-028 (Cost Tracking Service) - provides data
+- FEATURE-029 (LLM Integration) - populates database
+- FEATURE-030 (Verification) - confirms data accuracy
+- Admin API endpoints (already exist in `admin.py`)
+
+## Open Questions
+- [x] Should we show hourly breakdown? → No, daily is sufficient
+- [x] Historical comparison (this month vs last month)? → Phase 2 feature
+- [x] Export cost data to CSV? → Phase 2 feature
+- [x] Real-time updates or manual refresh? → Auto-refresh every 30s
+
+## Implementation Notes
+
+### Component Structure
+
+```
+context-owl-ui/src/
+├── pages/
+│   └── CostMonitor.tsx           # Main page (updated)
+├── components/
+│   ├── BudgetProgress.tsx        # New: Progress bar component
+│   ├── CostAlert.tsx             # New: Alert banner
+│   ├── DailyTrendChart.tsx       # New: 7-day chart
+│   ├── OperationBreakdown.tsx    # New: Operation costs
+│   └── ModelBreakdown.tsx        # New: Model costs
+```
+
+### BudgetProgress Component
+
+Create `context-owl-ui/src/components/BudgetProgress.tsx`:
+
+```typescript
+import React from 'react';
+
+interface BudgetProgressProps {
+  monthToDate: number;
+  target: number;
+  daysElapsed: number;
+  daysInMonth: number;
+}
+
+export const BudgetProgress: React.FC<BudgetProgressProps> = ({
+  monthToDate,
+  target,
+  daysElapsed,
+  daysInMonth
+}) => {
+  const percentage = (monthToDate / target) * 100;
+  const projectedMonthly = (monthToDate / daysElapsed) * daysInMonth;
+  
+  // Determine status
+  let status: 'success' | 'warning' | 'danger' = 'success';
+  let statusText = 'On Track';
+  let statusEmoji = '🟢';
+  
+  if (projectedMonthly > target) {
+    status = 'danger';
+    statusText = 'Over Budget';
+    statusEmoji = '🔴';
+  } else if (projectedMonthly > target * 0.8) {
+    status = 'warning';
+    statusText = 'Warning';
+    statusEmoji = '🟡';
+  }
+  
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-2xl font-bold">Monthly Budget</h2>
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">{statusEmoji}</span>
+          <span className={`text-lg font-semibold ${
+            status === 'success' ? 'text-green-600' :
+            status === 'warning' ? 'text-yellow-600' :
+            'text-red-600'
+          }`}>
+            {statusText}
+          </span>
+        </div>
+      </div>
+      
+      {/* Progress Bar */}
+      <div className="mb-4">
+        <div className="flex justify-between mb-2">
+          <span className="text-sm text-gray-600">
+            ${monthToDate.toFixed(2)} of ${target.toFixed(2)}
+          </span>
+          <span className="text-sm text-gray-600">
+            {percentage.toFixed(1)}%
+          </span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-4">
+          <div
+            className={`h-4 rounded-full transition-all ${
+              status === 'success' ? 'bg-green-500' :
+              status === 'warning' ? 'bg-yellow-500' :
+              'bg-red-500'
+            }`}
+            style={{ width: `${Math.min(percentage, 100)}%` }}
+          />
+        </div>
+      </div>
+      
+      {/* Stats Grid */}
+      <div className="grid grid-cols-3 gap-4 mt-4">
+        <div className="text-center">
+          <div className="text-sm text-gray-600">Days Elapsed</div>
+          <div className="text-2xl font-bold">{daysElapsed}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-sm text-gray-600">Days Remaining</div>
+          <div className="text-2xl font-bold">{daysInMonth - daysElapsed}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-sm text-gray-600">Projected Monthly</div>
+          <div className={`text-2xl font-bold ${
+            projectedMonthly > target ? 'text-red-600' : 'text-green-600'
+          }`}>
+            ${projectedMonthly.toFixed(2)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+
+### CostAlert Component
+
+Create `context-owl-ui/src/components/CostAlert.tsx`:
+
+```typescript
+import React from 'react';
+import { AlertTriangle } from 'lucide-react';
+
+interface CostAlertProps {
+  dailyCost: number;
+  projectedMonthly: number;
+  target: number;
+}
+
+export const CostAlert: React.FC<CostAlertProps> = ({
+  dailyCost,
+  projectedMonthly,
+  target
+}) => {
+  const DAILY_THRESHOLD = 0.50;  // $0.50 per day
+  
+  const showDailyAlert = dailyCost > DAILY_THRESHOLD;
+  const showMonthlyAlert = projectedMonthly > target;
+  
+  if (!showDailyAlert && !showMonthlyAlert) {
+    return null;
+  }
+  
+  return (
+    <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 mb-6">
+      <div className="flex items-start">
+        <AlertTriangle className="h-6 w-6 text-red-500 mr-3 mt-0.5" />
+        <div className="flex-1">
+          <h3 className="text-lg font-semibold text-red-800 dark:text-red-200 mb-2">
+            Cost Alert
+          </h3>
+          <ul className="list-disc list-inside space-y-1 text-red-700 dark:text-red-300">
+            {showDailyAlert && (
+              <li>
+                Daily cost (${dailyCost.toFixed(2)}) exceeds ${DAILY_THRESHOLD.toFixed(2)} threshold
+              </li>
+            )}
+            {showMonthlyAlert && (
+              <li>
+                Projected monthly cost (${projectedMonthly.toFixed(2)}) exceeds ${target.toFixed(2)} budget
+              </li>
+            )}
+          </ul>
+          <div className="mt-3 text-sm text-red-600 dark:text-red-400">
+            <strong>Recommended actions:</strong>
+            <ul className="list-disc list-inside mt-1">
+              <li>Review cache hit rate (target: >85%)</li>
+              <li>Check for unexpected high-volume operations</li>
+              <li>Consider reducing briefing frequency temporarily</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+
+### DailyTrendChart Component
+
+Create `context-owl-ui/src/components/DailyTrendChart.tsx`:
+
+```typescript
+import React from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+interface DailyData {
+  date: string;
+  total_cost: number;
+  cache_hit_rate: number;
+}
+
+interface DailyTrendChartProps {
+  data: DailyData[];
+}
+
+export const DailyTrendChart: React.FC<DailyTrendChartProps> = ({ data }) => {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+      <h2 className="text-xl font-bold mb-4">Daily Cost Trend (Last 7 Days)</h2>
+      <ResponsiveContainer width="100%" height={300}>
+        <LineChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis 
+            dataKey="date" 
+            tickFormatter={(date) => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          />
+          <YAxis 
+            label={{ value: 'Cost (USD)', angle: -90, position: 'insideLeft' }}
+            tickFormatter={(value) => `$${value.toFixed(2)}`}
+          />
+          <Tooltip 
+            formatter={(value: number) => [`$${value.toFixed(4)}`, 'Cost']}
+            labelFormatter={(label) => new Date(label).toLocaleDateString()}
+          />
+          <Line 
+            type="monotone" 
+            dataKey="total_cost" 
+            stroke="#3b82f6" 
+            strokeWidth={2}
+            dot={{ fill: '#3b82f6', r: 4 }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+```
+
+### Updated CostMonitor Page
+
+Update `context-owl-ui/src/pages/CostMonitor.tsx`:
+
+```typescript
+import React, { useEffect, useState } from 'react';
+import { BudgetProgress } from '../components/BudgetProgress';
+import { CostAlert } from '../components/CostAlert';
+import { DailyTrendChart } from '../components/DailyTrendChart';
+import { adminApi } from '../api/admin';
+
+const BUDGET_TARGET = 10.00;  // $10/month target
+
+export const CostMonitor: React.FC = () => {
+  const [summary, setSummary] = useState(null);
+  const [dailyCosts, setDailyCosts] = useState([]);
+  const [cacheStats, setCacheStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch all data in parallel
+      const [summaryData, dailyData, cacheData] = await Promise.all([
+        adminApi.getCostSummary(),
+        adminApi.getDailyCosts(7),
+        adminApi.getCacheStats()
+      ]);
+      
+      setSummary(summaryData);
+      setDailyCosts(dailyData.daily_costs);
+      setCacheStats(cacheData);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load cost data');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Initial load
+  useEffect(() => {
+    fetchData();
+  }, []);
+  
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, []);
+  
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-lg">Loading cost data...</div>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <p className="text-red-800">{error}</p>
+      </div>
+    );
+  }
+  
+  const daysInMonth = new Date(
+    new Date().getFullYear(),
+    new Date().getMonth() + 1,
+    0
+  ).getDate();
+  
+  return (
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold">Cost Monitor</h1>
+      
+      {/* Alert Banner */}
+      <CostAlert
+        dailyCost={dailyCosts[dailyCosts.length - 1]?.total_cost || 0}
+        projectedMonthly={summary.projected_monthly}
+        target={BUDGET_TARGET}
+      />
+      
+      {/* Budget Progress */}
+      <BudgetProgress
+        monthToDate={summary.month_to_date}
+        target={BUDGET_TARGET}
+        daysElapsed={summary.days_elapsed}
+        daysInMonth={daysInMonth}
+      />
+      
+      {/* Daily Trend Chart */}
+      <DailyTrendChart data={dailyCosts} />
+      
+      {/* Breakdowns Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Operation Breakdown */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+          <h2 className="text-xl font-bold mb-4">Cost by Operation</h2>
+          <div className="space-y-3">
+            {Object.entries(summary.breakdown_by_operation).map(([op, data]) => (
+              <div key={op} className="flex justify-between items-center">
+                <span className="text-sm font-medium">{op}</span>
+                <div className="text-right">
+                  <div className="font-bold">${data.cost.toFixed(4)}</div>
+                  <div className="text-xs text-gray-600">
+                    {data.calls} calls ({data.cached_calls} cached)
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Cache Stats */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+          <h2 className="text-xl font-bold mb-4">Cache Performance</h2>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium">Hit Rate</span>
+              <div className="text-2xl font-bold text-green-600">
+                {summary.cache_hit_rate_percent.toFixed(1)}%
+              </div>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium">Cache Hits</span>
+              <div className="text-lg font-semibold">
+                {summary.cached_calls.toLocaleString()}
+              </div>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium">Total Calls</span>
+              <div className="text-lg font-semibold">
+                {summary.total_calls.toLocaleString()}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+
+### API Client
+
+Ensure `context-owl-ui/src/api/admin.ts` has these methods:
+
+```typescript
+export const adminApi = {
+  async getCostSummary() {
+    const response = await apiClient.get('/admin/api-costs/summary');
+    return response.data;
+  },
+  
+  async getDailyCosts(days: number = 7) {
+    const response = await apiClient.get(`/admin/api-costs/daily?days=${days}`);
+    return response.data;
+  },
+  
+  async getCacheStats() {
+    const response = await apiClient.get('/admin/cache/stats');
+    return response.data;
+  }
+};
+```
+
+### Testing Checklist
+
+- [ ] Budget progress bar displays correctly
+- [ ] Alert shows when thresholds exceeded
+- [ ] Daily chart renders with data
+- [ ] Operation breakdown shows all operations
+- [ ] Cache hit rate displays
+- [ ] Auto-refresh works (30s interval)
+- [ ] Mobile responsive
+- [ ] Loading states work
+- [ ] Error states work
+- [ ] Dark mode support
+
+## Completion Summary
+*To be filled in after implementation*
+
+- Actual complexity:
+- Key UI decisions:
+- User feedback:
+- Performance notes:

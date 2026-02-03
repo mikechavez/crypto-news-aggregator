@@ -11,6 +11,7 @@ This is the main orchestration service that:
 Architecture: Memory-Augmented ReAct + Self-Refine (single agent)
 """
 
+import asyncio
 import json
 import logging
 import httpx
@@ -97,6 +98,15 @@ class BriefingAgent:
 
         self.memory_manager = get_memory_manager()
         self.pattern_detector = get_pattern_detector()
+        self.cost_tracker = None  # Lazy initialization
+
+    async def _get_cost_tracker(self):
+        """Get or initialize cost tracker."""
+        if self.cost_tracker is None:
+            from crypto_news_aggregator.services.cost_tracker import CostTracker
+            db = await mongo_manager.get_async_database()
+            self.cost_tracker = CostTracker(db)
+        return self.cost_tracker
 
     async def generate_briefing(
         self,
@@ -729,7 +739,30 @@ Return ONLY valid JSON in the same format as before."""
                     if model != DEFAULT_MODEL:
                         logger.info(f"Using fallback model: {model}")
 
-                    return data.get("content", [{}])[0].get("text", "")
+                    # Extract response text
+                    text = data.get("content", [{}])[0].get("text", "")
+
+                    # Track cost (async, non-blocking)
+                    try:
+                        usage = data.get("usage", {})
+                        input_tokens = usage.get("input_tokens", 0)
+                        output_tokens = usage.get("output_tokens", 0)
+
+                        if input_tokens > 0 or output_tokens > 0:
+                            tracker = await self._get_cost_tracker()
+                            asyncio.create_task(
+                                tracker.track_call(
+                                    operation="briefing_generation",
+                                    model=model,
+                                    input_tokens=input_tokens,
+                                    output_tokens=output_tokens,
+                                    cached=False
+                                )
+                            )
+                    except Exception as e:
+                        logger.error(f"Cost tracking failed: {e}")
+
+                    return text
 
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 403:

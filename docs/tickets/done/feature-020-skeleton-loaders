@@ -1,0 +1,529 @@
+# [FEATURE-020] Skeleton Loaders - Complete Implementation Guide
+
+**Status:** Ready for Implementation  
+**Priority:** P2 (Medium - UX Enhancement)  
+**Estimated Effort:** 1-1.5 hours  
+**Sprint:** Sprint 4 (UX Enhancements)  
+**Depends On:** FEATURE-019 (Article Pagination)
+
+---
+
+## Overview
+
+This ticket replaces plain "Loading..." text with animated skeleton placeholders during article loading. Skeleton loaders provide visual feedback that content is loading, making the perceived wait time feel shorter and the interface more responsive.
+
+**Current Behavior:**
+- User clicks "Load More"
+- Sees "Loading..." text
+- Blank space while waiting
+- Feels slow and uncertain
+
+**New Behavior:**
+- User clicks "Load More"
+- Sees 5 animated skeleton placeholders immediately
+- Visual feedback that content is loading
+- Feels fast and responsive
+- Skeletons replaced with real articles when loaded
+
+---
+
+## Implementation Instructions
+
+### Step 1: Create ArticleSkeleton Component
+
+**Create New File:** `context-owl-ui/src/components/ArticleSkeleton.tsx`
+
+**Full File Contents:**
+```typescript
+/**
+ * ArticleSkeleton Component
+ * 
+ * Animated skeleton placeholder for article cards during loading.
+ * Matches the layout and dimensions of actual article cards.
+ */
+export function ArticleSkeleton() {
+  return (
+    <div className="bg-gray-50 dark:bg-dark-hover p-3 rounded animate-pulse">
+      {/* Title skeleton - 75% width, varies for more natural look */}
+      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
+      
+      {/* Metadata skeleton - Source, bullet, timestamp */}
+      <div className="flex items-center gap-2">
+        {/* Source name */}
+        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-20"></div>
+        {/* Bullet separator */}
+        <div className="h-3 w-1 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        {/* Timestamp */}
+        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
+      </div>
+    </div>
+  );
+}
+```
+
+**Explanation:** This component creates a gray box that matches the layout of an actual article card with a pulsing animation. It has:
+- A title bar (75% width, 4px height)
+- Metadata row with source, bullet, and timestamp (varying widths)
+- Built-in `animate-pulse` from Tailwind CSS
+- Dark mode support
+
+**Note:** Tailwind's `animate-pulse` class is already configured in your project and provides a smooth opacity fade in/out effect.
+
+---
+
+### Step 2: Import ArticleSkeleton in Narratives.tsx
+
+**File:** `context-owl-ui/src/pages/Narratives.tsx`
+
+**Location:** At the top with other imports (around line 1-10)
+
+**FIND THIS:**
+```typescript
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Sparkles, TrendingUp, Flame, Zap, Star, Wind } from 'lucide-react';
+import { narrativesAPI } from '../api';
+import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
+import { Loading } from '../components/Loading';
+import { ErrorMessage } from '../components/ErrorMessage';
+import { formatRelativeTime, formatNumber } from '../lib/formatters';
+import { cn } from '../lib/cn';
+```
+
+**ADD AFTER LAST IMPORT:**
+```typescript
+import { ArticleSkeleton } from '../components/ArticleSkeleton';
+```
+
+**Complete Import Section Should Look Like:**
+```typescript
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Sparkles, TrendingUp, Flame, Zap, Star, Wind } from 'lucide-react';
+import { narrativesAPI } from '../api';
+import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
+import { Loading } from '../components/Loading';
+import { ErrorMessage } from '../components/ErrorMessage';
+import { formatRelativeTime, formatNumber } from '../lib/formatters';
+import { cn } from '../lib/cn';
+import { ArticleSkeleton } from '../components/ArticleSkeleton';
+```
+
+---
+
+### Step 3: Replace Initial Loading Text with Skeleton
+
+**File:** `context-owl-ui/src/pages/Narratives.tsx`
+
+**Location:** In the expanded articles section (around line 220)
+
+**FIND THIS:**
+```typescript
+{isLoadingArticles ? (
+  <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+    Loading articles...
+  </div>
+) : articles.length > 0 ? (
+```
+
+**REPLACE WITH:**
+```typescript
+{isLoadingArticles ? (
+  <div className="mt-3 space-y-2">
+    {[...Array(5)].map((_, i) => (
+      <ArticleSkeleton key={i} />
+    ))}
+  </div>
+) : articles.length > 0 ? (
+```
+
+**Explanation:** Instead of showing "Loading articles...", we now render 5 skeleton placeholders. The `[...Array(5)]` creates an array with 5 elements, and we map over it to render 5 `<ArticleSkeleton />` components. The `key={i}` is required by React for list items.
+
+---
+
+### Step 4: Add Skeleton During "Load More" Loading
+
+**File:** `context-owl-ui/src/pages/Narratives.tsx`
+
+**Location:** After the articles.map() block, before the "Load More" button (around line 250)
+
+**FIND THIS:**
+```typescript
+{articles.map((article, articleIdx) => {
+  console.log('[DEBUG] Rendering article:', articleIdx, article.title);
+  return (
+  <div key={articleIdx} className="text-sm bg-gray-50 dark:bg-dark-hover p-3 rounded">
+    <a
+      href={article.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline font-medium block mb-1"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {article.title}
+    </a>
+    <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs">
+      <span className="capitalize">{article.source}</span>
+      <span>•</span>
+      <span>{formatRelativeTime(article.published_at)}</span>
+    </div>
+  </div>
+  );
+})}
+
+{/* Load More Button */}
+{state?.hasMore && (
+```
+
+**REPLACE WITH:**
+```typescript
+{articles.map((article, articleIdx) => {
+  console.log('[DEBUG] Rendering article:', articleIdx, article.title);
+  return (
+  <div key={articleIdx} className="text-sm bg-gray-50 dark:bg-dark-hover p-3 rounded">
+    <a
+      href={article.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline font-medium block mb-1"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {article.title}
+    </a>
+    <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs">
+      <span className="capitalize">{article.source}</span>
+      <span>•</span>
+      <span>{formatRelativeTime(article.published_at)}</span>
+    </div>
+  </div>
+  );
+})}
+
+{/* Show skeleton loaders while loading more articles */}
+{loadingMore.has(narrativeId) && (
+  <div className="mt-2 space-y-2">
+    {[...Array(5)].map((_, i) => (
+      <ArticleSkeleton key={`loading-${i}`} />
+    ))}
+  </div>
+)}
+
+{/* Load More Button */}
+{state?.hasMore && (
+```
+
+**Explanation:** When the user clicks "Load More", we show 5 skeleton placeholders below the existing articles while the new articles are being fetched. The key uses `loading-${i}` to ensure it's unique from the initial loading skeletons.
+
+---
+
+## Complete Component Structure
+
+Here's what the articles section should look like after all changes:
+
+```typescript
+{isExpanded && (() => {
+  console.log('[DEBUG] Rendering expanded article section');
+  return (
+  <div className="mt-3 space-y-2">
+    {/* Initial loading state - show skeletons */}
+    {isLoadingArticles ? (
+      <div className="mt-3 space-y-2">
+        {[...Array(5)].map((_, i) => (
+          <ArticleSkeleton key={i} />
+        ))}
+      </div>
+    ) : articles.length > 0 ? (
+      <>
+        {/* Render actual articles */}
+        {articles.map((article, articleIdx) => (
+          <div key={articleIdx} className="text-sm bg-gray-50 dark:bg-dark-hover p-3 rounded">
+            <a
+              href={article.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline font-medium block mb-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {article.title}
+            </a>
+            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs">
+              <span className="capitalize">{article.source}</span>
+              <span>•</span>
+              <span>{formatRelativeTime(article.published_at)}</span>
+            </div>
+          </div>
+        ))}
+        
+        {/* Show skeleton loaders while loading more */}
+        {loadingMore.has(narrativeId) && (
+          <div className="mt-2 space-y-2">
+            {[...Array(5)].map((_, i) => (
+              <ArticleSkeleton key={`loading-${i}`} />
+            ))}
+          </div>
+        )}
+        
+        {/* Load More Button */}
+        {state?.hasMore && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              loadMoreArticles(narrativeId);
+            }}
+            disabled={loadingMore.has(narrativeId)}
+            className="w-full mt-4 py-3 px-4 rounded-lg border-2 border-blue-500 
+                       text-blue-600 dark:text-blue-400 hover:bg-blue-50 
+                       dark:hover:bg-blue-900/20 transition-all duration-200
+                       disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+          >
+            {loadingMore.has(narrativeId) 
+              ? 'Loading...' 
+              : `Load 20 More Articles (${state.totalCount - state.loadedArticles.length} remaining)`
+            }
+          </button>
+        )}
+      </>
+    ) : (
+      <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+        No articles available
+      </div>
+    )}
+  </div>
+  );
+})()}
+```
+
+---
+
+## Testing Checklist
+
+### Visual Testing
+
+**Test Case 1: Initial Load Skeleton**
+1. Navigate to Narratives page
+2. Find a narrative with articles
+3. Click to expand
+4. ✅ Verify: 5 skeleton placeholders appear immediately
+5. ✅ Verify: Skeletons have gray background
+6. ✅ Verify: Skeletons have pulsing animation
+7. ✅ Verify: Skeletons match article card size
+8. Wait for articles to load
+9. ✅ Verify: Skeletons replaced with real articles smoothly
+10. ✅ Verify: No layout shift during replacement
+
+**Test Case 2: Load More Skeleton**
+1. Expand a narrative with >20 articles
+2. Wait for initial 20 articles to load
+3. Click "Load More"
+4. ✅ Verify: 5 skeleton placeholders appear below existing articles
+5. ✅ Verify: Existing 20 articles remain visible
+6. ✅ Verify: Button shows "Loading..." and is disabled
+7. ✅ Verify: Skeletons have pulse animation
+8. Wait for new articles to load
+9. ✅ Verify: Skeletons replaced with articles 21-40
+10. ✅ Verify: No visual glitches
+
+**Test Case 3: Dark Mode**
+1. Switch to dark mode (if not already)
+2. Expand a narrative
+3. ✅ Verify: Skeleton background is darker (dark:bg-gray-700)
+4. ✅ Verify: Skeleton is visible (not too dark)
+5. ✅ Verify: Pulse animation works in dark mode
+6. ✅ Verify: Colors match dark theme
+
+**Test Case 4: Light Mode**
+1. Switch to light mode
+2. Expand a narrative
+3. ✅ Verify: Skeleton background is light gray (bg-gray-200)
+4. ✅ Verify: Skeleton is visible (not too bright)
+5. ✅ Verify: Pulse animation works in light mode
+6. ✅ Verify: Colors match light theme
+
+**Test Case 5: Rapid Expand/Collapse**
+1. Rapidly click to expand a narrative
+2. Immediately collapse before loading completes
+3. Re-expand quickly
+4. ✅ Verify: No stuck skeletons
+5. ✅ Verify: Skeletons appear/disappear correctly
+6. ✅ Verify: No visual glitches
+
+**Test Case 6: Multiple Narratives**
+1. Expand 3 different narratives quickly
+2. ✅ Verify: Each shows skeletons independently
+3. ✅ Verify: Skeletons don't interfere with each other
+4. Wait for all to load
+5. ✅ Verify: All replace correctly
+
+---
+
+### Responsive Testing
+
+**Test Case 7: Mobile (iPhone 13)**
+1. Open on iPhone 13 or similar
+2. Expand narrative
+3. ✅ Verify: Skeletons display correctly
+4. ✅ Verify: Animation is smooth (no jank)
+5. ✅ Verify: Touch interactions work
+
+**Test Case 8: Tablet (iPad)**
+1. Open on iPad or similar
+2. Expand narrative
+3. ✅ Verify: Skeletons scale appropriately
+4. ✅ Verify: Pulse animation smooth
+
+**Test Case 9: Desktop (1920x1080)**
+1. Open on large desktop
+2. Expand narrative
+3. ✅ Verify: Skeletons don't look stretched
+4. ✅ Verify: Animation performance good
+
+---
+
+### Performance Testing
+
+**Test Case 10: Animation Performance**
+1. Expand narrative with slow network (throttle to Slow 3G)
+2. ✅ Verify: Skeletons appear instantly
+3. ✅ Verify: Pulse animation is smooth (60fps)
+4. ✅ Verify: No stuttering or lag
+5. ✅ Verify: Page remains responsive during animation
+
+**Test Case 11: Multiple Skeletons**
+1. Expand 5 narratives simultaneously
+2. ✅ Verify: All skeletons animate smoothly
+3. ✅ Verify: No performance degradation
+4. ✅ Verify: CPU usage stays reasonable
+
+---
+
+### Browser Compatibility
+
+Test in the following browsers:
+- ✅ Chrome (latest)
+- ✅ Firefox (latest)
+- ✅ Safari (latest)
+- ✅ Edge (latest)
+- ✅ Mobile Safari (iOS)
+- ✅ Mobile Chrome (Android)
+
+---
+
+## Acceptance Criteria
+
+- ✅ ArticleSkeleton component created
+- ✅ Skeleton matches article card layout (title + metadata)
+- ✅ Skeleton appears during initial narrative expansion
+- ✅ Skeleton appears when clicking "Load More"
+- ✅ Always shows 5 skeleton placeholders
+- ✅ Skeleton has animated pulse effect
+- ✅ Skeleton is responsive to light/dark mode
+- ✅ Skeleton disappears when real articles load
+- ✅ No layout shift when skeleton → articles
+- ✅ Loading feels faster and more responsive
+- ✅ Works correctly with pagination flow
+- ✅ No console errors
+- ✅ Smooth 60fps animation
+- ✅ Cross-browser compatible
+- ✅ Mobile responsive
+
+---
+
+## Optional Enhancement: Shimmer Effect
+
+If you want a more sophisticated shimmer effect instead of the basic pulse, here's an optional upgrade:
+
+### Enhanced Skeleton with Shimmer
+
+**File:** `context-owl-ui/src/components/ArticleSkeleton.tsx`
+
+**Replace entire file with:**
+```typescript
+/**
+ * ArticleSkeleton Component
+ * 
+ * Animated skeleton placeholder with shimmer effect.
+ * Provides a more sophisticated loading experience.
+ */
+export function ArticleSkeleton() {
+  return (
+    <div className="bg-gray-50 dark:bg-dark-hover p-3 rounded relative overflow-hidden">
+      {/* Shimmer overlay */}
+      <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/10 dark:via-white/5 to-transparent"></div>
+      
+      {/* Content skeletons */}
+      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
+      <div className="flex items-center gap-2">
+        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-20"></div>
+        <div className="h-3 w-1 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
+      </div>
+    </div>
+  );
+}
+```
+
+**File:** `context-owl-ui/tailwind.config.ts`
+
+**Find the theme section and add:**
+```typescript
+theme: {
+  extend: {
+    animation: {
+      shimmer: 'shimmer 2s infinite',
+    },
+    keyframes: {
+      shimmer: {
+        '100%': { transform: 'translateX(100%)' },
+      },
+    },
+  },
+}
+```
+
+**Explanation:** This creates a shimmer effect that sweeps across the skeleton from left to right continuously. It's more visually interesting than the basic pulse but requires Tailwind config changes.
+
+**Note:** Only implement this if you want the extra polish. The basic pulse version is perfectly fine and requires no config changes.
+
+---
+
+## Success Metrics
+
+After deployment, measure:
+- **Perceived load time:** Users should report loading "feels faster"
+- **Visual feedback:** 100% of loading states show skeleton
+- **No layout shift:** Skeleton dimensions match real articles
+- **Smooth transitions:** Skeleton → articles is seamless
+- **Dark mode compatibility:** Visible in both themes
+- **Performance:** 60fps animation on all devices
+
+---
+
+## Notes for Developer
+
+1. **Why 5 skeletons?** Matches the typical number of articles visible in the viewport. Shows enough feedback without overwhelming the UI.
+
+2. **Why animate-pulse?** Tailwind's built-in pulse animation is performant and works across all browsers. It fades opacity in/out subtly.
+
+3. **Layout dimensions:** The skeleton dimensions (h-4, h-3, w-3/4, etc.) are carefully chosen to match the actual article card layout, preventing layout shift.
+
+4. **Dark mode:** The `dark:bg-gray-700` ensures the skeleton is visible but not too bright in dark mode.
+
+5. **Performance:** CSS animations are hardware-accelerated, so 5 skeletons animating simultaneously has negligible performance impact.
+
+6. **Accessibility:** Skeletons are purely visual and don't require ARIA attributes since they're transient loading states.
+
+---
+
+## Related Tickets
+
+- **FEATURE-019:** Article Pagination (prerequisite - must be complete first)
+- **FEATURE-021:** Error Handling with Retry
+- **FEATURE-022:** Progress Indicator
+
+---
+
+**Implementation Time:** 45 minutes  
+**Testing Time:** 30 minutes  
+**Total:** 1-1.5 hours  
+
+**Status:** Ready for implementation - all code provided above
