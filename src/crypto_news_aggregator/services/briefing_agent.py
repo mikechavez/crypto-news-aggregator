@@ -131,8 +131,8 @@ class BriefingAgent:
             # Step 2: Generate initial briefing
             generated = await self._generate_with_llm(briefing_input)
 
-            # Step 3: Self-refine (quality check)
-            refined = await self._self_refine(generated, briefing_input)
+            # Step 3: Self-refine (quality check with multi-pass refinement)
+            refined = await self._self_refine(generated, briefing_input, max_iterations=2)
 
             # Step 4: Save briefing to database
             briefing_doc = await self._save_briefing(
@@ -316,45 +316,74 @@ class BriefingAgent:
         self,
         generated: GeneratedBriefing,
         briefing_input: BriefingInput,
+        max_iterations: int = 2,
     ) -> GeneratedBriefing:
         """
-        Self-refine the generated briefing for quality.
+        Self-refine the generated briefing for quality with iterative refinement.
 
-        This implements the self-refine pattern:
+        This implements the multi-pass self-refine pattern:
         1. Evaluate the initial output
         2. Identify issues
         3. Refine if needed
+        4. Repeat up to max_iterations times
+        5. Return best attempt
+
+        Args:
+            generated: Initial briefing output
+            briefing_input: Input data used for generation
+            max_iterations: Maximum refinement passes (default: 2)
+
+        Returns:
+            Refined briefing (may still have issues if max iterations hit)
         """
-        # Build critique prompt
-        critique_prompt = self._build_critique_prompt(generated, briefing_input)
+        current = generated
 
-        critique_response = await self._call_llm(
-            critique_prompt,
-            system_prompt="You are a crypto market analyst reviewing a briefing for quality.",
-            max_tokens=1024,
-        )
+        for iteration in range(max_iterations):
+            # Build critique prompt
+            critique_prompt = self._build_critique_prompt(current, briefing_input)
 
-        # Check if refinement is needed
-        needs_refinement = self._check_needs_refinement(critique_response)
+            critique_response = await self._call_llm(
+                critique_prompt,
+                system_prompt="You are a crypto market analyst reviewing a briefing for quality.",
+                max_tokens=1024,
+            )
 
-        if not needs_refinement:
-            logger.info("Briefing passed quality check, no refinement needed")
-            return generated
+            # Check if refinement is needed
+            needs_refinement = self._check_needs_refinement(critique_response)
 
-        logger.info("Briefing needs refinement, running refinement pass")
+            if not needs_refinement:
+                logger.info(f"Briefing passed quality check on iteration {iteration + 1}")
+                # Add iteration metadata
+                current.detected_patterns.append(f"Quality passed on iteration {iteration + 1}")
+                return current
 
-        # Build refinement prompt
-        refinement_prompt = self._build_refinement_prompt(
-            generated, critique_response, briefing_input
-        )
+            logger.info(f"Briefing needs refinement (iteration {iteration + 1}/{max_iterations})")
+            logger.debug(f"Critique: {critique_response[:200]}...")
 
-        refined_response = await self._call_llm(
-            refinement_prompt,
-            system_prompt=self._get_system_prompt(briefing_input.briefing_type),
-            max_tokens=4096,
-        )
+            # Build refinement prompt
+            refinement_prompt = self._build_refinement_prompt(
+                current, critique_response, briefing_input
+            )
 
-        return self._parse_briefing_response(refined_response)
+            refined_response = await self._call_llm(
+                refinement_prompt,
+                system_prompt=self._get_system_prompt(briefing_input.briefing_type),
+                max_tokens=4096,
+            )
+
+            current = self._parse_briefing_response(refined_response)
+
+        # Max iterations reached without passing quality check
+        logger.warning(f"Briefing refinement stopped at max iterations ({max_iterations})")
+
+        # Reduce confidence score if we hit max iterations
+        if current.confidence_score > 0.6:
+            current.confidence_score = 0.6
+
+        # Add metadata about refinement attempts
+        current.detected_patterns.append(f"Max refinement iterations ({max_iterations}) reached")
+
+        return current
 
     def _get_system_prompt(self, briefing_type: str) -> str:
         """Get the enhanced system prompt for briefing generation."""
@@ -722,6 +751,17 @@ Return ONLY valid JSON in the same format as before."""
     ) -> Dict[str, Any]:
         """Save the generated briefing to the database."""
         from bson import ObjectId
+        import re
+
+        # Extract iteration count from detected_patterns if present
+        iteration_count = 1
+        for pattern in generated.detected_patterns:
+            if "iteration" in pattern.lower():
+                # Extract number from patterns like "Quality passed on iteration 2"
+                match = re.search(r'iteration (\d+)', pattern.lower())
+                if match:
+                    iteration_count = int(match.group(1))
+                    break
 
         briefing_doc = {
             "type": briefing_type,
@@ -741,13 +781,14 @@ Return ONLY valid JSON in the same format as before."""
                 "pattern_count": len(briefing_input.patterns.all_patterns()),
                 "manual_input_count": len(briefing_input.memory.manual_inputs),
                 "model": DEFAULT_MODEL,
+                "refinement_iterations": iteration_count,  # NEW: Track iterations
             },
         }
 
         briefing_id = await insert_briefing(briefing_doc)
         briefing_doc["_id"] = ObjectId(briefing_id)
 
-        logger.info(f"Saved briefing {briefing_id}")
+        logger.info(f"Saved briefing {briefing_id} (iterations: {iteration_count})")
         return briefing_doc
 
     async def _save_patterns(
