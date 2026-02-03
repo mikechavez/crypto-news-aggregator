@@ -68,6 +68,12 @@ task_routes = {
 
 
 # Beat settings
+beat_schedule = {
+    # This will be populated by the Celery app after it's created
+    # to avoid circular imports
+}
+
+
 def get_beat_schedule():
     schedule = get_schedule()
     schedule.update(
