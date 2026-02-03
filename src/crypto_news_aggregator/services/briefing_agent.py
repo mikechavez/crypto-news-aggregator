@@ -34,6 +34,9 @@ from crypto_news_aggregator.services.pattern_detector import (
     get_pattern_detector,
     PatternSummary,
 )
+from crypto_news_aggregator.services.market_event_detector import (
+    get_market_event_detector,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +167,24 @@ class BriefingAgent:
         # Get current narratives
         narratives = await self._get_active_narratives()
         logger.info(f"Retrieved {len(narratives)} active narratives")
+
+        # Detect and include market shock events
+        detector = get_market_event_detector()
+        market_events = await detector.detect_market_events()
+
+        if market_events:
+            logger.info(f"Detected {len(market_events)} market shock events")
+
+            # Create/update narratives for each market event
+            for event in market_events:
+                await detector.create_or_update_market_event_narrative(event)
+
+            # Refresh narratives to include newly created market event narratives
+            narratives = await self._get_active_narratives()
+
+            # Boost market events in the narrative ranking
+            narratives = await detector.boost_market_event_in_briefing(narratives)
+            logger.info(f"Market events prioritized in narrative ranking")
 
         # Detect patterns
         patterns = await self.pattern_detector.detect_all_patterns(
