@@ -8,7 +8,7 @@
 
 Implement comprehensive LLM cost tracking with accurate monitoring dashboard to ensure monthly costs stay under $10 target.
 
-**Progress:** 1/4 tickets completed (FEATURE-028 ✅)
+**Progress:** 2/4 tickets completed (FEATURE-028 ✅, FEATURE-029 ✅)
 
 ---
 
@@ -73,25 +73,25 @@ class CostTracker:
 
 ### 2️⃣ FEATURE-029: LLM Integration - Core Services
 **Priority:** HIGH - Do Second
-**Status:** Backlog
-**File:** `/Users/mc/dev-projects/crypto-news-aggregator/docs/tickets/FEATURE-029-llm-integration.md`
-**Estimated:** 3 hours
-**Dependencies:** FEATURE-028
+**Status:** ✅ COMPLETED (2026-02-05)
+**File:** `/Users/mc/dev-projects/crypto-news-aggregator/docs/tickets/feature-029-llm-integration`
+**Estimated:** 3 hours | **Actual:** 2 hours
+**Dependencies:** FEATURE-028 ✅
 
-**What to implement:**
-- Modify `src/crypto_news_aggregator/llm/optimized_anthropic.py`
-  - Wrap all `messages.create()` calls with cost tracking
+**What was implemented:**
+- ✅ Modified `src/crypto_news_aggregator/llm/optimized_anthropic.py`
+  - Wrapped all API calls with new CostTracker from FEATURE-028
   - Extract token counts from `response.usage`
   - Use `asyncio.create_task()` for non-blocking tracking
 
-- Modify `src/crypto_news_aggregator/services/briefing_agent.py`
-  - Add `_get_cost_tracker()` method
+- ✅ Modified `src/crypto_news_aggregator/services/briefing_agent.py`
+  - Added `_get_cost_tracker()` method
   - Track all LLM calls with operation="briefing_generation"
 
-- Modify `src/crypto_news_aggregator/services/narrative_themes.py`
-  - Ensure operation="narrative_summary" passed to LLM calls
-
-- Create test suite: `tests/integration/test_llm_cost_tracking.py`
+- ✅ Created test suite: `tests/integration/test_llm_cost_tracking.py`
+  - 9 tests, all passing
+  - Covers all integration scenarios
+  - Tests operation labeling, caching, cost calculation
 
 **Integration Pattern:**
 ```python
