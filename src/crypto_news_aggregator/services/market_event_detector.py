@@ -107,9 +107,15 @@ class MarketEventDetector:
         estimated_volume = 0
 
         for article in articles:
-            # Collect entities
+            # Collect entities (entities can be strings or dicts with 'name' field)
             if article.get("entities"):
-                entities.update(article["entities"][:5])
+                for entity in article["entities"][:5]:
+                    if isinstance(entity, dict):
+                        entity_name = entity.get("name") or entity.get("entity", "")
+                    else:
+                        entity_name = str(entity)
+                    if entity_name:
+                        entities.add(entity_name)
 
             # Estimate volume from content (look for dollar amounts)
             title = article.get("title", "")
@@ -175,7 +181,13 @@ class MarketEventDetector:
         entities = set()
         for article in articles:
             if article.get("entities"):
-                entities.update(article["entities"][:3])
+                for entity in article["entities"][:3]:
+                    if isinstance(entity, dict):
+                        entity_name = entity.get("name") or entity.get("entity", "")
+                    else:
+                        entity_name = str(entity)
+                    if entity_name:
+                        entities.add(entity_name)
 
         if len(entities) < 2:  # Need at least 2 major entities affected
             return None
@@ -214,7 +226,13 @@ class MarketEventDetector:
 
         for article in articles:
             if article.get("entities"):
-                entities.update(article["entities"][:3])
+                for entity in article["entities"][:3]:
+                    if isinstance(entity, dict):
+                        entity_name = entity.get("name") or entity.get("entity", "")
+                    else:
+                        entity_name = str(entity)
+                    if entity_name:
+                        entities.add(entity_name)
 
             # Extract loss amounts
             title = article.get("title", "")
