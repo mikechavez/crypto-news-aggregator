@@ -1,116 +1,249 @@
-# Session Start Guide - Sprint 5
-**Last Updated**: 2026-02-04
-**Sprint**: Sprint 5 - Briefing System Launch
+# Session Start Guide - Sprint 6
+**Last Updated**: 2026-02-05
+**Sprint**: Sprint 6 - Cost Tracking & Monitoring
 
 ---
 
 ## 🎯 Current Sprint Goal
 
-Launch automated briefing generation with high-quality analysis twice daily (8 AM/8 PM EST).
+Implement comprehensive LLM cost tracking with accurate monitoring dashboard to ensure monthly costs stay under $10 target.
 
-**Progress:** 2/3 tickets completed (FEATURE-027 ✅, FEATURE-025 ✅)
+**Progress:** 1/4 tickets completed (FEATURE-028 ✅)
 
 ---
 
 ## ✅ What's Already Working
 
-**Briefing Infrastructure:**
-- Briefing agent service complete (`src/crypto_news_aggregator/services/briefing_agent.py`)
-- API endpoints live (`/api/v1/briefing/latest`, `/generate`, `/next`)
-- Frontend page ready (`context-owl-ui/src/pages/Briefing.tsx`)
-- Memory manager integrated (feedback, patterns, history)
-- Pattern detector working
-- Manual generation via `/generate` endpoint functional
+**Sprint 5 Completed (2026-02-04):**
+- Briefing automation live (8 AM/8 PM EST)
+- Multi-pass refinement working (avg 1-2 iterations)
+- Quality prompts enhanced (no vague references)
+- All tests passing (21/21)
+- Ready for Railway deployment
 
-**Current Capabilities:**
-- Generate morning/evening briefings on demand
-- LLM integration (Sonnet 4.5) with fallback chain
-- Single-pass self-refine quality check
-- Narrative selection with recency scoring
-- Anti-hallucination prompts
-- Cost tracking (<$10/month for all LLM operations)
+**Current Infrastructure:**
+- Briefing agent service complete and automated
+- Admin API endpoints exist (`/admin/api-costs/*`, `/admin/cache/*`)
+- Cost Monitor UI exists (no real data)
+- MongoDB `api_costs` collection created (empty)
+- MongoDB `llm_cache` collection created (for Phase 3)
+
+**Current Problem:**
+- ❌ Cost tracking not implemented (only in-memory Counter)
+- ❌ No cost calculations (just call counts)
+- ❌ No MongoDB writes (zero persistence)
+- ❌ Dashboard shows no data
+- ❌ Zero visibility into actual spending
 
 ---
 
-## 🎫 Sprint 5 Tickets (Implementation Order)
+## 🎫 Sprint 6 Tickets (Implementation Order)
 
-### 1️⃣ ✅ FEATURE-027: Prompt Quality Enhancement - COMPLETED
-**Priority:** HIGH - DONE ✅
-**Status:** Completed 2026-02-01
-**Commit:** `228fb48`
+### 1️⃣ FEATURE-028: Cost Tracking Service
+**Priority:** HIGH - Do First
+**Status:** ✅ COMPLETED
+**File:** `/Users/mc/dev-projects/crypto-news-aggregator/docs/tickets/feature-028-cost-tracking-service`
+**Estimated:** 4 hours (Completed in 1 hour)
 
 **What was implemented:**
-- ✅ Enhanced `_get_system_prompt()` with entity reference rules
-- ✅ Added "why it matters" enforcement
-- ✅ Included good/bad example demonstrations
-- ✅ Enhanced `_build_critique_prompt()` to check for vague entity references
-- ✅ Created test file `tests/test_briefing_prompts.py` (3 tests passing)
+- ✅ Created `src/crypto_news_aggregator/services/cost_tracker.py`
+- ✅ Anthropic pricing table (Haiku, Sonnet, Opus)
+- ✅ Token-based cost calculation (6-decimal precision)
+- ✅ MongoDB persistence to `api_costs` collection
+- ✅ Cache hit/miss tracking (cached=True = $0.00)
+- ✅ Test suite: `tests/services/test_cost_tracker.py` (8 tests, all passing)
 
-**Files modified:**
-- `src/crypto_news_aggregator/services/briefing_agent.py` (lines 338-424, 497-543)
-- Created: `tests/services/test_briefing_prompts.py`
+**Key Classes:**
+```python
+class CostTracker:
+    PRICING = {...}  # Anthropic pricing per 1M tokens
+    
+    async def track_call(
+        operation: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cached: bool = False
+    ) -> float
+```
 
----
-
-### 2️⃣ ✅ FEATURE-025: Multi-Pass Refinement - COMPLETED
-**Priority:** HIGH - DONE ✅
-**Status:** Completed 2026-02-04
-**Commits:** `84d0a3f`, `abad1e7`
-
-**What was implemented:**
-- ✅ Modified `_self_refine()` with iterative loop (max_iterations: default 2)
-- ✅ Implemented early stopping when quality check passes
-- ✅ Added iteration tracking to detected_patterns
-- ✅ Updated `_save_briefing()` to track refinement_iterations in metadata
-- ✅ Confidence score capped at 0.6 if max iterations hit
-- ✅ Created test file `tests/test_briefing_multi_pass.py` (3 tests passing)
-- ✅ All existing tests still passing (20/20 total)
-
-**Files modified:**
-- `src/crypto_news_aggregator/services/briefing_agent.py` (multi-pass implementation)
-- Created: `tests/test_briefing_multi_pass.py`
-- Fixed: `src/crypto_news_aggregator/services/market_event_detector.py` (entity handling)
-
-**Testing Results:**
-- ✅ test_refinement_passes_on_first_iteration (1 LLM call)
-- ✅ test_refinement_iterates_until_max (4 LLM calls for max=2)
-- ✅ test_refinement_passes_on_second_iteration (3 LLM calls, stops early)
+**Why first:** Foundation for all cost tracking. Must be in place before integration.
 
 ---
 
-### 3️⃣ FEATURE-026: Celery Beat Automation
-**Priority:** HIGH - Do Third
-**File:** `/mnt/user-data/outputs/FEATURE-026-celery-beat-automation.md`
+### 2️⃣ FEATURE-029: LLM Integration - Core Services
+**Priority:** HIGH - Do Second
+**Status:** Backlog
+**File:** `/Users/mc/dev-projects/crypto-news-aggregator/docs/tickets/FEATURE-029-llm-integration.md`
+**Estimated:** 3 hours
+**Dependencies:** FEATURE-028
 
 **What to implement:**
-- Create new file `src/crypto_news_aggregator/tasks/briefing_tasks.py`
-- Modify `src/crypto_news_aggregator/tasks/beat_schedule.py` (add 2 new tasks)
-- Modify `src/crypto_news_aggregator/tasks/celery_config.py` (register tasks)
-- Configure Railway multi-service deployment (web + worker + beat)
-- Create test file `tests/test_briefing_tasks.py`
+- Modify `src/crypto_news_aggregator/llm/optimized_anthropic.py`
+  - Wrap all `messages.create()` calls with cost tracking
+  - Extract token counts from `response.usage`
+  - Use `asyncio.create_task()` for non-blocking tracking
 
-**Schedules:**
-- Morning: 8:00 AM EST = 13:00 UTC
-- Evening: 8:00 PM EST = 01:00 UTC (next day)
+- Modify `src/crypto_news_aggregator/services/briefing_agent.py`
+  - Add `_get_cost_tracker()` method
+  - Track all LLM calls with operation="briefing_generation"
 
-**Why third:** Deploy automation after quality systems in place
+- Modify `src/crypto_news_aggregator/services/narrative_themes.py`
+  - Ensure operation="narrative_summary" passed to LLM calls
+
+- Create test suite: `tests/integration/test_llm_cost_tracking.py`
+
+**Integration Pattern:**
+```python
+# After LLM call
+tracker = await self._get_cost_tracker()
+asyncio.create_task(
+    tracker.track_call(
+        operation="entity_extraction",
+        model=model,
+        input_tokens=response.usage.input_tokens,
+        output_tokens=response.usage.output_tokens,
+        cached=False
+    )
+)
+```
+
+**Why second:** Integrates tracker with main LLM operations.
+
+---
+
+### 3️⃣ FEATURE-030: Cost Verification & Testing
+**Priority:** HIGH - Do Third
+**Status:** Backlog
+**File:** `/Users/mc/dev-projects/crypto-news-aggregator/docs/tickets/FEATURE-030-verification-testing.md`
+**Estimated:** 2 hours
+**Dependencies:** FEATURE-028, FEATURE-029
+
+**What to implement:**
+- Create `scripts/verify_cost_tracking.py`
+  - Make test LLM call
+  - Display tracked data
+  - Verify cost calculations
+  - Show monthly summary
+
+- Create `tests/integration/test_cost_tracking_e2e.py`
+  - End-to-end tracking pipeline tests
+  - Database write verification
+  - Cost aggregation accuracy
+
+**Verification Checklist:**
+```bash
+# 1. Run verification script
+poetry run python scripts/verify_cost_tracking.py
+
+# 2. Run E2E tests
+pytest tests/integration/test_cost_tracking_e2e.py -v
+
+# 3. Check database
+# MongoDB: db.api_costs.find().limit(5)
+```
+
+**Why third:** Validates tracking accuracy before dashboard work.
+
+---
+
+### 4️⃣ FEATURE-031: Dashboard Enhancement
+**Priority:** MEDIUM - Do Fourth
+**Status:** Backlog
+**File:** `/Users/mc/dev-projects/crypto-news-aggregator/docs/tickets/FEATURE-031-dashboard-enhancement.md`
+**Estimated:** 3 hours
+**Dependencies:** FEATURE-028, FEATURE-029, FEATURE-030
+
+**What to implement:**
+- Create `context-owl-ui/src/components/BudgetProgress.tsx`
+  - Big progress bar: month-to-date vs $10 target
+  - Status indicator (🟢 On Track / 🟡 Warning / 🔴 Over Budget)
+  - Days elapsed/remaining
+
+- Create `context-owl-ui/src/components/CostAlert.tsx`
+  - Alert banner if daily cost > $0.50
+  - Alert banner if projected monthly > $10
+  - Recommended actions
+
+- Create `context-owl-ui/src/components/DailyTrendChart.tsx`
+  - 7-day cost trend line chart
+  - Recharts integration
+
+- Update `context-owl-ui/src/pages/CostMonitor.tsx`
+  - Integrate all new components
+  - Fetch from `/admin/api-costs/*` endpoints
+  - Auto-refresh every 30 seconds
+
+**Why fourth:** Polish dashboard after tracking is proven accurate.
 
 ---
 
 ## 📋 Implementation Checklist
 
 **For each ticket:**
-1. Read ticket file completely (includes all code)
-2. Implement changes exactly as specified
-3. Run tests to verify functionality
-4. Commit with format: `feat(briefing): [ticket description]`
-5. Test manually if applicable
-6. Mark ticket complete in tracking
+1. Read ticket file completely at `/Users/mc/dev-projects/crypto-news-aggregator/docs/tickets/FEATURE-XXX-*.md`
+2. Ticket contains full implementation code
+3. Implement changes exactly as specified
+4. Run tests to verify functionality
+5. Commit with format: `feat(cost): [ticket description]`
+6. Test manually if applicable
+7. Mark ticket complete in tracking
 
 **Testing after each ticket:**
-- FEATURE-027: Generate test briefing, check for vague references
-- FEATURE-025: Run `pytest tests/test_briefing_multi_pass.py`
-- FEATURE-026: Manually trigger tasks, verify Railway deployment
+- FEATURE-028: `pytest tests/services/test_cost_tracker.py -v`
+- FEATURE-029: `pytest tests/integration/test_llm_cost_tracking.py -v`
+- FEATURE-030: `poetry run python scripts/verify_cost_tracking.py`
+- FEATURE-031: Open Cost Monitor UI and verify data displays
+
+---
+
+## 🔍 LLM Call Locations (Verified)
+
+**Primary Integration Points:**
+1. `llm/optimized_anthropic.py` - Main LLM client
+   - Used by entity extraction
+   - Used by narrative themes (imported)
+   - Most frequent calls
+
+2. `services/briefing_agent.py` - Briefing generation
+   - 2x daily (morning/evening)
+   - Uses Sonnet 4.5
+   - High token count per call
+
+3. `services/narrative_themes.py` - Narrative summaries
+   - Imported by `narrative_service.py`
+   - Uses `get_llm_provider("anthropic")`
+   - Periodic calls
+
+**Operation Types:**
+- `entity_extraction` - Most frequent, uses Haiku
+- `briefing_generation` - 2x daily, uses Sonnet 4.5
+- `narrative_summary` - Periodic, uses Haiku or Sonnet
+- `fingerprint_generation` - Occasional, uses Haiku
+
+---
+
+## 📊 Cost Projections
+
+**Anthropic Pricing (Feb 2026):**
+| Model | Input (per 1M tokens) | Output (per 1M tokens) |
+|-------|----------------------|------------------------|
+| Claude 3.5 Haiku | $0.80 | $4.00 |
+| Claude 3.5 Sonnet | $3.00 | $15.00 |
+| Claude Opus 4.5 | $15.00 | $75.00 |
+
+**Expected Monthly Cost (no caching):**
+- Entity extraction: ~$0.60/month
+- Briefings: ~$0.90/month
+- Narratives: ~$0.13/month
+- **Total: ~$1.63/month** ✅
+
+**With 90% cache hit rate:**
+- **Total: ~$0.16/month** 🎉
+
+**Alert Thresholds:**
+- Daily cost > $0.50 → Warning
+- Projected monthly > $10 → Danger
 
 ---
 
@@ -118,239 +251,207 @@ Launch automated briefing generation with high-quality analysis twice daily (8 A
 
 **Local Testing:**
 ```bash
-# Test briefing generation manually
-curl -X POST http://localhost:8000/api/v1/briefing/generate \
-  -H "Content-Type: application/json" \
-  -d '{"type": "morning", "force": true}'
+# Test cost tracker
+pytest tests/services/test_cost_tracker.py -v
 
-# Run tests
-pytest tests/test_briefing_multi_pass.py -v
-pytest tests/test_briefing_tasks.py -v
-pytest tests/test_briefing_prompts.py -v
+# Test LLM integration
+pytest tests/integration/test_llm_cost_tracking.py -v
+
+# Verify tracking
+poetry run python scripts/verify_cost_tracking.py
+
+# Check database
+mongosh "your_connection_string"
+use crypto_news
+db.api_costs.find().sort({timestamp: -1}).limit(5)
 ```
 
-**Railway Deployment (FEATURE-026):**
-- Ensure Procfile or railway.toml has 3 services: web, worker, beat
-- Verify environment variables set: `ANTHROPIC_API_KEY`, `MONGODB_URI`, `REDIS_URL`
-- Check Railway logs after deployment for task registration
-- Monitor first scheduled runs at 13:00 UTC and 01:00 UTC
+**Railway Deployment:**
+- No changes needed (same services as Sprint 5)
+- Verify environment variables: `ANTHROPIC_API_KEY`, `MONGODB_URI`
+- Monitor logs for cost tracking messages
+- Check dashboard after deployment
 
 ---
 
-## 🔍 Key File Locations
+## 📁 Key File Locations
 
-**Core Services:**
+**Cost Tracking (New):**
+- Cost tracker service: `src/crypto_news_aggregator/services/cost_tracker.py` (to create)
+- Verification script: `scripts/verify_cost_tracking.py` (to create)
+
+**LLM Integration (Modify):**
+- LLM client: `src/crypto_news_aggregator/llm/optimized_anthropic.py`
 - Briefing agent: `src/crypto_news_aggregator/services/briefing_agent.py`
-- Memory manager: `src/crypto_news_aggregator/services/memory_manager.py`
-- Pattern detector: `src/crypto_news_aggregator/services/pattern_detector.py`
+- Narrative themes: `src/crypto_news_aggregator/services/narrative_themes.py`
 
-**API:**
-- Briefing endpoints: `src/crypto_news_aggregator/api/v1/endpoints/briefing.py`
+**Backend (Existing):**
+- Admin API: `src/crypto_news_aggregator/api/admin.py`
+- MongoDB connection: `src/crypto_news_aggregator/db/mongodb.py`
 
-**Database:**
-- Briefing operations: `src/crypto_news_aggregator/db/operations/briefing.py`
+**Frontend (Modify):**
+- Cost Monitor page: `context-owl-ui/src/pages/CostMonitor.tsx`
+- Components: `context-owl-ui/src/components/` (new components)
+- Admin API client: `context-owl-ui/src/api/admin.ts`
 
-**Tasks (for FEATURE-026):**
-- Celery config: `src/crypto_news_aggregator/tasks/celery_config.py`
-- Beat schedule: `src/crypto_news_aggregator/tasks/beat_schedule.py`
+**Tests (New):**
+- `tests/services/test_cost_tracker.py`
+- `tests/integration/test_llm_cost_tracking.py`
+- `tests/integration/test_cost_tracking_e2e.py`
 
-**Frontend:**
-- Briefing page: `context-owl-ui/src/pages/Briefing.tsx`
+**Tickets:**
+- All tickets: `/Users/mc/dev-projects/crypto-news-aggregator/docs/tickets/`
+- FEATURE-028: `FEATURE-028-cost-tracking-service.md`
+- FEATURE-029: `FEATURE-029-llm-integration.md`
+- FEATURE-030: `FEATURE-030-verification-testing.md`
+- FEATURE-031: `FEATURE-031-dashboard-enhancement.md`
 
 ---
 
 ## ⚠️ Important Notes
 
-**Prompt Engineering:**
-- Current briefing uses Sonnet 4.5 (best instruction following)
-- Anti-hallucination is CRITICAL - only use facts from narratives
-- Entity references must be specific (no "the exchange", use "Binance")
-- Every development needs "why it matters" explanation
+**Current Tracking Status:**
+- `llm/tracking.py` - Only in-memory Counter (not persistent)
+- No cost calculations (just counts)
+- No MongoDB writes
+- Dashboard has no data
 
-**Cost Tracking:**
-- Current: <$10/month for all LLM operations
-- Expected with briefings: ~$2-4/month additional
-- Multi-pass refinement may increase to ~$4-6/month (acceptable)
+**MongoDB Collections:**
+- `api_costs` - Created in Phase 1, currently empty
+- `llm_cache` - Created in Phase 1, for future caching
 
-**Quality Standards:**
-- No hallucinated facts
-- No vague entity references
-- Clear "why it matters" for each narrative
-- Professional analyst tone
-- No generic filler language
+**Admin API Endpoints (Already Exist):**
+- GET `/admin/api-costs/summary` - Monthly summary
+- GET `/admin/api-costs/daily?days=7` - Daily breakdown
+- GET `/admin/api-costs/by-model?days=30` - Model breakdown
+- GET `/admin/cache/stats` - Cache performance
 
-**Celery Beat:**
-- Use UTC for all scheduling (auto-adjusts for DST)
-- Retry 3x with exponential backoff
-- Tasks expire after 1 hour if not executed
-- Separate Railway services needed: web, worker, beat
+**Token Extraction:**
+```python
+# All Anthropic API responses include:
+response.usage.input_tokens
+response.usage.output_tokens
+```
+
+**Non-Blocking Tracking:**
+```python
+import asyncio
+
+# Fire and forget - don't block LLM calls
+asyncio.create_task(
+    tracker.track_call(...)
+)
+```
 
 ---
 
 ## 📊 Success Metrics
 
 **By End of Sprint:**
-- ✅ Briefings auto-generate at 8 AM and 8 PM EST
-- ✅ Quality consistently high (no hallucinations, specific entities)
-- ✅ Multi-pass refinement working (avg 1-2 iterations)
-- ✅ Railway deployment stable with 3 services
-- ✅ First week of automated briefings generated successfully
-- ✅ Cost remains under $15/month total
+- ✅ All LLM calls tracked with accurate token counts
+- ✅ MongoDB `api_costs` collection populated
+- ✅ Dashboard displays accurate real-time data
+- ✅ Daily cost visible and under $0.50
+- ✅ Monthly projection visible and under $10
+- ✅ Cache hit rate visible (baseline for Phase 3)
+- ✅ All tests passing (20+ tests)
+
+**Verification Criteria:**
+- Cost calculations accurate (verified manually)
+- Database writes successful
+- Dashboard updates every 30 seconds
+- Alert triggers correctly (test by simulation)
 
 ---
 
-## 🎯 Session 2 - BUG-006 Verification & Entity Handling Fix
+## 🎯 Sprint Context
 
-### This Session (2026-02-02)
-- **BUG-006 Verification Complete** ✅ - Market event detection system verified working
-- **Integration Test Passed** ✅ - Detector properly integrated into briefing pipeline
-- **Bug Fix Applied** ✅ - Fixed entity handling (dict vs string) in market_event_detector.py
-- **All Tests Passing** ✅ - 11/12 market shock tests passing (1 skipped - requires DB)
+**Previous Sprint (Sprint 5):**
+- Completed 3 features in 4 days (ahead of schedule)
+- Briefing automation live
+- All tests passing (21/21)
+- Status: ✅ COMPLETE
 
-### What Was Verified
-1. Market event detector instantiates correctly (singleton pattern working)
-2. Integration confirmed: detector runs in `_gather_inputs()` before narrative selection
-3. Keyword sets properly configured (12 liquidation, 10 crash, 10 exploit keywords)
-4. Detection thresholds set for high-impact events only (4+ articles, $500M+, 3+ entities)
-5. Recency boost mechanism verified (+1.0 score ensures top 8 ranking)
+**Current Sprint (Sprint 6):**
+- Duration: 2 weeks (Feb 5-19)
+- Estimated effort: 12 hours total
+- Status: 🟢 Ready to Start
 
-### Bug Found & Fixed
-- **Issue:** Entity extraction was attempting to add dicts to set (unhashable type)
-- **Cause:** Articles have entities as dicts with `name` field, not plain strings
-- **Fix:** Added type checking and extraction in 3 detection methods (liquidation, crash, exploit)
-- **Impact:** Market event detector now handles real database data correctly
-
-### BUG-006: Market Shock Events Excluded from Briefings
-
-**Status:** ✅ RESOLVED (2026-02-02)
-
-**What we found:**
-- 7 liquidation articles exist on Jan 31 (4 Tier 1, 3 Tier 2)
-- Articles absorbed into unrelated "Bitcoin Accumulation" narrative
-- Recency-based ranking excluded market shock from top 8 narratives
-- System optimizes for entity narratives, not market events
-
-**Root cause:** Entity-based narrative system + exponential recency decay misses single-day market shocks
-- Top narratives based on freshest articles (Feb 1 articles score 0.78+)
-- Liquidation articles from Jan 31 score 0.46 (drops quickly due to 24h half-life)
-- Liquidation narrative ranked 16-20, just outside top 15 cutoff
-
-**Solution implemented:** Market event detection service
-- Detect high-velocity liquidation/crash signals (4+ articles in 24h)
-- Create dedicated "market shock" narratives with "hot" lifecycle
-- Guarantee market events included in top 8 narratives
-- Boost recency scores to ensure prominent placement
-
-**Implementation details:**
-- New service: `src/crypto_news_aggregator/services/market_event_detector.py`
-- Detects liquidations ($500M+ volume, 3+ entities), crashes, exploits
-- Integrated into briefing_agent.py `_gather_inputs()` flow
-- Test suite: 11/11 tests passing
-- Commit: `8b735a0`
-
-**Ticket:** `docs/tickets/bug-006-briefing-missing-market-shock-events.md`
-
-### Session 3 - Live API Test & Findings (2026-02-03)
-
-#### Manual Briefing Test Results ✅
-
-**Test executed:**
-- Generated morning briefing via `/api/v1/briefing/generate` endpoint
-- Briefing ID: `69814857abffd925e990c008`
-- Generated at: 2026-02-03T00:57:25.154000+00:00
-- Confidence score: 0.92 (Excellent)
-
-**Briefing quality observations:**
-- ✅ High-quality prose with specific entity references (no vague pronouns)
-- ✅ "Why it matters" explanations present for every narrative
-- ✅ Professional analyst tone maintained throughout
-- ✅ 15 narratives analyzed and 8 selected for inclusion
-- ✅ 5 distinct patterns detected and summarized
-- ✅ 13 entities mentioned with specific actions/impacts
-
-**Narratives included:**
-1. Tether USAT regulatory strategy (Anchorage Digital)
-2. Binance South Korea re-entry (Gopax acquisition)
-3. Ripple XRP institutional liquidity (Flare integration)
-4. Corporate Bitcoin treasury reporting challenges (Strategy credit metric)
-5. Ethereum Fusaka scalability upgrade
-6. Hyperliquid derivatives expansion
-7. Shiba Inu exchange delisting effects
-
-**Market event detection status:**
-- ❓ Market shock keywords NOT found in briefing narrative
-- ❓ No liquidation/crash/exploit mentions despite detection system being active
-- **Interpretation:** Market event detector ran but found no qualifying events in last 24h (likely didn't meet 4+ article, $500M+ volume, 3+ entity thresholds)
-- **System behavior:** Correct - detector should only create market shock narratives when thresholds are met
-- **Conclusion:** BUG-006 fix is working as designed; no high-impact market shocks occurred in test window
-
-**Key insight:**
-The briefing system is now properly configured to detect and include market shocks IF they occur. The absence of market shock keywords in this briefing indicates the system is correctly filtering for only genuinely significant events, not creating false positives.
-
-### Session 5 - FEATURE-026 Implementation (2026-02-04)
-
-**Completed FEATURE-026: Celery Beat Automation** ✅
-
-**What was done:**
-1. ✅ Updated `src/crypto_news_aggregator/tasks/celery_config.py`
-   - Added `beat_schedule` variable initialization
-   - Preserved dynamic scheduling via `get_beat_schedule()`
-
-2. ✅ Updated `src/crypto_news_aggregator/tasks/__init__.py`
-   - Imported all briefing tasks (morning, evening, cleanup)
-   - Set `app.conf.beat_schedule = get_beat_schedule()` after app creation
-   - Added briefing tasks to autodiscover list
-   - Proper task registration in `__all__` export
-
-3. ✅ Verified existing `briefing_tasks.py` implementation
-   - Morning task: 8 AM EST (13:00 UTC)
-   - Evening task: 8 PM EST (01:00 UTC)
-   - Cleanup task: Weekly maintenance
-   - All tasks include retry logic (max 2 retries, 5-min delay)
-
-4. ✅ Created comprehensive test suite: `tests/tasks/test_briefing_tasks.py`
-   - 15 tests covering task execution, error handling, scheduling
-   - **All 15 tests PASSING** ✅
-   - Test coverage:
-     - Task success scenarios (returns correct fields)
-     - Skipped briefing handling (already exists)
-     - Cleanup variations
-     - Error handling
-     - Retry configuration
-     - **Beat schedule verification** ✅
-     - **Task scheduling times verification** ✅
-
-**Test Results:**
-```
-tests/tasks/test_briefing_tasks.py: 15/15 PASSED ✅
-tests/test_briefing_multi_pass.py: 3/3 PASSED ✅
-tests/services/test_briefing_prompts.py: 3/3 PASSED ✅
-```
-
-**Commit:** `628b1a9` - feat(briefing): add celery beat automated generation
-
-**Sprint 5 Summary:**
-- Foundation: FEATURE-027 ✅
-- Quality loop: FEATURE-025 ✅
-- Automation: FEATURE-026 ✅
-- **SPRINT COMPLETE!** 🎉
+**Next Sprint (Sprint 7):**
+- Cost optimization with caching (Phase 3)
+- Cache warming strategies
+- Cost analytics dashboard
 
 ---
 
-## FEATURE-027 Verification Results (2026-02-01)
+## 🔄 Quick Start Commands
 
-✅ **Prompt Quality: EXCELLENT**
-- Specific entity references (all named, no vague pronouns)
-- "Why it matters" explanations present for every narrative
-- No generic filler language detected
-- Professional analyst tone maintained
-- Responsible uncertainty handling (notes missing data)
+```bash
+# Start Sprint 6
+cd /Users/mc/dev-projects/crypto-news-aggregator
 
-❌ **Coverage Gap: CRITICAL**
-- 10th largest liquidation event in crypto history: MISSING
-- System generated high-quality prose but omitted major market action
-- Questions: data collection? narrative detection? narrative ranking?
+# Read first ticket
+cat docs/tickets/FEATURE-028-cost-tracking-service.md
 
-**Conclusion:** Prompts are working perfectly, but the briefing selection logic may have a blind spot for high-impact market events.
+# Create cost tracker
+# (follow ticket implementation)
 
-Good luck investigating! 🔍
+# Run tests
+pytest tests/services/test_cost_tracker.py -v
+
+# Verify tracking
+poetry run python scripts/verify_cost_tracking.py
+
+# Check dashboard
+open http://localhost:3000/cost-monitor
+```
+
+---
+
+## 📚 Reference Documents
+
+**Sprint Planning:**
+- Current sprint plan: `SPRINT-6-COST-TRACKING.md`
+- Previous sprint: `SPRINT-5-COMPLETION.md`
+- Sprint archive: `/Users/mc/Documents/claude-vault/projects/app-backdrop/development/SPRINTS.md`
+
+**Tickets:**
+- Backlog: `/Users/mc/dev-projects/crypto-news-aggregator/docs/tickets/`
+- Template: `docs/tickets/ticket-template-feature.md`
+
+**Cost Optimization:**
+- Phase 1 complete: `COST_OPTIMIZATION_PHASE1_COMPLETE.md`
+- Setup guide: `COST_OPTIMIZATION_SETUP.md`
+- Quick reference: `COST_OPTIMIZATION_QUICKSTART.md`
+
+**Architecture:**
+- Backend patterns: `backend-service-patterns.md`
+- Technical overview: `technical_overview.md`
+
+---
+
+## 🎓 Key Learnings from Sprint 5
+
+**What Worked Well:**
+1. Incremental approach (prompts → quality → automation)
+2. Test-first mindset (21 tests created)
+3. Manual verification before automation
+4. Clear acceptance criteria per ticket
+
+**Apply to Sprint 6:**
+1. Build foundation first (cost tracker service)
+2. Write tests alongside implementation
+3. Verify accuracy with real API calls
+4. Test dashboard with real data before considering done
+
+**Cost Tracking Specifics:**
+1. Use `asyncio.create_task()` for non-blocking tracking
+2. Don't raise exceptions on tracking failures (log only)
+3. Extract tokens from `response.usage` object
+4. Track cache hits with cost = $0.00
+
+---
+
+**Ready to start FEATURE-028!** 🚀
+
+Read the ticket at: `/Users/mc/dev-projects/crypto-news-aggregator/docs/tickets/FEATURE-028-cost-tracking-service.md`
