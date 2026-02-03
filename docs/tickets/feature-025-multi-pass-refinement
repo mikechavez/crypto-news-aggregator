@@ -1,0 +1,333 @@
+---
+id: FEATURE-025
+type: feature
+status: completed
+priority: high
+complexity: medium
+created: 2026-02-01
+updated: 2026-02-04
+estimated_hours: 3
+actual_hours: 2
+completed_at: 2026-02-04
+---
+
+# Multi-Pass Briefing Refinement
+
+## Problem/Opportunity
+Current briefing generation uses single-pass refinement. If the first refinement attempt still has quality issues, it ships anyway. We need iterative refinement to ensure high-quality briefings before publication.
+
+## Proposed Solution
+Implement multi-pass refinement loop (2-3 iterations max) that:
+1. Generates initial briefing
+2. Critiques output
+3. If issues found, refines and repeats
+4. Stops when quality threshold met OR max iterations reached
+5. Logs iteration count and final confidence score
+
+## User Story
+As a briefing reader, I want consistently high-quality analysis so that I can trust the briefing's accuracy and insights without second-guessing.
+
+## Acceptance Criteria
+- [x] Briefing agent supports max_iterations parameter (default: 2)
+- [x] Refinement loop continues until quality passes OR max iterations
+- [x] Each iteration logged with critique results
+- [x] Final briefing includes iteration_count in metadata
+- [x] Confidence score decreases if max iterations hit without passing
+- [x] No infinite loops (hard cap at max_iterations)
+- [x] Existing tests still pass
+- [x] New test validates multi-pass behavior
+
+## Dependencies
+- None (enhances existing briefing_agent.py)
+
+## Implementation Notes
+
+### File: `src/crypto_news_aggregator/services/briefing_agent.py`
+
+**Modify `_self_refine` method (lines 294-336):**
+
+```python
+async def _self_refine(
+    self,
+    generated: GeneratedBriefing,
+    briefing_input: BriefingInput,
+    max_iterations: int = 2,
+) -> GeneratedBriefing:
+    """
+    Self-refine the generated briefing for quality with iterative refinement.
+
+    This implements the multi-pass self-refine pattern:
+    1. Evaluate the initial output
+    2. Identify issues
+    3. Refine if needed
+    4. Repeat up to max_iterations times
+    5. Return best attempt
+
+    Args:
+        generated: Initial briefing output
+        briefing_input: Input data used for generation
+        max_iterations: Maximum refinement passes (default: 2)
+
+    Returns:
+        Refined briefing (may still have issues if max iterations hit)
+    """
+    current = generated
+    
+    for iteration in range(max_iterations):
+        # Build critique prompt
+        critique_prompt = self._build_critique_prompt(current, briefing_input)
+
+        critique_response = await self._call_llm(
+            critique_prompt,
+            system_prompt="You are a crypto market analyst reviewing a briefing for quality.",
+            max_tokens=1024,
+        )
+
+        # Check if refinement is needed
+        needs_refinement = self._check_needs_refinement(critique_response)
+
+        if not needs_refinement:
+            logger.info(f"Briefing passed quality check on iteration {iteration + 1}")
+            # Add iteration metadata
+            current.detected_patterns.append(f"Quality passed on iteration {iteration + 1}")
+            return current
+
+        logger.info(f"Briefing needs refinement (iteration {iteration + 1}/{max_iterations})")
+        logger.debug(f"Critique: {critique_response[:200]}...")
+
+        # Build refinement prompt
+        refinement_prompt = self._build_refinement_prompt(
+            current, critique_response, briefing_input
+        )
+
+        refined_response = await self._call_llm(
+            refinement_prompt,
+            system_prompt=self._get_system_prompt(briefing_input.briefing_type),
+            max_tokens=4096,
+        )
+
+        current = self._parse_briefing_response(refined_response)
+
+    # Max iterations reached without passing quality check
+    logger.warning(f"Briefing refinement stopped at max iterations ({max_iterations})")
+    
+    # Reduce confidence score if we hit max iterations
+    if current.confidence_score > 0.6:
+        current.confidence_score = 0.6
+    
+    # Add metadata about refinement attempts
+    current.detected_patterns.append(f"Max refinement iterations ({max_iterations}) reached")
+    
+    return current
+```
+
+**Add iteration tracking to `_save_briefing` (lines 650-684):**
+
+```python
+async def _save_briefing(
+    self,
+    briefing_type: str,
+    briefing_input: BriefingInput,
+    generated: GeneratedBriefing,
+) -> Dict[str, Any]:
+    """Save the generated briefing to the database."""
+    from bson import ObjectId
+
+    # Extract iteration count from detected_patterns if present
+    iteration_count = 1
+    for pattern in generated.detected_patterns:
+        if "iteration" in pattern.lower():
+            # Extract number from patterns like "Quality passed on iteration 2"
+            import re
+            match = re.search(r'iteration (\d+)', pattern.lower())
+            if match:
+                iteration_count = int(match.group(1))
+                break
+
+    briefing_doc = {
+        "type": briefing_type,
+        "generated_at": briefing_input.generated_at,
+        "version": "2.0",  # Agent-generated briefings
+        "content": {
+            "narrative": generated.narrative,
+            "key_insights": generated.key_insights,
+            "entities_mentioned": generated.entities_mentioned,
+            "detected_patterns": generated.detected_patterns,
+            "recommendations": generated.recommendations,
+        },
+        "metadata": {
+            "confidence_score": generated.confidence_score,
+            "signal_count": len(briefing_input.signals),
+            "narrative_count": len(briefing_input.narratives),
+            "pattern_count": len(briefing_input.patterns.all_patterns()),
+            "manual_input_count": len(briefing_input.memory.manual_inputs),
+            "model": DEFAULT_MODEL,
+            "refinement_iterations": iteration_count,  # NEW: Track iterations
+        },
+    }
+
+    briefing_id = await insert_briefing(briefing_doc)
+    briefing_doc["_id"] = ObjectId(briefing_id)
+
+    logger.info(f"Saved briefing {briefing_id} (iterations: {iteration_count})")
+    return briefing_doc
+```
+
+### Test File: `tests/test_briefing_multi_pass.py`
+
+```python
+"""
+Test multi-pass refinement logic in briefing agent.
+"""
+
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+from crypto_news_aggregator.services.briefing_agent import BriefingAgent, GeneratedBriefing, BriefingInput
+from datetime import datetime, timezone
+
+
+@pytest.fixture
+def mock_briefing_input():
+    """Create mock briefing input."""
+    return BriefingInput(
+        briefing_type="morning",
+        signals=[],
+        narratives=[{"title": "Test Narrative", "summary": "Test summary"}],
+        patterns=MagicMock(all_patterns=lambda: []),
+        memory=MagicMock(manual_inputs=[], to_prompt_context=lambda: ""),
+        generated_at=datetime.now(timezone.utc),
+    )
+
+
+@pytest.mark.asyncio
+async def test_refinement_passes_on_first_iteration(mock_briefing_input):
+    """Test that refinement stops when quality check passes on first iteration."""
+    agent = BriefingAgent()
+    
+    initial = GeneratedBriefing(
+        narrative="Good briefing content",
+        key_insights=["Insight 1"],
+        entities_mentioned=["Bitcoin"],
+        detected_patterns=[],
+        recommendations=[],
+        confidence_score=0.85,
+    )
+    
+    # Mock critique to indicate no refinement needed
+    with patch.object(agent, '_call_llm', new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = '{"needs_refinement": false, "issues": []}'
+        
+        result = await agent._self_refine(initial, mock_briefing_input, max_iterations=2)
+        
+        # Should only call LLM once (critique only, no refinement)
+        assert mock_llm.call_count == 1
+        assert "Quality passed on iteration 1" in result.detected_patterns
+        assert result.confidence_score == 0.85
+
+
+@pytest.mark.asyncio
+async def test_refinement_iterates_until_max(mock_briefing_input):
+    """Test that refinement stops at max iterations."""
+    agent = BriefingAgent()
+    
+    initial = GeneratedBriefing(
+        narrative="Poor briefing",
+        key_insights=[],
+        entities_mentioned=[],
+        detected_patterns=[],
+        recommendations=[],
+        confidence_score=0.7,
+    )
+    
+    # Mock critique to always indicate refinement needed
+    with patch.object(agent, '_call_llm', new_callable=AsyncMock) as mock_llm:
+        # Critique responses always say "needs refinement"
+        # Refinement responses return parseable JSON
+        mock_llm.side_effect = [
+            '{"needs_refinement": true, "issues": ["vague claims"]}',  # Critique 1
+            '{"narrative": "Refined v1", "confidence_score": 0.7}',    # Refine 1
+            '{"needs_refinement": true, "issues": ["still vague"]}',   # Critique 2
+            '{"narrative": "Refined v2", "confidence_score": 0.7}',    # Refine 2
+        ]
+        
+        result = await agent._self_refine(initial, mock_briefing_input, max_iterations=2)
+        
+        # Should call LLM 4 times (2 iterations × [critique + refine])
+        assert mock_llm.call_count == 4
+        assert "Max refinement iterations (2) reached" in result.detected_patterns
+        # Confidence should be capped at 0.6
+        assert result.confidence_score == 0.6
+
+
+@pytest.mark.asyncio
+async def test_refinement_passes_on_second_iteration(mock_briefing_input):
+    """Test that refinement can pass on subsequent iterations."""
+    agent = BriefingAgent()
+    
+    initial = GeneratedBriefing(
+        narrative="Initial briefing",
+        key_insights=[],
+        entities_mentioned=[],
+        detected_patterns=[],
+        recommendations=[],
+        confidence_score=0.7,
+    )
+    
+    with patch.object(agent, '_call_llm', new_callable=AsyncMock) as mock_llm:
+        mock_llm.side_effect = [
+            '{"needs_refinement": true, "issues": ["missing context"]}',  # Critique 1
+            '{"narrative": "Better briefing", "confidence_score": 0.85}',  # Refine 1
+            '{"needs_refinement": false, "issues": []}',                   # Critique 2 - passes
+        ]
+        
+        result = await agent._self_refine(initial, mock_briefing_input, max_iterations=3)
+        
+        # Should call LLM 3 times (stopped after passing on iteration 2)
+        assert mock_llm.call_count == 3
+        assert "Quality passed on iteration 2" in result.detected_patterns
+        assert result.confidence_score == 0.85
+```
+
+## Open Questions
+- [x] What should max_iterations default be? → 2 (balance quality vs cost)
+- [x] Should we fail completely if max iterations hit? → No, ship with low confidence score
+
+## Completion Summary
+
+**Status:** ✅ COMPLETED (2026-02-04)
+
+### Implementation Details
+- **Actual complexity:** Medium (as estimated)
+- **Actual effort:** 2 hours (vs 3 estimated)
+- **Commits:**
+  - `84d0a3f` - feat(briefing): implement multi-pass refinement with iterative quality checks
+  - `abad1e7` - fix(briefing): handle dict-type entities in market event detector (BUG-006)
+
+### Key Decisions Made
+1. **Default max_iterations = 2:** Balance between quality (more iterations) and cost (fewer LLM calls)
+2. **Early stopping:** Loop exits immediately when quality check passes, avoiding wasted iterations
+3. **Confidence score penalty:** Capped at 0.6 if max iterations hit without passing quality check
+4. **Metadata tracking:** Iteration count extracted from detected_patterns and stored in briefing metadata
+
+### Testing Results
+- ✅ 3/3 new tests passing (test_briefing_multi_pass.py)
+  - test_refinement_passes_on_first_iteration
+  - test_refinement_iterates_until_max
+  - test_refinement_passes_on_second_iteration
+- ✅ All existing briefing tests passing (20/20 total)
+- ✅ No breaking changes to existing functionality
+
+### Deviations from Plan
+- None - Implementation followed specification exactly
+- Bonus: Fixed BUG-006 entity handling bug in market_event_detector.py
+
+### What Works
+- ✅ Multi-pass refinement loop with configurable max_iterations
+- ✅ Quality check integration (critiques → refines if needed)
+- ✅ Iteration tracking in detected_patterns and metadata
+- ✅ Confidence score penalties for low-quality briefings
+- ✅ Hard cap prevents infinite loops
+- ✅ Cost-effective (2 iterations max = 2-4 extra LLM calls per briefing)
+
+### Next Steps
+FEATURE-026: Celery Beat Automation (scheduled briefing generation)

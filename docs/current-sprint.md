@@ -1,478 +1,373 @@
-# Current Sprint: Sprint 4 (UX Enhancements & Pagination)
+# Current Sprint: Sprint 5 (Briefing System Launch)
 
-**Goal:** Implement article pagination with comprehensive UX enhancements
+**Goal:** Launch automated briefing generation with high-quality analysis twice daily
 
-**Sprint Duration:** 2026-01-29 to 2026-02-12 (2 weeks)
+**Sprint Duration:** 2026-02-01 to 2026-02-15 (2 weeks)
 
-**Velocity Target:** 6 tickets for UX improvements and pagination
+**Velocity Target:** 3 core features for briefing automation and quality
 
-**Status:** ✅ **UNBLOCKED** - All bugs fixed, build passing
+**Status:** 🟢 **READY TO START** - All dependencies clear, implementation-ready tickets
 
 ---
 
-## ✅ BUGS FIXED - 2026-01-30 (Evening - ALL RESOLVED)
+## Sprint Overview
 
-### All Pagination Issues - Now Fully Working
-**Status:** ✅ **ALL FIXED & VERIFIED**
-**Fixed:** 2026-01-30 (Evening)
+### Context
+Sprint 4 completed UX enhancements with article pagination, skeleton loaders, error handling, and progress indicators. All features are production-ready and merged. Sprint 5 pivots to briefing system launch.
 
-**Issues Resolved:**
+### Key Objective
+Get automated briefings generating twice daily (8 AM/8 PM EST) with consistent high-quality analysis. The briefing agent service exists and works, but needs:
+1. Multi-pass refinement for quality assurance
+2. Celery Beat automation for scheduled generation
+3. Prompt enhancements for better output
 
-1. **Frontend UI Bug (Line 116)** ✅
-   - Fixed: "Showing 20 of 20" now shows "Showing 20 of 69"
-   - Root Cause: Incorrect fallback logic
-   - Solution: Changed line 116 to use `narrative.article_count` fallback
-   - Commit: 2ca1f60
+### Success Criteria
+- ✅ Briefings auto-generate at 8 AM EST and 8 PM EST
+- ✅ Quality consistently meets publication standards
+- ✅ No hallucinations or vague entity references
+- ✅ Each narrative explains "why it matters"
+- ✅ System handles failures gracefully with retries
 
-2. **Missing API Method** ✅
-   - Fixed: TypeScript build error for `getArticlesPaginated`
-   - Root Cause: Method not exported from narrativesAPI
-   - Solution: Added full method and PaginatedArticlesResponse interface
-   - Commit: 49c0624
+---
 
-3. **FastAPI Route Order (BUG-005)** ✅
-   - Fixed: 404 errors on `/articles` endpoint
-   - Root Cause: Generic `/{narrative_id}` route defined before specific `/{narrative_id}/articles`
-   - Solution: Moved articles endpoint to line 739 (before generic endpoint at line 784)
-   - File: `src/crypto_news_aggregator/api/v1/endpoints/narratives.py`
-   - Status: Code moved, ready for commit
+## Sprint Backlog
 
-**Verification:**
-- ✅ Build passing (no TypeScript errors)
-- ✅ FastAPI route ordering corrected
-- ✅ All commits pushed to feature/article-pagination branch
-- ✅ Ready for manual testing and FEATURE-021 implementation
+### 🎯 Core Features (Priority Order)
+
+#### FEATURE-027: Prompt Quality Enhancement
+**Priority:** HIGH - Do First
+**Complexity:** Small (2 hours)
+**Status:** Backlog
+
+**Why First?** Improves prompt quality before we start automated generation. Get the foundation right.
+
+**What:** Enhance system and critique prompts with:
+- Specific entity reference rules (no vague "the platform")
+- "Why it matters" enforcement
+- Good/bad example demonstrations
+- Stronger anti-hallucination checks
+
+**Files to modify:**
+- `src/crypto_news_aggregator/services/briefing_agent.py` (lines 338-391, 463-500)
+- Create: `tests/test_briefing_prompts.py`
+
+**Acceptance:**
+- System prompt includes entity reference rules
+- Critique checks for vague references
+- Test briefing has no vague pronouns
+- All narratives explain significance
+
+---
+
+#### FEATURE-025: Multi-Pass Refinement
+**Priority:** HIGH - Do Second  
+**Complexity:** Medium (3 hours)
+**Status:** Backlog
+
+**Why Second?** Builds on prompt improvements. Ensures quality loop before automation.
+
+**What:** Implement iterative refinement (2-3 passes max):
+- Generate → Critique → Refine → Repeat
+- Stop when quality passes OR max iterations
+- Track iteration count in metadata
+- Reduce confidence score if max iterations hit
+
+**Files to modify:**
+- `src/crypto_news_aggregator/services/briefing_agent.py` (lines 294-336, 650-684)
+- Create: `tests/test_briefing_multi_pass.py`
+
+**Acceptance:**
+- Refinement continues up to max_iterations (default: 2)
+- Stops early if quality check passes
+- Iteration count saved in briefing metadata
+- Confidence score capped at 0.6 if max iterations hit
+- Tests validate multi-pass behavior
+
+---
+
+#### FEATURE-026: Celery Beat Automation
+**Priority:** HIGH - Do Third
+**Complexity:** Medium (4 hours)
+**Status:** Backlog
+
+**Why Third?** Deploy automation after quality systems in place. Final piece for launch.
+
+**What:** Set up scheduled briefing generation:
+- Morning briefing: 8:00 AM EST (13:00 UTC)
+- Evening briefing: 8:00 PM EST (01:00 UTC)
+- Celery Beat tasks with retry logic
+- Railway deployment configuration
+
+**Files to create:**
+- `src/crypto_news_aggregator/tasks/briefing_tasks.py`
+- `tests/test_briefing_tasks.py`
+
+**Files to modify:**
+- `src/crypto_news_aggregator/tasks/beat_schedule.py`
+- `src/crypto_news_aggregator/tasks/celery_config.py`
+- Railway deployment config (Procfile or railway.toml)
+
+**Acceptance:**
+- Morning task registered and runs at 13:00 UTC
+- Evening task registered and runs at 01:00 UTC
+- Tasks retry 3x with exponential backoff
+- Failures logged to application logs
+- Railway shows 3 services: web, worker, beat
+- First automated briefings generated successfully
 
 ---
 
 ## Current Status
 
-### ✅ FEATURE-022 - COMPLETE (Progress Indicator)
-- **[FEATURE-022] Progress Indicator** - ✅ **COMPLETE**
-  - Status: Implementation complete, tested, and verified
-  - Feature: Page progress display "Page X of Y"
-  - Current page calculation: Based on loaded articles count
-  - Total pages calculation: ceil(totalArticles / ARTICLES_PER_PAGE)
-  - UI: Display alongside "Showing X of Y Articles" badge
-  - Styling: Gray text for distinction, full dark mode support
-  - Display condition: Only when expanded and articles loaded
-  - Branch: feature/article-pagination
-  - Commit: 9f5898c
-  - TypeScript: No errors
-  - Vite build: 461.39 kB JS, 52.59 kB CSS
-  - **Testing Results:**
-    - ✅ All 10 API pagination tests passing
-    - ✅ TypeScript build successful
-    - ✅ Progress indicator displays correctly
-    - ✅ Dark mode styling verified
-    - ✅ Ready for production
+### ✅ Completed
+- **[FEATURE-027]** Prompt Quality Enhancement - ✅ COMPLETED (2026-02-01)
+  - System prompt enhanced with entity references and why-it-matters rules
+  - Critique prompt checks for vague entity references
+  - Test suite created (3 tests passing)
+  - Commit: `228fb48`
 
-### ✅ FEATURE-021 - TESTING COMPLETE (Error Handling Verified)
-- **[FEATURE-021] Error Handling with Retry** - ✅ **TESTED & VERIFIED**
-  - Status: Implementation complete, tested, and verified
-  - Error state tracking: `loadErrors` Map per narrative
-  - Error handling for initial load and "Load More"
-  - Smart retry function (detects initial vs load more)
-  - Error UI: Red alert box with AlertCircle icon and Retry button
-  - Dark mode: Full support with appropriate colors
-  - Branch: feature/article-pagination
-  - TypeScript: No errors
-  - Vite build: 461.12 kB JS, 52.59 kB CSS
-  - **Testing Results:**
-    - ✅ All 10 API pagination tests passing
-    - ✅ TypeScript build successful
-    - ✅ Error message display verified
-    - ✅ Dark mode styling verified
-    - ✅ Retry functionality verified
-    - ✅ Ready for commit and production
+- **[FEATURE-025]** Multi-Pass Refinement - ✅ COMPLETED (2026-02-04)
+  - Iterative refinement loop with max_iterations (default: 2)
+  - Early stopping when quality check passes
+  - Iteration tracking in metadata
+  - Confidence score penalties if max iterations hit
+  - Test suite created (3 tests, all passing)
+  - Commits: `84d0a3f`, `abad1e7`
 
-### ✅ FEATURE-019 - COMPLETE (All Bugs Fixed)
-- **[FEATURE-019] Article Pagination** - ✅ **COMPLETE**
-  - Status: Frontend complete, backend endpoint working, API method exported
-  - Frontend UI: Fixed pagination total count logic
-  - Frontend API: Added getArticlesPaginated method
-  - Backend: Endpoint fully functional at `/api/v1/narratives/{narrative_id}/articles`
-  - Branch: feature/article-pagination
-  - Commits:
-    - 370a297 (BUG-004)
-    - 07423ec (FEATURE-019)
-    - 2b38e78 (FEATURE-020)
-    - 2ca1f60 (Fix pagination UI bug)
-    - 49c0624 (Add missing API method)
-- **[BUG-004] Vite Proxy Configuration** - ✅ **RESOLVED**
-  - Status: Fixed and committed
-  - Root cause: Missing server.proxy in vite.config.ts
-  - Result: Articles now display in local dev
+### Ready to Implement
+- **[FEATURE-026]** Celery Beat Automation - Ready to implement
+
+### Bug Fixes & Verification (Session 2)
+✅ **BUG-006 RESOLVED (2026-02-02):**
+- Market event detector implemented to identify liquidation cascades
+- Briefing now includes high-impact market shocks in top 8 narratives
+- FEATURE-025 is now unblocked and ready to implement
+- Commit: 8b735a0
+
+✅ **Entity Handling Bug Fixed (2026-02-02):**
+- Issue: Market event detector crashed on entity extraction (unhashable type)
+- Cause: Articles have entities as dicts with `name` field, not plain strings
+- Fix: Added type checking in _detect_liquidation_cascade, _detect_market_crash, _detect_exploit_event
+- Impact: Market detector now works with real database data
+- All market shock tests passing: 11/12 (1 skipped - requires MongoDB)
+
+### Manual Verification Complete (2026-02-03)
+✅ Live briefing generated and tested
+- Briefing quality: 0.92 confidence score (excellent)
+- 15 narratives analyzed, 8 selected for inclusion
+- 5 distinct patterns detected
+- No high-impact market shocks in current 24h window (system operating correctly)
+- Market event detector verified working as designed
 
 ---
 
-## Completed This Session (2026-01-30)
+## Implementation Order
 
-### ✅ FEATURE-022 Complete (Late Evening)
+**Day 1-2: Foundation (FEATURE-027)**
+1. Start with FEATURE-027 (prompt enhancement)
+2. Test prompt changes with manual generation
+3. Verify entity references and "why it matters"
+4. Commit and deploy
 
-**[FEATURE-022] Progress Indicator - Implementation Complete**
-- Status: ✅ **COMPLETE** (2026-01-30 Late Evening)
-- Feature: Page progress indicator displaying "Page X of Y"
-- Implementation details:
-  - File: `context-owl-ui/src/pages/Narratives.tsx`
-  - Current page calculation (lines 120-122)
-    - `currentPage = Math.floor(articles.length / ARTICLES_PER_PAGE) + (articles.length % ARTICLES_PER_PAGE > 0 ? 1 : 0)`
-    - `totalPages = Math.ceil(totalArticles / ARTICLES_PER_PAGE)`
-  - UI rendering (lines 335-345)
-    - Display "Page X of Y" in gray text
-    - Show next to "Showing X of Y Articles" badge
-    - Only display when expanded and articles loaded
-- Build status:
-  - ✅ TypeScript: No errors
-  - ✅ Vite: 461.39 kB JS, 52.59 kB CSS
-  - ✅ Tests: All 10 API pagination tests passing
-- Commit: 9f5898c (`feat(ui): add progress indicator for article pagination`)
-- Push: origin/feature/article-pagination
+**Day 3-4: Quality Loop (FEATURE-025)**
+1. Implement multi-pass refinement
+2. Write and run tests
+3. Test with real briefing generation
+4. Monitor iteration counts and confidence scores
+5. Commit and deploy
 
-### ✅ FEATURE-021 Complete & Tested (Evening)
+**Day 5-7: Automation (FEATURE-026)**
+1. Create Celery Beat tasks
+2. Update beat schedule configuration
+3. Test locally with manual triggers
+4. Deploy to Railway with multi-service setup
+5. Monitor first scheduled runs
+6. Verify both 8 AM and 8 PM generations
 
-**[FEATURE-021] Error Handling with Retry - Complete & Verified**
-- Status: ✅ **TESTED & VERIFIED** (2026-01-30 Evening)
-- Error state management with `loadErrors` Map
-- Error handling for initial article load
-  - File: `context-owl-ui/src/pages/Narratives.tsx` (lines 135-159)
-  - Clears previous errors before load
-  - Sets user-friendly error message on failure
-- Error handling for "Load More"
-  - File: `context-owl-ui/src/pages/Narratives.tsx` (lines 174-217)
-  - Preserves existing articles during error
-  - Sets specific error message
-- Smart retry function
-  - File: `context-owl-ui/src/pages/Narratives.tsx` (lines 219-261)
-  - Detects initial vs load more scenarios
-  - Reuses existing load functions
-- Error display UI component
-  - File: `context-owl-ui/src/pages/Narratives.tsx` (lines 395-418)
-  - Red alert box with dark mode support
-  - AlertCircle icon for visual feedback
-  - Retry button with click handling
-- Build status: ✅ TypeScript clean, Vite build successful
-- **Test Results:**
-  - ✅ All 10 API pagination tests passing (pytest)
-  - ✅ TypeScript compilation successful
-  - ✅ Error message display verified
-  - ✅ Dark mode styling confirmed
-  - ✅ Mobile responsive layout verified
-- Ready for: Commit, push, and production deployment
-
-### ✅ Bug Fixes Complete (Evening)
-
-**[Pagination Bug Fixes] - All Issues Resolved**
-- Status: ✅ **COMPLETE** (2026-01-30 Evening)
-- **Bug 1**: Frontend UI showing wrong total count
-  - File: `context-owl-ui/src/pages/Narratives.tsx` (line 116)
-  - Fix: Use `narrative.article_count` as fallback
-  - Commit: 2ca1f60
-- **Bug 2**: Missing API method causing build failure
-  - File: `context-owl-ui/src/api/narratives.ts`
-  - Fix: Added full `getArticlesPaginated` method and interface
-  - Commit: 49c0624
-- **Result**: Build passing, ready for testing and next features
-
-### ✅ FEATURE-020 Implementation Complete
-
-**[FEATURE-020] Skeleton Loaders - Implementation Complete**
-- Priority: P2 (Medium - UX Enhancement)
-- Complexity: Medium (1-1.5 hours)
-- Status: ✅ **IMPLEMENTATION COMPLETE** (2026-01-30)
-- Ticket: `FEATURE-020-SKELETON-LOADERS-COMPLETE.md`
-- Implementation summary:
-  - Created ArticleSkeleton component with animated pulse effect
-  - Replaced "Loading articles..." text with 5 skeleton placeholders
-  - Added skeleton loaders during "Load More" loading state
-  - Skeleton dimensions match article card layout (prevents layout shift)
-  - Full dark mode support with appropriate colors
-- Files created:
-  - ✅ `context-owl-ui/src/components/ArticleSkeleton.tsx`
-- Files modified:
-  - ✅ `context-owl-ui/src/pages/Narratives.tsx` (import + integration)
-- Features Working:
-  - ✅ Initial load skeleton placeholders
-  - ✅ Load More skeleton placeholders
-  - ✅ Pulse animation (animate-pulse class)
-  - ✅ Dark mode colors
-  - ✅ Smooth transition to real articles
-- Next: Commit and push to origin/feature/article-pagination
-
-### ✅ FEATURE-019 & BUG-004 Complete
-
-**[FEATURE-019] Article Pagination - Frontend Implementation**
-- Priority: P1 (High - Foundation)
-- Complexity: Medium (2-3 hours)
-- Status: ✅ **COMPLETE** (2026-01-30)
-- Ticket: `docs/tickets/feature-019-article-pagination.md`
-- Implementation summary:
-  - Added pagination state management with `paginationState` Map
-  - Implemented 'Load More' button for narratives with >20 articles
-  - Added 'Showing X of Y Articles' badge
-  - Set articles per page to 20 with ARTICLES_PER_PAGE constant
-  - Load More button only appears when more articles available
-- Files modified:
-  - ✅ `context-owl-ui/src/pages/Narratives.tsx` (pagination state, UI, button handler)
-- Backend Status:
-  - ✅ `/api/v1/narratives/{narrative_id}/articles` endpoint tested (10/10 passing)
-  - ✅ Pagination logic complete and verified
-- Next: FEATURE-020 (Skeleton Loaders)
-
-**[BUG-004] Vite Proxy Configuration - Resolution**
-- Priority: P1 (blocking feature)
-- Complexity: Low (simple config change)
-- Status: ✅ **RESOLVED** (2026-01-30)
-- Root Cause: Missing server.proxy in vite.config.ts
-- Solution: Added proxy configuration to forward /api/* requests to http://localhost:8000
-- Result: Articles now display correctly in local dev environment
-- Files modified:
-  - ✅ `context-owl-ui/vite.config.ts` (added server.proxy)
-
-## Ready for Implementation
-
-### Phase 2: Optional UX Polish (Next 2-3 hours)
-
-**[FEATURE-023] State Preservation - ⭐ NEXT UP**
-- Priority: P1 (High - UX Critical)
-- Complexity: Medium (1.5-2 hours)
-- Status: 📝 Ready for Implementation
-- **What it does:** Preserve loaded articles when collapsing/re-expanding narratives
-- **Note:** Basic state preservation already included in FEATURE-019; this ticket adds localStorage persistence
-- **Dependencies:** FEATURE-019 ✅ (complete)
-
-**[FEATURE-023] State Preservation**
-- Priority: P1 (High - UX Critical)
-- Complexity: Medium (1.5-2 hours)
-- Status: 📝 Ready for Implementation
-- **What it does:** Preserve loaded articles when collapsing/re-expanding narratives
-- **Note:** Basic state preservation already included in FEATURE-019; this ticket adds localStorage persistence
-- **Dependencies:** FEATURE-019 ✅ (complete)
+**Day 8-14: Monitor & Tune**
+1. Watch automated briefing quality
+2. Review user feedback
+3. Tune prompts if needed
+4. Adjust narrative selection if needed
+5. Document any issues for future sprints
 
 ---
 
-## Completed
+## Technical Context
 
-### 2026-01-30 (Today - This Session)
+### Existing Infrastructure
 
-#### Evening - FEATURE-019 & BUG-004 Commit & Push
-- **[FEATURE-019 & BUG-004] Commit and Push** - ✅ COMPLETE
-  - Committed BUG-004: Fixed Vite proxy configuration (370a297)
-  - Committed FEATURE-019: Implemented article pagination UI (07423ec)
-  - Pushed to origin/feature/article-pagination
-  - Both commits are on remote repository
-  - Ready for next feature implementation
+**Briefing Agent Service:** ✅ Complete
+- File: `src/crypto_news_aggregator/services/briefing_agent.py`
+- Functions: `generate_morning_briefing()`, `generate_evening_briefing()`
+- Features: Memory manager, pattern detector, LLM integration, self-refine
+- Cost: ~$0.03-0.05 per briefing with Sonnet 4.5
 
-#### Earlier - FEATURE-019 Frontend Implementation
-- **[FEATURE-019] Article Pagination - Frontend** - ✅ COMPLETE
-  - Implemented pagination state management
-  - Added "Load More" button with smart states
-  - Added "Showing X of Y Articles" badge
-  - Visual verification complete
-  - Ready to commit and push
+**API Endpoints:** ✅ Complete
+- GET `/api/v1/briefing/latest` - Get most recent briefing
+- POST `/api/v1/briefing/generate` - Manual generation (for testing)
+- GET `/api/v1/briefing/next` - Next scheduled time
+- Feedback system integrated
 
-#### Earlier - BUG-004 Fix
-- **[BUG-004] Vite Proxy Configuration** - ✅ RESOLVED
-  - Added server.proxy to vite.config.ts
-  - Fixed articles not displaying in local dev
-  - Local dev now matches production behavior
+**Frontend:** ✅ Complete
+- Page: `context-owl-ui/src/pages/Briefing.tsx`
+- Displays morning/evening briefings
+- Placeholder while agent being set up
+- Recommendation links to narratives
 
-### 2026-01-27 & Earlier
+### What We're Building
 
-#### Evening (Late) - Backfill Execution
-- **[FEATURE-013] Execute Backfill Script** - ✅ COMPLETE
-  - Executed 2026-01-07 23:11-23:24 (~13 minutes)
-  - Result: 435/436 narratives successfully backfilled
-  - Single failure: Timeout on one narrative (ObjectId('68f1ba31fdcae8c027f50d19'))
-  - Tokens used: 54093 input, 11104 output
-  - Cost: $0.09 (excellent - well under estimate)
-  - **FEATURE-011 now unblocked and ready for implementation**
+**Quality System:**
+- Multi-pass refinement ensures publication quality
+- Enhanced prompts prevent common issues
+- Confidence scoring flags low-quality attempts
 
-#### Evening - Ticket Preparation & Enhancement
-- **[FEATURE-011] Consolidation Tickets Created** - ✅ READY FOR CLAUDE CODE
-  - Split into two comprehensive tickets for implementation and testing
-  - **FEATURE-011-IMPLEMENTATION**: Core consolidation logic (2-3 hours)
-    - Complete method implementations provided
-    - Database query patterns with examples
-    - Step-by-step implementation guide
-    - Basic smoke test checklist
-  - **FEATURE-011-TESTS**: Comprehensive test suite (2-3 hours)
-    - 10+ unit tests fully implemented
-    - 3+ integration tests fully implemented
-    - Edge case coverage
-    - Test fixtures and helpers
-  - Both tickets ready in outputs folder
-  - Follows FEATURE-013 comprehensive template model
-  - Time: ~1 hour of enhancement work
+**Automation:**
+- Celery Beat schedules twice-daily generation
+- Retry logic handles transient failures
+- Monitoring via application logs
 
-#### Afternoon - Database Investigation & Fix
-- **[FEATURE-014] Investigate Missing Narratives** - ✅ COMPLETE
-  - Root cause: Scripts connecting to `backdrop` database instead of `crypto_news`
-  - Created diagnostic tool: `scripts/diagnose_database.py`
-  - Fixed FEATURE-013 script database name and query filter
-  - Validated: 436 narratives ready for backfill
-  - Time: ~1 hour
-  - Files created: `scripts/diagnose_database.py`
-  - Files modified: `scripts/backfill_narrative_focus.py`
-
-- **[FEATURE-013] Backfill Script Creation** - ✅ READY TO EXECUTE
-  - Created comprehensive backfill script with:
-    - Batch processing (50 narratives per batch)
-    - Cost tracking and progress logging
-    - Dry-run mode for validation
-    - Error handling and failure tracking
-  - Database issue fixed (was `backdrop`, now `crypto_news`)
-  - Query filter updated (backfills ALL narratives, not just Dec 1+)
-  - Dry-run validated: Found 436 narratives to process
-  - Ready for execution: Waiting for Mike to run manually
-  - Time: ~2 hours total (creation + fixes)
-
-#### Morning - Focus-First Matching
-- **[FEATURE-010] Revise Similarity Matching** - ✅ DEPLOYED
-  - Rewrote `calculate_fingerprint_similarity()` with new weights:
-    - Focus: 0.5 (primary discriminator, was 0.35)
-    - Nucleus: 0.3 (secondary, was 0.30)
-    - Actors: 0.1 (was 0.20)
-    - Actions: 0.1 (was 0.15)
-  - Added hard gate logic: Requires focus OR nucleus match
-  - Added `_compute_focus_similarity()` for token-based matching
-  - All 83 tests passing (12 new focus tests, 71 existing updated)
-  - Result: Prevents unrelated narrative merges
-  - Time: ~3 hours
-  - Deployed: Merged to main, live in Railway production
-
-### 2026-01-06
-
-- **[FEATURE-009] Add Narrative Focus Extraction** - ✅ DEPLOYED
-  - Added narrative_focus field to LLM extraction pipeline
-  - Updated fingerprint calculation to include focus
-  - Added validation and tests
-  - All 68 tests passing
-  - Time: ~4 hours
-  - Branch: `feature/narrative-focus-extraction`
-
-- **[FEATURE-008] Fix Theme vs Title UI** - ✅ DEPLOYED
-  - Implemented smart title fallback in Narratives.tsx
-  - Fixed UI issue where narratives showed identical titles
-  - Time: ~1 hour
-  - Branch: `feature/narrative-title-display`
-
-### 2026-01-05
-
-- **Signal Scoring: Compute on Read** - ✅ DEPLOYED
-  - Implemented ADR-003: Compute signals on demand instead of background task
-  - Disabled worker signal task
-  - Added 60s cache to API endpoints
-  - Time: ~2 hours
-
-### 2026-01-04
-
-- **Deployment & Testing** - ✅ COMPLETE
-  - PR #124 merged (relevance filtering)
-  - Fixed loguru dependency issue (PR #125)
-  - Railway deployment successful
-  - Verified background tasks running
-
-### 2026-01-02
-
-- **[FEATURE-008 Phase 1] Relevance Filtering** - ✅ DEPLOYED
-  - Implemented article relevance classifier (Tier 1/2/3)
-  - Backfilled ~22k articles
-  - Distribution: ~15% Tier 1, ~83% Tier 2, ~2% Tier 3
-  - Files modified: Multiple services, article model, RSS fetcher
-  - Time: ~6 hours
-  - Branch: `feature/briefing-agent`
+**Cost Projection:**
+- 2 briefings/day × $0.04 avg = $0.08/day
+- ~$2.40/month (well within budget)
+- Multi-pass may increase to $0.06/briefing = $3.60/month
 
 ---
 
 ## Architecture Decisions
 
-### Sprint 4 Architecture: Pagination-First UX
-- **Pagination Strategy**: Load-on-demand (20 articles at a time)
-  - Backend endpoint: `/api/v1/narratives/{narrative_id}/articles?offset=0&limit=20`
-  - Frontend state management: Map<narrativeId, PaginationState>
-  - PaginationState tracks: loadedArticles, offset, hasMore, totalCount
-  - Button UX: Shows remaining count, disables during load, hides when done
+### Sprint 5 Architecture: Quality-First Automation
 
-- **Error Handling**: Graceful fallback with retry
-  - Visual feedback during errors
-  - Smart retry with automatic detection
-  - Doesn't block other narratives on failure
+**Multi-Pass Refinement Strategy:**
+- Max 2 iterations by default (balance quality vs cost)
+- Early stopping when quality check passes
+- Confidence score penalty if max iterations hit
+- Iteration count tracked in metadata for analysis
 
-- **UX Enhancements**: Progressive disclosure
-  - Skeleton loaders: Visual feedback while loading
-  - Progress indicators: Optional, shows load progress
-  - State preservation: Articles remain loaded on collapse/re-expand
+**Prompt Enhancement Strategy:**
+- Entity-specific rules prevent vague references
+- "Why it matters" mandatory for each development
+- Good/bad examples guide LLM output
+- Critique prompt includes entity vagueness check
 
-### Previous ADRs (Sprint 3)
-- **ADR-004**: Narrative Focus Identity ✅ (DEPLOYED)
-- **ADR-003**: Signal Compute-on-Read ✅ (DEPLOYED)
+**Automation Strategy:**
+- Celery Beat for reliability (vs cron)
+- UTC scheduling (13:00 and 01:00) auto-adjusts for DST
+- Exponential backoff retries (3 attempts)
+- Task expiration after 1 hour (prevents stale execution)
+
+**Deployment Strategy:**
+- Railway multi-service: web + worker + beat
+- Separate processes for isolation
+- Beat worker runs schedules
+- Worker executes tasks
+- Web serves API
 
 ---
 
 ## Metrics & Progress
 
-### Sprint 4 Velocity
-- **Completed tickets:** 4 (FEATURE-019, FEATURE-020, FEATURE-021, FEATURE-022)
+### Sprint 5 Velocity
+- **Total tickets:** 3 (FEATURE-025, 026, 027)
+- **Estimated effort:** 9 hours total
+- **Completed:** 2 (FEATURE-027: 2 hours, FEATURE-025: 2 hours)
 - **In progress:** 0
-- **Ready to implement:** 2 (FEATURE-023, FEATURE-024)
-- **Estimated remaining effort:** ~2-3 hours (optional features)
-- **Total effort:** 10-13 hours across 6 tickets (4 complete, 2 optional remaining)
+- **Remaining:** 1 (FEATURE-026)
+- **Velocity:** 4 hours completed, 1 session (avg 2 hours/session)
 
-### Article Pagination Improvements
-**User Problem (Before Sprint 4):**
-- Users see "184 Articles" but can only access first 20
-- No way to view articles 21+
-- Frustrated users with incomplete information
+### Sprint Health Indicators
+- **Briefing generation:** Manual only (via `/generate` endpoint)
+- **Quality system:** Single-pass refine (to be enhanced)
+- **Automation:** Not deployed (to be implemented)
+- **Target:** Automated twice-daily by end of sprint
 
-**User Solution (After Sprint 4):**
-- View articles in chunks of 20
-- See progress: "Showing 40 of 184 Articles"
-- Load more with one click (or auto-scroll)
-- Visual feedback during loads
-- Can access ALL articles in any narrative
+---
 
-**Current Progress:**
-- Foundation: Pagination endpoint ✅ (backend tested 10/10)
-- UI implementation: Load More button ✅ (frontend verified)
-- Next: Skeleton loaders (better UX during load)
-- Then: Error handling (graceful failures)
-- Finally: Polish (progress bar, smooth scroll, state preservation)
+## Testing Strategy
+
+### Unit Tests
+- `tests/test_briefing_multi_pass.py` - Multi-pass refinement logic
+- `tests/test_briefing_tasks.py` - Celery task execution
+- `tests/test_briefing_prompts.py` - Prompt quality checks
+
+### Integration Tests
+- Manual briefing generation via API
+- Celery task manual trigger
+- Full briefing generation workflow
+
+### Production Monitoring
+- Railway logs for task execution
+- MongoDB `daily_briefings` collection
+- Confidence scores and iteration counts
+- First automated runs verification
+
+---
+
+## Risks & Mitigation
+
+### Risk 1: Railway Multi-Service Deployment
+**Impact:** High - Blocks automation
+**Likelihood:** Medium - Railway config may differ
+**Mitigation:**
+- Check Railway documentation early
+- Test multi-service locally first
+- Have fallback to single-process with supervisor
+
+### Risk 2: Timezone Confusion (EST vs UTC)
+**Impact:** Medium - Wrong generation times
+**Likelihood:** Low - Using UTC internally
+**Mitigation:**
+- All schedules in UTC
+- Document EST → UTC conversions clearly
+- Test with manual triggers at correct times
+
+### Risk 3: LLM Quality Variability
+**Impact:** Medium - Inconsistent briefings
+**Likelihood:** Medium - LLMs can vary
+**Mitigation:**
+- Multi-pass refinement catches issues
+- Confidence scoring flags problems
+- Human review first week of automation
+
+### Risk 4: Cost Overrun
+**Impact:** Low - Budget can handle it
+**Likelihood:** Low - Well-estimated
+**Mitigation:**
+- Monitor costs daily first week
+- LLM tracking already in place
+- Can tune max_iterations if needed
 
 ---
 
 ## Blocked Items
 
-None - all work unblocked and ready
+None - All tickets ready to implement
 
 ---
 
 ## Next Actions
 
-### Immediate (Next - This Session)
-1. ✅ **FEATURE-019 & BUG-004** - COMPLETE (committed and pushed)
-2. ✅ **FEATURE-020** - COMPLETE (Skeleton Loaders implemented)
-3. ✅ **FEATURE-021** - COMPLETE (Error Handling implemented)
-4. ✅ **Automated Testing** - COMPLETE
-   - All 10 API pagination tests passing
-   - TypeScript build successful
-   - Error handling verified
-5. **Next: Commit & Push** - Ready to commit changes to feature branch
-6. **Optional: FEATURE-023** - State Preservation (localStorage) if time permits
+### This Session (2026-02-01)
+1. ✅ Sprint planning complete
+2. 📝 Ready to start FEATURE-027 (Prompt Enhancement)
+3. Implement prompt changes per ticket
+4. Test with manual generation
+5. Commit and deploy to Railway
+6. Move to FEATURE-025
 
-### This Session
-1. ✅ FEATURE-019 & BUG-004 - COMPLETE
-2. ✅ FEATURE-020 - COMPLETE
-3. ✅ FEATURE-021 - COMPLETE & TESTED
-4. ✅ Automated Testing - All tests passing
-5. 📝 **Next: Commit Changes** - Ready to push to feature/article-pagination
-6. Optional: FEATURE-023 (State Preservation) if time permits
+### Week 1 (Feb 1-7)
+1. Complete FEATURE-027 (Prompt Enhancement)
+2. Complete FEATURE-025 (Multi-Pass Refinement)
+3. Complete FEATURE-026 (Celery Beat Automation)
+4. Deploy to Railway with multi-service
+5. Monitor first automated runs
 
-### Later (Week 2)
-1. FEATURE-022 (Progress Indicator) - optional
-2. FEATURE-024 (Smooth Scrolling) - optional
-3. Testing and production deployment
-4. User feedback and monitoring
+### Week 2 (Feb 8-14)
+1. Monitor briefing quality daily
+2. Review and adjust prompts if needed
+3. Tune narrative selection if needed
+4. Gather user feedback
+5. Document learnings for future sprints
 
 ---
 
@@ -489,44 +384,28 @@ None - all work unblocked and ready
 - Roadmap: `/Users/mc/Documents/claude-vault/projects/app-backdrop/planning/roadmap.md`
 - Architecture: `/Users/mc/dev-projects/crypto-news-aggregator/docs/decisions/`
 
+**Code References:**
+- Briefing agent: `src/crypto_news_aggregator/services/briefing_agent.py`
+- Briefing API: `src/crypto_news_aggregator/api/v1/endpoints/briefing.py`
+- Memory manager: `src/crypto_news_aggregator/services/memory_manager.py`
+- Pattern detector: `src/crypto_news_aggregator/services/pattern_detector.py`
+- DB operations: `src/crypto_news_aggregator/db/operations/briefing.py`
+
 ---
 
 ## Sprint Health
 
-**Status:** 🟢 Healthy - Core Features Complete & Tested
+**Status:** 🟢 Ready to Start
 
-**Completed this sprint:**
-- ✅ FEATURE-019: Article pagination (backend + frontend)
-- ✅ BUG-004: Fixed Vite proxy configuration
-- ✅ FEATURE-020: Skeleton Loaders (animated placeholders)
-- ✅ FEATURE-021: Error Handling with Retry (TESTED & VERIFIED)
-- ✅ FEATURE-022: Progress Indicator (Page X of Y display)
-- ✅ All automated tests passing (10/10 API tests)
-- ✅ TypeScript build successful
-- ✅ All changes committed and pushed to origin/feature/article-pagination
+**Strengths:**
+- All tickets have complete implementation code
+- Infrastructure already in place (agent, API, frontend)
+- Clear success criteria and testing strategy
+- Low risk with good mitigation plans
 
-**In Progress:**
-- None - all work committed
+**Watch Items:**
+- Railway multi-service deployment configuration
+- First automated briefing quality
+- LLM costs (should be ~$2-4/month)
 
-**Remaining work:**
-- 📋 FEATURE-023: State Preservation (1.5-2 hours, optional)
-- 📋 FEATURE-022 & 024: Progress indicator & smooth scroll (optional)
-
-**Risks:**
-- None identified - all core features stable and working
-
-**Test Results:**
-- ✅ 10/10 API pagination tests passing
-- ✅ TypeScript: Zero compilation errors
-- ✅ Build: 461 KB JS, 52 KB CSS (optimized)
-- ✅ Error handling: Verified and working
-- ✅ Dark mode: Full support confirmed
-- ✅ Mobile: Responsive layout verified
-
-**Notes:**
-- Excellent progress: 3 core features complete and tested (FEATURE-019, 020, 021)
-- Foundation solid: Pagination + Skeleton loaders + Error handling all verified
-- Core user experience greatly improved
-- All tests passing - safe for production
-- Optional polish features available for Week 2
-- Ready for final commit and deployment
+**Confidence:** High - Foundation is solid, just adding quality + automation
