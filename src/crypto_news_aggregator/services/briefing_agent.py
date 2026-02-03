@@ -34,6 +34,9 @@ from crypto_news_aggregator.services.pattern_detector import (
     get_pattern_detector,
     PatternSummary,
 )
+from crypto_news_aggregator.services.market_event_detector import (
+    get_market_event_detector,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -128,8 +131,8 @@ class BriefingAgent:
             # Step 2: Generate initial briefing
             generated = await self._generate_with_llm(briefing_input)
 
-            # Step 3: Self-refine (quality check)
-            refined = await self._self_refine(generated, briefing_input)
+            # Step 3: Self-refine (quality check with multi-pass refinement)
+            refined = await self._self_refine(generated, briefing_input, max_iterations=2)
 
             # Step 4: Save briefing to database
             briefing_doc = await self._save_briefing(
@@ -164,6 +167,24 @@ class BriefingAgent:
         # Get current narratives
         narratives = await self._get_active_narratives()
         logger.info(f"Retrieved {len(narratives)} active narratives")
+
+        # Detect and include market shock events
+        detector = get_market_event_detector()
+        market_events = await detector.detect_market_events()
+
+        if market_events:
+            logger.info(f"Detected {len(market_events)} market shock events")
+
+            # Create/update narratives for each market event
+            for event in market_events:
+                await detector.create_or_update_market_event_narrative(event)
+
+            # Refresh narratives to include newly created market event narratives
+            narratives = await self._get_active_narratives()
+
+            # Boost market events in the narrative ranking
+            narratives = await detector.boost_market_event_in_briefing(narratives)
+            logger.info(f"Market events prioritized in narrative ranking")
 
         # Detect patterns
         patterns = await self.pattern_detector.detect_all_patterns(
@@ -295,48 +316,77 @@ class BriefingAgent:
         self,
         generated: GeneratedBriefing,
         briefing_input: BriefingInput,
+        max_iterations: int = 2,
     ) -> GeneratedBriefing:
         """
-        Self-refine the generated briefing for quality.
+        Self-refine the generated briefing for quality with iterative refinement.
 
-        This implements the self-refine pattern:
+        This implements the multi-pass self-refine pattern:
         1. Evaluate the initial output
         2. Identify issues
         3. Refine if needed
+        4. Repeat up to max_iterations times
+        5. Return best attempt
+
+        Args:
+            generated: Initial briefing output
+            briefing_input: Input data used for generation
+            max_iterations: Maximum refinement passes (default: 2)
+
+        Returns:
+            Refined briefing (may still have issues if max iterations hit)
         """
-        # Build critique prompt
-        critique_prompt = self._build_critique_prompt(generated, briefing_input)
+        current = generated
 
-        critique_response = await self._call_llm(
-            critique_prompt,
-            system_prompt="You are a crypto market analyst reviewing a briefing for quality.",
-            max_tokens=1024,
-        )
+        for iteration in range(max_iterations):
+            # Build critique prompt
+            critique_prompt = self._build_critique_prompt(current, briefing_input)
 
-        # Check if refinement is needed
-        needs_refinement = self._check_needs_refinement(critique_response)
+            critique_response = await self._call_llm(
+                critique_prompt,
+                system_prompt="You are a crypto market analyst reviewing a briefing for quality.",
+                max_tokens=1024,
+            )
 
-        if not needs_refinement:
-            logger.info("Briefing passed quality check, no refinement needed")
-            return generated
+            # Check if refinement is needed
+            needs_refinement = self._check_needs_refinement(critique_response)
 
-        logger.info("Briefing needs refinement, running refinement pass")
+            if not needs_refinement:
+                logger.info(f"Briefing passed quality check on iteration {iteration + 1}")
+                # Add iteration metadata
+                current.detected_patterns.append(f"Quality passed on iteration {iteration + 1}")
+                return current
 
-        # Build refinement prompt
-        refinement_prompt = self._build_refinement_prompt(
-            generated, critique_response, briefing_input
-        )
+            logger.info(f"Briefing needs refinement (iteration {iteration + 1}/{max_iterations})")
+            logger.debug(f"Critique: {critique_response[:200]}...")
 
-        refined_response = await self._call_llm(
-            refinement_prompt,
-            system_prompt=self._get_system_prompt(briefing_input.briefing_type),
-            max_tokens=4096,
-        )
+            # Build refinement prompt
+            refinement_prompt = self._build_refinement_prompt(
+                current, critique_response, briefing_input
+            )
 
-        return self._parse_briefing_response(refined_response)
+            refined_response = await self._call_llm(
+                refinement_prompt,
+                system_prompt=self._get_system_prompt(briefing_input.briefing_type),
+                max_tokens=4096,
+            )
+
+            current = self._parse_briefing_response(refined_response)
+
+        # Max iterations reached without passing quality check
+        logger.warning(f"Briefing refinement stopped at max iterations ({max_iterations})")
+
+        # Reduce confidence score if we hit max iterations
+        if current.confidence_score > 0.6:
+            current.confidence_score = 0.6
+
+        # Add metadata about refinement attempts
+        current.detected_patterns.append(f"Max refinement iterations ({max_iterations}) reached")
+
+        return current
 
     def _get_system_prompt(self, briefing_type: str) -> str:
-        """Get the system prompt for briefing generation."""
+        """Get the enhanced system prompt for briefing generation."""
         time_context = "morning" if briefing_type == "morning" else "evening"
 
         return f"""You are a senior crypto market analyst writing a {time_context} briefing memo.
@@ -351,7 +401,7 @@ You will be given a list of narratives below. Your briefing MUST:
 ✓ ONLY discuss narratives explicitly listed in the data below
 ✓ ONLY use facts, names, and details that appear in those narratives
 ✗ NEVER add companies, people, events, or facts from your training knowledge
-✗ NEVER mention FalconX, 21Shares, SEC restructuring, CZ, or Binance unless they appear in the narratives below
+✗ NEVER mention entities unless they appear in the narratives below
 ✗ NEVER invent acquisitions, partnerships, or regulatory events
 
 If you mention something not in the provided narratives, the briefing is INVALID.
@@ -360,31 +410,65 @@ If you mention something not in the provided narratives, the briefing is INVALID
 
 WRITING RULES:
 
-1. ONLY COVER NARRATIVES FROM THE DATA
+1. SPECIFIC ENTITY REFERENCES (NEW - CRITICAL)
+   - ALWAYS use full entity names: "Binance", "BlackRock", "Cardano"
+   - NEVER use vague references: "the platform", "the exchange", "the network"
+   - If an entity is mentioned multiple times, use its name each time
+   - Example GOOD: "Binance has expanded its stablecoin offerings..."
+   - Example BAD: "The exchange is expanding..." (which exchange?)
+
+2. EXPLAIN "WHY IT MATTERS" (MANDATORY)
+   - Every significant development MUST include its implications
+   - Use phrases like:
+     * "The significance lies in..."
+     * "This matters because..."
+     * "The immediate impact is..."
+     * "This represents..."
+   - Connect events to broader market trends or investor decisions
+   - Example GOOD: "BlackRock's Bitcoin ETF positioning represents material institutional endorsement that could drive Q1 capital flows despite regulatory uncertainty."
+   - Example BAD: "BlackRock designated Bitcoin ETF as key theme." (so what?)
+
+3. ONLY COVER NARRATIVES FROM THE DATA
    - Read the "Active Narratives" section carefully
    - Each narrative you discuss MUST match one of the titles listed
    - Do not add stories that aren't in the list
 
-2. USE EXACT DETAILS FROM SUMMARIES
+4. USE EXACT DETAILS FROM SUMMARIES
    - The narrative summaries contain the facts you should use
    - Copy specific details (names, amounts, events) from the summaries
    - If a summary lacks details, say so rather than inventing them
 
-3. NO GENERIC FILLER
+5. NO GENERIC FILLER
    - BANNED: "The crypto markets continue to...", "In a mix of developments..."
    - BANNED: "Looking ahead, the industry will be shaped by..."
+   - BANNED: "Navigating challenges", "Amid uncertainty", "In the evolving landscape"
    - Start directly with your most important story
+   - End with specific actionable focus areas
 
-4. STRUCTURE
+6. PROFESSIONAL ANALYST TONE
+   - Write as flowing memo, not bullet points
+   - Connect related developments with causal reasoning
+   - Be direct about uncertainty when data is limited
+   - Use informed opinion with clear reasoning
+
+7. STRUCTURE
    - Each paragraph = one narrative or connected set of narratives
-   - End with a specific insight about what to watch
+   - Open with most significant development
+   - End with specific "immediate focus" areas
+
+GOOD EXAMPLE:
+"Binance has expanded its stablecoin offerings with the listing of a Kyrgyzstan som-pegged stablecoin, marking a strategic move into Central Asian markets. The exchange is simultaneously addressing security concerns through its anti-scam initiatives, though the specific technical measures remain undisclosed in available reporting. This parallel focus on market expansion and security infrastructure reflects the operational priorities of centralized exchanges navigating growth and trust simultaneously."
+
+BAD EXAMPLE:
+"The exchange continues to navigate the evolving landscape with new offerings. They are also working on security. This shows how platforms are adapting."
+(Why bad? Vague "the exchange", generic filler "evolving landscape", no specific names, no "why it matters")
 
 Output Format:
 Return valid JSON:
 {{
     "narrative": "The briefing text...",
     "key_insights": ["insight1", "insight2", "insight3"],
-    "entities_mentioned": ["entity1", "entity2"],
+    "entities_mentioned": ["Entity1", "Entity2"],  // Full names only
     "detected_patterns": ["pattern1", "pattern2"],
     "recommendations": [{{"title": "...", "theme": "..."}}],
     "confidence_score": 0.85
@@ -463,9 +547,16 @@ Return valid JSON:
     def _build_critique_prompt(
         self, generated: GeneratedBriefing, briefing_input: BriefingInput
     ) -> str:
-        """Build prompt for self-critique."""
+        """Build enhanced prompt for self-critique."""
         # Build list of narrative titles for grounding check
         narrative_titles = [n.get("title", "") for n in briefing_input.narratives[:8]]
+
+        # Extract entity names from narratives
+        narrative_entities = set()
+        for narrative in briefing_input.narratives[:8]:
+            entities = narrative.get("entities", [])
+            if entities:
+                narrative_entities.update(entities[:5])  # Top 5 entities per narrative
 
         return f"""Review this crypto briefing for quality issues:
 
@@ -478,19 +569,24 @@ KEY INSIGHTS:
 AVAILABLE NARRATIVES (the only valid sources):
 {json.dumps(narrative_titles, indent=2)}
 
+AVAILABLE ENTITIES (the only entities that can be mentioned):
+{json.dumps(list(narrative_entities), indent=2)}
+
 Check for these issues:
 
 1. HALLUCINATION: Does the briefing mention facts, companies, events, or numbers that are NOT from the provided narratives? This is the most critical issue.
 
-2. VAGUE CLAIMS: Are there statements like "X is navigating challenges" without specific details? Each claim needs specifics.
+2. VAGUE ENTITY REFERENCES (NEW - CRITICAL): Does the briefing use vague references like "the platform", "the exchange", "the network", "the protocol" instead of specific entity names? Every entity must be named explicitly.
 
-3. MISSING CONTEXT: Are numbers mentioned without baselines or comparisons?
+3. MISSING "WHY IT MATTERS": Are events mentioned without explaining their significance or implications? Each development needs clear reasoning for its importance.
 
-4. GENERIC FILLER: Does it start with "The crypto markets continue to..." or end with generic forward-looking statements?
+4. VAGUE CLAIMS: Are there statements like "X is navigating challenges" without specific details? Each claim needs specifics.
 
-5. ABRUPT TRANSITIONS: Does it switch topics mid-paragraph without logical connection?
+5. MISSING CONTEXT: Are numbers mentioned without baselines or comparisons?
 
-6. MISSING "WHY IT MATTERS": Are events mentioned without explaining their significance?
+6. GENERIC FILLER: Does it start with "The crypto markets continue to..." or end with generic forward-looking statements? Check for banned phrases like "amid uncertainty", "navigating challenges", "evolving landscape".
+
+7. ABRUPT TRANSITIONS: Does it switch topics mid-paragraph without logical connection?
 
 Respond with:
 {{
@@ -655,6 +751,17 @@ Return ONLY valid JSON in the same format as before."""
     ) -> Dict[str, Any]:
         """Save the generated briefing to the database."""
         from bson import ObjectId
+        import re
+
+        # Extract iteration count from detected_patterns if present
+        iteration_count = 1
+        for pattern in generated.detected_patterns:
+            if "iteration" in pattern.lower():
+                # Extract number from patterns like "Quality passed on iteration 2"
+                match = re.search(r'iteration (\d+)', pattern.lower())
+                if match:
+                    iteration_count = int(match.group(1))
+                    break
 
         briefing_doc = {
             "type": briefing_type,
@@ -674,13 +781,14 @@ Return ONLY valid JSON in the same format as before."""
                 "pattern_count": len(briefing_input.patterns.all_patterns()),
                 "manual_input_count": len(briefing_input.memory.manual_inputs),
                 "model": DEFAULT_MODEL,
+                "refinement_iterations": iteration_count,  # NEW: Track iterations
             },
         }
 
         briefing_id = await insert_briefing(briefing_doc)
         briefing_doc["_id"] = ObjectId(briefing_id)
 
-        logger.info(f"Saved briefing {briefing_id}")
+        logger.info(f"Saved briefing {briefing_id} (iterations: {iteration_count})")
         return briefing_doc
 
     async def _save_patterns(
