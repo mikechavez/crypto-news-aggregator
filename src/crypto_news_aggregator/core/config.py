@@ -84,8 +84,9 @@ class Settings(BaseSettings):
     UPSTASH_REDIS_TOKEN: str = ""  # Your Upstash REST token
 
     # Celery settings (using Redis for local development)
-    CELERY_BROKER_URL: str = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
-    CELERY_RESULT_BACKEND: str = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+    # Allow override via environment variable for production deployments (e.g., Railway)
+    CELERY_BROKER_URL: str = ""
+    CELERY_RESULT_BACKEND: str = ""
 
     # Security settings
     SECRET_KEY: str  # Change this to a secure secret key
@@ -168,6 +169,13 @@ class Settings(BaseSettings):
             self.POSTGRES_URL = f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}/{self.POSTGRES_DB}"
         if self.DATABASE_URL is None:
             self.DATABASE_URL = self.POSTGRES_URL
+
+        # Build Celery URLs with fallback to localhost for local development
+        if not self.CELERY_BROKER_URL:
+            self.CELERY_BROKER_URL = f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+        if not self.CELERY_RESULT_BACKEND:
+            self.CELERY_RESULT_BACKEND = f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+
         return self
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
