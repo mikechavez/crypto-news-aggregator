@@ -1,0 +1,222 @@
+---
+id: BUG-007
+type: bug
+status: fixed
+priority: critical
+severity: high
+created: 2026-02-05
+sprint: Sprint 6
+estimated_hours: 1-2
+reported_by: Product Owner
+fixed_date: 2026-02-05
+root_cause: Procfile missing Celery Beat and Worker process definitions
+fix_commit: cddbeb8
+---
+
+# Briefing Generation Not Running
+
+## Problem
+No briefings have been generated today (2026-02-05). Expected automated briefings at 8 AM and 8 PM EST per Sprint 5 implementation, but none created.
+
+## Impact
+- **Severity:** HIGH - Core feature broken
+- **User Impact:** No daily market briefings
+- **Business Impact:** Primary product value proposition not working
+
+## Expected Behavior
+- Briefings auto-generate at 8 AM EST (13:00 UTC)
+- Briefings auto-generate at 8 PM EST (01:00 UTC next day)
+- Visible in dashboard at `/briefings`
+
+## Actual Behavior
+- No briefings generated today
+- Last successful briefing: Unknown (needs verification after fix)
+
+## Root Cause (FIXED)
+**Procfile Missing Critical Process Definitions**
+
+The Procfile only defined the `web` process:
+```
+web: uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+This meant Railway was **only running the FastAPI web server**, but NOT the Celery processes needed for:
+- ✅ Celery Beat: Scheduler that triggers tasks at 8 AM and 8 PM EST
+- ✅ Celery Worker: Executor that runs the scheduled briefing generation tasks
+
+Without these processes, no scheduled tasks could ever execute, regardless of how well the automation code was implemented.
+
+## Solution Implemented
+
+Updated `Procfile` to include missing processes:
+
+```procfile
+web: uvicorn main:app --host 0.0.0.0 --port $PORT
+worker: celery -A crypto_news_aggregator.tasks worker --loglevel=info --queues=default,news,price,alerts,briefings
+beat: celery -A crypto_news_aggregator.tasks beat --loglevel=info
+```
+
+**What this fixes:**
+- `worker`: Executes all queued tasks (briefings, news fetching, price monitoring, alerts)
+- `beat`: Triggers scheduled tasks at configured times (8 AM and 8 PM EST for briefings)
+
+Commit: `cddbeb8` - "fix(celery): add missing worker and beat processes to Procfile"
+
+---
+
+## Investigation Steps (For Reference)
+
+### 1. Check Railway Deployment Status
+```bash
+# Via Railway dashboard or CLI
+railway logs --service backend
+```
+
+Look for:
+- Is app running?
+- Recent deployment timestamp
+- Any startup errors
+
+### 2. Check Celery Beat Logs
+```bash
+# In Railway logs, filter for "celery" or "beat"
+railway logs --filter "celery"
+```
+
+Look for:
+- Beat scheduler running?
+- Schedule entries loaded?
+- Tasks triggered at 8 AM/8 PM EST?
+
+### 3. Check Celery Worker Logs
+```bash
+# Look for task execution
+railway logs --filter "briefing"
+```
+
+Look for:
+- Worker receiving tasks?
+- Task execution errors?
+- Database connection issues?
+
+### 4. Query Database for Last Briefing
+```python
+# scripts/check_last_briefing.py
+from crypto_news_aggregator.db.mongodb import MongoDBConnection
+from datetime import datetime
+
+async def check_briefings():
+    db = MongoDBConnection()
+    await db.connect()
+    
+    # Get last briefing
+    last = await db.db.briefings.find_one(
+        sort=[("created_at", -1)]
+    )
+    
+    if last:
+        print(f"Last briefing: {last['created_at']}")
+        print(f"Title: {last.get('title', 'N/A')}")
+    else:
+        print("No briefings found in database")
+    
+    await db.disconnect()
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(check_briefings())
+```
+
+### 5. Check Celery Beat Schedule Configuration
+```python
+# In crypto_news_aggregator/main.py or celery_app.py
+# Verify schedule is configured:
+app.conf.beat_schedule = {
+    'generate-morning-briefing': {
+        'task': 'crypto_news_aggregator.tasks.generate_briefing',
+        'schedule': crontab(hour=13, minute=0),  # 8 AM EST
+    },
+    'generate-evening-briefing': {
+        'task': 'crypto_news_aggregator.tasks.generate_briefing',
+        'schedule': crontab(hour=1, minute=0),   # 8 PM EST
+    },
+}
+```
+
+### 6. Manual Trigger Test
+```bash
+# Trigger briefing manually to test if service works
+curl -X POST http://localhost:8000/api/briefings/generate
+# or via Python:
+poetry run python -c "from crypto_news_aggregator.tasks import generate_briefing; generate_briefing.apply_async()"
+```
+
+## Possible Root Causes
+
+### Deployment Issue
+- Railway service not running
+- Recent deploy failed
+- Environment variables missing (ANTHROPIC_API_KEY, MONGODB_URI)
+
+### Celery Configuration
+- Beat scheduler not started in Railway
+- Worker not started
+- Timezone configuration wrong (EST vs UTC)
+- Schedule not loaded
+
+### Database Issue
+- MongoDB connection broken
+- Write permissions issue
+- Collection not found
+
+### Code Issue
+- Bug in briefing generation code
+- Exception not caught/logged
+- Async issue
+
+## Resolution Steps
+
+1. **Verify Railway deployment:**
+   - Check service status in Railway dashboard
+   - Verify latest deploy successful
+   - Check environment variables present
+
+2. **Check Celery processes:**
+   - Ensure both beat and worker running
+   - Verify logs show task scheduling
+   - Confirm timezone configuration
+
+3. **Test manual generation:**
+   - Trigger briefing via API
+   - Check if it succeeds
+   - Review any error messages
+
+4. **Fix identified issue:**
+   - Update configuration if needed
+   - Restart services if needed
+   - Deploy fix if code issue
+
+## Testing After Fix
+- [ ] Deploy updated Procfile to Railway
+- [ ] Verify both worker and beat processes started
+- [ ] Check Railway logs show "Starting beat scheduler"
+- [ ] Wait for next scheduled briefing time (8 AM or 8 PM EST)
+- [ ] Check logs show briefing task executed successfully
+- [ ] Verify briefing appears in MongoDB `briefings` collection
+- [ ] Confirm briefing visible in `/briefings` dashboard
+- [ ] Check cost tracking recorded LLM usage for briefing generation
+
+## Prevention
+- Add health check endpoint: `GET /health/celery`
+- Add monitoring for briefing generation
+- Alert if no briefing generated in 24 hours
+- Add daily briefing count to Cost Monitor dashboard
+
+## Related Files
+- `src/crypto_news_aggregator/tasks.py` - Celery tasks
+- `src/crypto_news_aggregator/services/briefing_agent.py` - Generation logic
+- `src/crypto_news_aggregator/main.py` - FastAPI app with beat schedule
+- Railway deployment config
+
+## Notes
+This is critical - briefing automation was Sprint 5's main deliverable. Must fix ASAP.
