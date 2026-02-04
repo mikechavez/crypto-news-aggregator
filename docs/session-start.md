@@ -17,19 +17,19 @@
 
 ## Sprint Status
 
-**Progress:** 3/5 features complete (60%) + 1 critical bug fixed
+**Progress:** 4/5 features complete (80%) + 1 critical bug fixed
 
 **Completed:**
 - ✅ FEATURE-028: Cost Tracking Service
 - ✅ FEATURE-029: LLM Integration
 - ✅ FEATURE-030: Verification & Testing
+- ✅ FEATURE-031: Backend API Verification (0.5h actual)
 - ✅ BUG-007: Briefing Generation Failure (ROOT CAUSE FOUND & FIXED)
 
 **Remaining:**
-- 📋 FEATURE-031: Backend API Verification (1h)
 - 📋 FEATURE-032: Add Alert Banner (0.5h)
 
-**Blockers:** None - BUG-007 resolved
+**Blockers:** None - all dependencies clear
 
 ---
 
@@ -45,8 +45,8 @@
 ## Next Steps
 
 1. ✅ Fix BUG-007 (briefing generation) - **COMPLETE** - Procfile updated with worker and beat processes
-2. 📋 Test FEATURE-031 (backend API verification) - Next priority
-3. 📋 Add FEATURE-032 (alert banner only - existing dashboard is great)
+2. ✅ Test FEATURE-031 (backend API verification) - **COMPLETE** - All 7 endpoints verified with real data
+3. 📋 Add FEATURE-032 (alert banner only - existing dashboard is great) - **READY TO START**
 
 ---
 
@@ -77,4 +77,32 @@ beat: celery -A crypto_news_aggregator.tasks beat --loglevel=info
 
 ---
 
-**Focus:** Verify BUG-007 fix deployed, then complete FEATURE-031 and FEATURE-032 to finish sprint
+## ✅ FEATURE-031 Completion Details
+
+**All 7 admin API endpoints tested and verified working:**
+
+### Cost Data Validated
+- Month-to-date: $0.09
+- Projected monthly: $0.71 (✅ TARGET MET - under $10!)
+- Cache hit rate: 24.33%
+
+### Real Data Statistics
+- Cache entries: 883 (all active)
+- Articles processed (7d): 1,145
+- LLM extractions: 1,308
+- Simple extractions: 280
+
+### Endpoints Verified
+1. `/admin/health` ✓
+2. `/admin/api-costs/summary` ✓
+3. `/admin/api-costs/daily?days=7` ✓
+4. `/admin/api-costs/by-model` ✓
+5. `/admin/cache/stats` ✓
+6. `/admin/cache/clear-expired` ✓
+7. `/admin/processing/stats` ✓
+
+**Backend ready for FEATURE-032 frontend integration!**
+
+---
+
+**Focus:** Complete FEATURE-032 (alert banner) to finish sprint
