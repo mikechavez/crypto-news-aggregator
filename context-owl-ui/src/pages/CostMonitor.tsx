@@ -16,6 +16,7 @@ import { adminAPI } from '../api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { CostAlert } from '../components/CostAlert';
 import { cn } from '../lib/cn';
 
 // Original monthly cost before optimization
@@ -306,6 +307,15 @@ export function CostMonitor() {
           </button>
         </div>
       </div>
+
+      {/* Cost Alert Banner */}
+      {summary && (
+        <CostAlert
+          dailyCost={dailyCosts?.daily_costs?.[dailyCosts.daily_costs.length - 1]?.total_cost || 0}
+          projectedMonthly={summary.projected_monthly || 0}
+          target={10}
+        />
+      )}
 
       {/* Stat Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
