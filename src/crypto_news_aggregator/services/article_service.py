@@ -636,3 +636,8 @@ class ArticleService:
 
 # Singleton instance
 article_service = ArticleService()
+
+
+def get_article_service() -> ArticleService:
+    """Get the singleton ArticleService instance."""
+    return article_service
