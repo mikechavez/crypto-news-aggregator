@@ -13,6 +13,11 @@ from .briefing_tasks import (
     cleanup_old_briefings_task,
 )
 
+# FIXED: Import missing task modules
+from .alert_tasks import check_price_alerts
+from .fetch_news import fetch_news as fetch_news_task
+from .price_monitor import check_price_movements
+
 app = Celery("crypto_news_aggregator")
 app.config_from_object("crypto_news_aggregator.tasks.celery_config")
 
@@ -31,14 +36,23 @@ __all__ = [
     "generate_morning_briefing_task",
     "generate_evening_briefing_task",
     "cleanup_old_briefings_task",
+    "consolidate_narratives_task",
+    "check_price_alerts",
+    "fetch_news_task",
+    "check_price_movements",
 ]
 
-# Auto-discover tasks (as a fallback)
+# FIXED: Auto-discover ALL task modules
 app.autodiscover_tasks(
     [
         "crypto_news_aggregator.tasks.news",
         "crypto_news_aggregator.tasks.trends",
         "crypto_news_aggregator.tasks.briefing_tasks",
+        "crypto_news_aggregator.tasks.alert_tasks",
+        "crypto_news_aggregator.tasks.fetch_news",
+        "crypto_news_aggregator.tasks.price_monitor",
+        "crypto_news_aggregator.tasks.process_article",
+        "crypto_news_aggregator.tasks.narrative_consolidation",
     ]
 )
 
