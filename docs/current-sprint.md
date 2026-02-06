@@ -1,436 +1,390 @@
-# Sprint 6: Cost Tracking & Monitoring
+# Sprint 7: Model Migration & UI Polish
 
-**Goal:** Implement comprehensive LLM cost tracking with accurate monitoring dashboard
+**Goal:** Migrate to Claude Haiku 4.5 and deliver polished user experience improvements
 
-**Sprint Duration:** 2026-02-05 to 2026-02-19 (2 weeks)
+**Sprint Duration:** 2026-02-06 to 2026-02-20 (2 weeks)
 
-**Velocity Target:** 5 features + critical bugs
+**Velocity Target:** 4 features + 1 bug = 5 tickets
 
-**Status:** 🟡 **~96% COMPLETE** - All bugs fixed! BUG-018 deployed, worker healthy, awaiting briefing verification ⏳
-
----
-
-## ✅ BUG-018: CoinDesk Infinite Retry Loop - FIXED ✅
-
-**Priority:** P0 - CRITICAL (starves worker pool)
-**Status:** ✅ FIXED & DEPLOYED - 2026-02-06 23:30 UTC
-**Discovered:** 2026-02-07 01:10 UTC (during log analysis)
-**Root Cause:** JSONDecodeError breaks from retry loop but not outer while loop → infinite retry
-**Commit:** 4a5b673
-**Deployment:** ✅ Deployed to Railway, worker restarted 2026-02-07 15:16 UTC
-
-**The Problem:**
-Workers stuck in infinite loop making duplicate HTTP requests to CoinDesk API:
-```
-[14:54:08] HTTP Request: GET https://www.coindesk.com/v2/news?page=1&per_page=20...
-[14:54:08] Could not decode JSON from CoinDesk. Status: 200. Response: <!DOCTYPE html>
-[14:54:09] HTTP Request: GET https://www.coindesk.com/v2/news?page=1...  ← SAME PAGE!
-[14:54:09] Could not decode JSON from CoinDesk. Status: 200. Response: <!DOCTYPE html>
-...INFINITE LOOP...
-```
-
-**Root Cause (coindesk.py line 177):**
-```python
-except json.JSONDecodeError:
-    logger.warning(f"Could not decode JSON from CoinDesk...")
-    break  # ← Only exits retry loop, not outer while loop!
-    # Code continues: while count < limit → retries same page forever
-```
-
-**Fix Applied:**
-Changed `break` to `return` in JSONDecodeError handler:
-```python
-except json.JSONDecodeError:
-    logger.warning(f"Could not decode JSON from CoinDesk...")
-    logger.info(f"Stopping fetch from CoinDesk due to HTML response (blocking detected)")
-    return  # Exit both retry loop AND outer while loop
-```
-
-**Result:** ✅ Worker pool recovered, fetch_news now completes in 0.25 seconds
-
-**Verification (2026-02-07 15:21 UTC Railway logs):**
-- ✅ fetch_news[0ecf2d40-2d75-4dea-88b5-df8402e79afd] completed in 0.254s
-- ✅ No more infinite retry loop
-- ✅ Worker processing tasks normally
-- ✅ check_price_alerts completed in 0.069s
+**Status:** 🟡 **IN PROGRESS** - 0/5 complete (0%)
 
 ---
 
-## ✅ BUG-015: Async Task Serialization Error - FIXED ✅
+## Sprint Objectives
 
-**Priority:** P0 - CRITICAL (prevents all task execution)
-**Status:** ✅ FIXED - 2026-02-06 06:15 UTC
-**Discovered:** 2026-02-06 02:50 UTC (after BUG-014 merge)
-**Commit:** 18c74ac
+### Primary Goals
+1. **Model Migration** - Upgrade to Claude Haiku 4.5 before deprecation
+2. **UI Polish** - Fix known UX issues and improve navigation
+3. **Feature Enhancement** - Add narrative detail pages for better UX
 
-**Issue (RESOLVED):**
-After BUG-014 fixed task name mismatch, tasks were being received but failed with:
-```
-kombu.exceptions.EncodeError: Object of type coroutine is not JSON serializable
-```
-
-**Root Cause (IDENTIFIED):**
-Task functions were defined as `async` but used `@shared_task` which doesn't support async:
-- `src/crypto_news_aggregator/tasks/fetch_news.py` line 84: `async def fetch_news(...)`
-- `src/crypto_news_aggregator/tasks/alert_tasks.py` line 20: `async def check_price_alerts()`
-
-**Fix Applied:**
-1. ✅ Removed `async` keyword from both function definitions
-2. ✅ Wrapped async calls with `asyncio.run()`:
-   - fetch_news.py line 112: `asyncio.run(fetch_articles_from_source(...))`
-   - alert_tasks.py line 38: `asyncio.run(notification_service.process_price_alert(...))`
-3. ✅ Added `asyncio` import to alert_tasks.py
-4. ✅ Fixed lazy settings initialization in fetch_news.py
-
-**Files modified:**
-- ✅ `src/crypto_news_aggregator/tasks/fetch_news.py`
-- ✅ `src/crypto_news_aggregator/tasks/alert_tasks.py`
-
-**Status:** ✅ MERGED TO MAIN & DEPLOYED - Worker verified executing tasks successfully!
+### Success Criteria
+- ✅ Haiku 4.5 migration complete and verified
+- ✅ Briefing page labels accurate (morning/evening)
+- ✅ Narrative detail pages functional and linked
+- ✅ Signals page clean and focused
+- ✅ All features tested and deployed
 
 ---
 
-## 📋 New Tickets Created (Sprint Completion)
+## Sprint Backlog
 
-### TASK-002: End-to-End Briefing Verification - PRIORITY ⭐
-**Status:** Ready to execute
-**Priority:** HIGH - Blocks sprint completion
-**Effort:** 30 minutes to 1 day
-**Created:** 2026-02-05
+### 🚨 High Priority
 
-**Objective:** Verify complete briefing generation pipeline works end-to-end
+#### FEATURE-033: Migrate to Claude Haiku 4.5
+**Priority:** HIGH  
+**Status:** Ready  
+**Complexity:** Low  
+**Effort:** 1 hour estimated
 
-**Test Plan:**
-1. Run manual test: `poetry run python scripts/test_briefing_trigger.py`
-2. Verify articles exist in database
-3. Check cost tracking records operations
-4. Monitor scheduled briefings (8 AM / 8 PM EST)
-5. Confirm dashboard shows updated costs
+**Why this matters:**
+- Claude 3.5 Haiku deprecated Jan 5, 2026
+- Shutdown date: July 5, 2026
+- Haiku 4.5 is 4-5x faster with better performance
+- Achieves 90% of Sonnet 4.5 quality
 
-**Success Criteria:**
-- ✅ Manual test passes without errors
-- ✅ Briefing content generated
-- ✅ Cost data recorded in MongoDB
-- ✅ Scheduled briefings execute successfully
-- ✅ All costs within budget (<$10/month)
+**What we're doing:**
+- Update model string: `claude-3-5-haiku-20241022` → `claude-haiku-4-5-20251001`
+- Update pricing: Input $0.80→$1.00, Output $4.00→$5.00 per 1M tokens
+- Test entity extraction quality
+- Verify cost tracking accuracy
 
-**Ticket:** `TASK-002-end-to-end-briefing-verification.md`
+**Cost impact:** +$0.15/month (still well under $10 target)
 
-### TASK-001: Investigate News Fetching Architecture
-**Status:** Backlog (post-sprint)
-**Priority:** MEDIUM
-**Effort:** 1-2 hours
-**Created:** 2026-02-05
+**Files:**
+- `src/crypto_news_aggregator/llm/optimized_anthropic.py` (1 line)
+- `src/crypto_news_aggregator/services/cost_tracker.py` (pricing table)
 
-**Discovery:** Two separate news fetching systems exist:
-1. **API-Based** (`fetch_news.py`) - Currently executing via Celery
-2. **RSS-Based** (`rss_service.py`) - 12 feeds configured, unclear if active
-
-**Objective:** Clarify which system is primary and if consolidation needed
-
-**Investigation:**
-- Check beat schedule for RSS tasks
-- Verify which sources have recent articles
-- Test both systems independently
-- Document architecture decision
-- Remove unused code or integrate both systems
-
-**Ticket:** `TASK-001-investigate-news-fetching-architecture.md`
-
-### BUG-016: CoinDesk API HTML Response
-**Status:** Identified (post-sprint)
-**Priority:** MEDIUM (11/12 sources working)
-**Severity:** MEDIUM
-**Created:** 2026-02-05
-
-**Issue:** CoinDesk API returning HTML instead of JSON during fetch_news execution
-
-**Impact:** Low - worker executing successfully, other sources working
-
-**Investigation needed:**
-- Test if RSS feed works: `https://www.coindesk.com/arc/outboundfeeds/rss/`
-- Check if API endpoint changed
-- Try different User-Agent headers
-- Consider using RSS instead of API
-
-**Resolution depends on:** TASK-001 findings (which system to prioritize)
-
-**Ticket:** `BUG-016-coindesk-api-html-response.md`
+**Ticket:** `/mnt/user-data/outputs/FEATURE-033-haiku-4-5-migration.md`
 
 ---
 
-## ✅ CRITICAL BUGS RESOLVED
+### 📋 Medium Priority
 
-### BUG-007 - FIXED ✅
-**Root Cause:** Procfile missing Celery Beat and Worker process definitions
-**Fix:** Added worker and beat processes to Procfile (commit cddbeb8)
-**Status:** Verified working
+#### FEATURE-034: Build Narrative Detail Page
+**Priority:** MEDIUM  
+**Status:** Ready  
+**Complexity:** Medium  
+**Effort:** 4 hours estimated
 
-### BUG-008 - FIXED ✅
-**Root Cause:** Celery worker/beat can't connect to Redis broker in production
-**Fix:** Updated config to accept CELERY_BROKER_URL environment override (commit aab0f16)
-**Infrastructure:** Redis service added to Railway
-**Status:** Verified working
+**Why this matters:**
+- Blocks FEATURE-035 (recommended reading links)
+- Users can't deep-dive into narratives
+- No shareable narrative URLs
+- Future features need detail pages
 
-### BUG-009 - FIXED ✅
-**Root Cause:** Manual event loop management left dangling Motor references
-**Issue:** "Event loop is closed" error on repeated briefing generation
-**Fix:** Replaced with `asyncio.run()` which properly manages lifecycle
-**Status:** Verified working
+**What we're building:**
+- New route: `/narratives/:id`
+- Dedicated page with narrative focus
+- Full article list (better UX than accordion)
+- Metadata section (first seen, last updated, etc.)
+- Related signals (if available)
 
-### BUG-010 - FIXED ✅
-**Root Cause:** Multiple deployment configuration issues
-**Issues Found and Fixed:**
-1. **Python Path:** Added `cd src &&` to worker and beat start commands ✅
-2. **SECRET_KEY:** Added SECRET_KEY environment variable to both services ✅
-3. **Redis URLs:** Replaced `${REDIS_URL}` with actual connection strings ✅
-**Status:** Infrastructure configured correctly
+**Components:**
+- `NarrativeDetail.tsx` (main page)
+- `LifecycleBadge.tsx` (extracted shared component)
+- `ArticleCard.tsx` (extracted shared component)
 
-### BUG-011 - FIXED & VERIFIED ✅
-**Root Cause:** Missing `get_article_service()` function in `article_service.py`
-**Fix:** Added function to return singleton instance (commit edb385d)
-**Status:** ✅ Verified working (function imports successfully now that BUG-012 is fixed)
+**Backend dependency:** Verify or create `GET /api/narratives/:id` endpoint
 
-### BUG-012 - FIXED ✅
-**Root Cause:** Non-existent `check_price_movements` function imported in multiple files
-**Fix:** Removed all imports and beat schedule references (commits c1bd804, 618e4c7)
-**Status:** ✅ Verified working (web service and worker start successfully)
-
-### BUG-013 - FIXED & MERGED ✅
-**Root Cause:** `price_monitor` module still in autodiscover list after tasks were removed
-**Fix:** Removed module from autodiscover (commit 618e4c7)
-**Status:** ✅ Merged to main (2026-02-06 01:50 UTC)
+**Ticket:** `/mnt/user-data/outputs/FEATURE-034-narrative-detail-page.md`
 
 ---
 
-## ✅ Completed Features
+#### FEATURE-035: Update Briefing Recommended Reading Links
+**Priority:** MEDIUM  
+**Status:** Blocked (depends on FEATURE-034)  
+**Complexity:** Low  
+**Effort:** 1 hour estimated
 
-### FEATURE-028: Cost Tracking Service
-**Status:** ✅ COMPLETED
-**Effort:** 4h estimated, 1h actual
-**Delivered:**
-- CostTracker service with full pricing table
-- 8 tests passing
-- Accurate cost calculations verified
+**Why this matters:**
+- Recommended reading links currently go to generic `/narratives` page
+- Users can't click to explore recommendations
+- Feature feels broken/incomplete
 
-### FEATURE-029: LLM Integration
-**Status:** ✅ COMPLETED  
-**Effort:** 3h estimated, 2h actual
-**Delivered:**
-- All LLM calls wrapped with tracking
-- Token extraction from API responses
-- 9 integration tests passing
+**What we're doing:**
+- Backend: Add `narrative_id` to recommendation objects
+- Frontend: Link to `/narratives/{id}` instead of `/narratives`
+- Graceful fallback for old briefings without IDs
 
-### FEATURE-030: Verification & Testing
-**Status:** ✅ COMPLETED
-**Effort:** 2h estimated, 1h actual
-**Delivered:**
-- Verification script functional
-- 6 E2E tests passing
-- Cost calculations validated
+**Dependencies:** FEATURE-034 must be complete first
 
-### FEATURE-031: Backend API Verification
-**Status:** ✅ COMPLETED
-**Effort:** 1h estimated, 0.5h actual
-**Delivered:**
-- All 7 admin endpoints tested with real MongoDB data
-- Response formats verified correct for frontend
-- Real cost data validated: $0.09 MTD, $0.71 projected (TARGET MET!)
-- Cache performance tracked: 24.33% hit rate
-- Processing statistics verified: 1,145 articles, 1,308 LLM ops
+**Files:**
+- `src/crypto_news_aggregator/services/briefing_agent.py` (backend)
+- `context-owl-ui/src/pages/Briefing.tsx` (1 line change)
 
-### FEATURE-032: Dashboard UI Components
-**Status:** ✅ COMPLETED
-**Effort:** 0.5h estimated, 0.25h actual
-**Delivered:**
-- CostAlert component created (`src/components/CostAlert.tsx`)
-- Alert triggers: daily cost > $0.50 OR projected monthly > $10
-- Integrated at top of CostMonitor page
-- Dark mode support with Tailwind utilities
-- Production build: ✅ Successful (462.70 KB JS, 52.82 KB CSS)
+**Ticket:** `/mnt/user-data/outputs/FEATURE-035-briefing-recommended-links.md`
+
+---
+
+#### BUG-010: Briefing Morning/Evening Label Accuracy
+**Priority:** MEDIUM  
+**Status:** Ready  
+**Severity:** Low  
+**Effort:** 30 min estimated
+
+**Why this matters:**
+- Briefing page should accurately show "Morning" or "Evening"
+- Label should be based on actual generation time
+- Current implementation unclear
+
+**What we're investigating:**
+- Does backend set `type` field correctly?
+- Is it based on scheduled time (8 AM/8 PM) or actual time?
+- Does it persist correctly in MongoDB?
+
+**Proposed fix:**
+Backend should set `type` based on scheduled hour:
+- `scheduled_hour == 8` → `type = "morning"`
+- `scheduled_hour == 20` → `type = "evening"`
+
+**Files:**
+- `src/crypto_news_aggregator/services/briefing_agent.py` (investigation/fix)
+
+**Ticket:** `/mnt/user-data/outputs/BUG-010-briefing-morning-evening-label.md`
+
+---
+
+### ✨ Low Priority / Quick Wins
+
+#### FEATURE-036: Remove "Part of:" Section from Signals
+**Priority:** LOW  
+**Status:** Ready  
+**Complexity:** Trivial  
+**Effort:** 10 minutes estimated
+
+**Why this matters:**
+- Current "Part of:" links don't work (go to generic page)
+- Creates user confusion
+- Better to remove than show broken functionality
+
+**What we're doing:**
+- Remove narrative links from signal cards
+- Keep "Emerging" badge (still useful)
+- Clean up spacing/layout
+
+**What stays:** Recent articles, velocity badges, entity info  
+**What goes:** Narrative theme badge buttons
+
+**Files:**
+- `context-owl-ui/src/pages/Signals.tsx` (~20 lines removed, ~8 added)
+
+**Future:** Re-add with working links after FEATURE-034 completes
+
+**Ticket:** `/mnt/user-data/outputs/FEATURE-036-remove-signals-part-of.md`
 
 ---
 
 ## Sprint Progress
 
-### Velocity
-- **Total tickets:** 5 features + 9 bugs + 2 tasks
-- **Completed:** 5/5 features (100%) + 9/9 bugs (100%) + 0/2 tasks (0%)
-- **Remaining:** TASK-002 (HIGH PRIORITY - blocks sprint completion)
-- **Time spent:** 4.75 hours features + ~8 hours debugging + verification pending
+### Velocity Tracker
+- **Total tickets:** 5 (4 features + 1 bug)
+- **Completed:** 0/5 (0%)
+- **In Progress:** 0
+- **Blocked:** 1 (FEATURE-035 blocked by FEATURE-034)
+- **Estimated hours:** 6.5 hours total
 
-### Remaining for Sprint Completion
+### Current Focus
+1. 🔴 **FEATURE-033** - Haiku migration (do first, highest priority)
+2. 🟡 **FEATURE-034** - Narrative detail pages (unblocks FEATURE-035)
+3. 🟢 **FEATURE-036** - Remove "Part of:" section (quick win)
 
-**High Priority - Blocks Sprint:**
-- [ ] **TASK-002:** End-to-end briefing verification (30 min - 1 day)
-  - Manual test script: `poetry run python scripts/test_briefing_trigger.py`
-  - Verify cost tracking in dashboard
-  - Monitor scheduled briefings (8 AM / 8 PM EST)
-  - **Acceptance:** All tests pass → Sprint COMPLETE!
+---
 
-**Medium Priority - Post-Sprint:**
-- [ ] **TASK-001:** Investigate news fetching architecture (1-2 hours)
-  - Clarify API vs RSS systems
-  - Document architecture decision
-  - Can be done after sprint closes
-  
-- [ ] **BUG-016:** CoinDesk API HTML response (low priority)
-  - 11/12 sources working
-  - Fix depends on TASK-001 findings
-  - Non-blocking issue
+## Dependency Graph
+
+```
+FEATURE-033 (Haiku Migration) ────────────────────┐
+                                                   │
+BUG-010 (Briefing Labels) ───────────────────────┤
+                                                   ├─→ Deploy Together
+FEATURE-036 (Remove "Part of") ──────────────────┤
+                                                   │
+                                                   └─→ Quick Wins Phase
+
+FEATURE-034 (Narrative Detail) ──┐
+                                  ├─→ FEATURE-035 (Recommended Links)
+                                  │
+                                  └─→ Future: Re-add "Part of" to Signals
+```
 
 ---
 
 ## Technical Context
 
-### LLM Call Locations
-1. `llm/optimized_anthropic.py` - Main client
-2. `services/briefing_agent.py` - Briefings (2x daily)
-3. `services/narrative_themes.py` - Narrative summaries
+### Model Migration Details
+**Current:** Claude 3.5 Haiku (deprecated)  
+**New:** Claude Haiku 4.5
 
-### Anthropic Pricing (Feb 2026)
-| Model | Input | Output |
-|-------|-------|--------|
-| Haiku | $0.80/1M | $4.00/1M |
-| Sonnet | $3.00/1M | $15.00/1M |
-| Opus | $15.00/1M | $75.00/1M |
+| Model | Input Cost | Output Cost |
+|-------|------------|-------------|
+| 3.5 Haiku | $0.80/1M | $4.00/1M |
+| 4.5 Haiku | $1.00/1M | $5.00/1M |
 
-### Expected Monthly Cost
-- Entity extraction: $0.60
-- Briefings: $0.90
-- Narratives: $0.13
-- **Total: ~$1.63/month** ✅ (under $10 target)
+**Performance:** 4.5 is 4-5x faster, better quality
 
 ---
 
-## Success Criteria
+### UI Architecture Changes
 
-By end of sprint:
-- ✅ Briefing automation working
-- ✅ All LLM calls tracked accurately
-- ✅ Dashboard displays real cost data
-- ✅ Alerts trigger at thresholds ($0.50/day, $10/month)
-- ✅ Monthly cost under $10
+**New Routes:**
+- `/narratives/:id` - Narrative detail page (new)
 
----
+**Shared Components to Extract:**
+- `LifecycleBadge` - Used by Narratives list + detail
+- `ArticleCard` - Reusable article display
 
-## Bug Resolution Timeline
-
-**BUG-007:** Identified and fixed (Procfile) - 2 hours ✅
-**BUG-008:** Identified and fixed (Redis config) - 1 hour ✅
-**BUG-009:** Identified and fixed (event loop) - 1 hour ✅
-**BUG-010:** Identified and fixed (infrastructure) - 2 hours ✅
-**BUG-011:** Identified and fixed (missing function) - 1 hour ✅
-**BUG-012:** Identified (import error) - 1 hour investigation, fix pending
-
-**Total debugging time:** ~8 hours
-**Lesson:** Always check full error traces - recent changes may not be the cause
+**Files to Modify:**
+- Briefing.tsx - Link recommendations to detail pages
+- Signals.tsx - Remove broken narrative links
+- Narratives.tsx - Refactor to use shared components
 
 ---
 
-## Deployment Status
+## Risk Assessment
 
-**Features:** ✅ All tested and verified (5/5 complete)
-**Infrastructure:** ✅ Configured correctly & OPERATIONAL
-**Code:** ✅ ALL BUGS FIXED - Worker actively executing tasks!
+### Medium Risk  
+🟡 **FEATURE-034** - Backend endpoint might not exist  
+**Mitigation:** Verify endpoint first, create if needed (add 30 min)
 
-### What's Ready & Working ✅
-- ✅ Cost tracking service with accurate LLM cost tracking
-- ✅ LLM integration with token extraction and tracking
-- ✅ Verification and testing system
-- ✅ Backend API endpoints fully verified (7/7 working)
-- ✅ Dashboard UI with cost alert banner
-- ✅ Celery + Redis infrastructure OPERATIONAL
-- ✅ Briefing scheduler configured for 8 AM and 8 PM EST
-- ✅ Event loop management fixed with asyncio.run()
-- ✅ All environment variables set correctly
-- ✅ Python path configured correctly (via Procfile cd src &&)
-- ✅ BUG-011 fix applied (get_article_service function added)
-- ✅ BUG-015 async serialization fixed (removed async, added asyncio.run)
-
-### Task Execution Status
-- ✅ Worker ACTIVELY EXECUTING TASKS (verified in real-time logs)
-- ✅ fetch_news task running and processing articles
-- ✅ ForkPoolWorker-31 and ForkPoolWorker-32 handling requests
-- ✅ No JSON serialization errors
-- ✅ All 23 tasks registered and available
-- 🔴 **BUG-018: CoinDesk API infinite retry loop (CRITICAL)**
-  - API returns HTML instead of JSON (blocking detected)
-  - Code breaks from retry loop but continues outer while loop → infinite loop
-  - Workers stuck making same request repeatedly, starving other tasks
-  - force_generate_briefing_task cannot execute (no available workers)
-  - **Status:** Root cause identified, fix ready to commit
-  - **Note:** RSS feed likely active and working; API should be deprecated
-
-### Recent Completion
-- ✅ BUG-012: Removed check_price_movements import
-- ✅ BUG-013: Removed price_monitor from autodiscover
-- ✅ BUG-014: Fixed task name mismatch in beat schedule (MERGED)
-- ✅ BUG-015: Fixed async task serialization (MERGED & VERIFIED!)
-- ✅ Web service starts and responds
-- ✅ Celery worker starts and executes tasks
-- ✅ Celery beat scheduler starts and dispatches tasks
+### Low Risk
+🟢 **FEATURE-033** - Model migration is straightforward  
+🟢 **Others** - All are simple UI changes with clear scope
 
 ---
 
-**Sprint Health:** 🟢 **~95% Complete - Infrastructure fully operational, final verification pending!**
+## Testing Strategy
 
-**Current Status:**
-- ✅ All 5 features implemented and tested
-- ✅ All 9 infrastructure bugs fixed (BUG-007 through BUG-015)
-- ✅ Worker is processing tasks in real-time
-- ✅ No errors in critical paths
-- ✅ Cost tracking system functional
-- ✅ Scheduled briefings configured (8 AM / 8 PM EST)
+### Unit Tests
+- Cost tracker with new Haiku 4.5 pricing
+- Entity extraction with new model
+- Narrative detail component rendering
 
-**Remaining Work:**
-- 🎯 **TASK-002:** End-to-end briefing verification (BLOCKING SPRINT)
-  - Run manual test
-  - Verify scheduled briefings execute
-  - Confirm cost tracking records operations
-  - **Timeline:** 30 minutes (fast-track) to 1 day (with scheduled runs)
+### Integration Tests
+- Recommended reading navigation flow
+- Narrative detail page data loading
 
-**Post-Sprint (Non-Blocking):**
-- 📋 **TASK-001:** Architecture investigation (1-2 hours)
-  - Clarify dual news fetching systems (API vs RSS)
-  - Document architecture decision
-- 🐛 **BUG-016:** CoinDesk HTML response (low priority)
-  - 11/12 news sources working fine
-  - Fix depends on TASK-001 findings
-
-**Next Step:** Execute TASK-002 verification → Sprint COMPLETE! ✅
-
-## ✅ BUG-017: Missing force_generate_briefing_task Import - FIXED ✅
-
-**Priority:** P1 - BLOCKER (blocks E2E verification)
-**Status:** ✅ FIXED - 2026-02-06 22:40 UTC
-**Discovered:** 2026-02-06 22:38 UTC (during test execution)
-**Commit:** 2df6295
-
-**Issue (RESOLVED):**
-Test script `test_briefing_trigger.py` timed out waiting for task completion.
-
-**Root Cause (IDENTIFIED):**
-- `force_generate_briefing_task` was defined in `briefing_tasks.py`
-- But NOT imported in `tasks/__init__.py`
-- Task was never registered in Celery app
-- Worker had no handler for the task
-- Task stayed PENDING forever
-
-**Fix Applied:**
-1. ✅ Added import: `force_generate_briefing_task` from briefing_tasks
-2. ✅ Added to `__all__` exports
-3. ✅ Verified all 23 tasks registered
-
-**Status:** ✅ COMMITTED & READY - Ready for E2E verification!
+### Manual QA
+- Test all new routes and links
+- Verify dark mode on all new pages
+- Check responsive design (mobile, tablet, desktop)
 
 ---
 
-**Success Metrics Achieved:**
-- ✅ Briefing automation infrastructure working
-- ✅ All LLM calls wrapped with cost tracking
-- ✅ Dashboard displays real cost data ($0.09 MTD, $0.71 projected)
-- ✅ Alert system configured ($0.50/day, $10/month thresholds)
-- ✅ Monthly cost projection: $1.63 (well under $10 target!)
-- ✅ All 17 critical bugs fixed (BUG-007 through BUG-017)
-- ⏳ End-to-end verification pending (TASK-002)
+## Deployment Plan
+
+### Phase 1: Model Migration & Quick Wins (Day 1-2)
+1. Deploy FEATURE-033 (Haiku 4.5)
+2. Monitor first few API calls
+3. Verify cost tracking accuracy
+4. Deploy FEATURE-036 (remove "Part of") - quick win
+5. Deploy BUG-010 (label fix) if investigation confirms it's needed
+
+### Phase 2: UI Enhancements (Day 3-7)
+1. Develop and test FEATURE-034 (narrative detail)
+2. Deploy FEATURE-034
+3. Develop and deploy FEATURE-035 (recommended links)
+
+### Phase 3: Verification (Day 8-14)
+1. Monitor production for issues
+2. Gather user feedback
+3. Fix any bugs discovered
+4. Document lessons learned
+
+---
+
+## Success Metrics
+
+### Cost & Performance
+- Monthly LLM cost remains under $10 (target: ~$0.86)
+- Haiku 4.5 entity extraction quality ≥ 3.5 Haiku
+- No API errors or rate limiting
+
+### User Experience
+- Recommended reading links work (0% 404 errors)
+- Narrative detail pages load fast (<500ms)
+- Zero broken links or navigation errors
+- Clean, focused signal cards (no confusing elements)
+
+### Code Quality
+- All tests passing (30+ existing + new tests)
+- No console errors or warnings
+- TypeScript compilation clean
+- Production build succeeds
+
+---
+
+## Next Actions
+
+### Immediate (This Session)
+1. ⏳ **Start FEATURE-033** - Migrate to Haiku 4.5
+2. ⏳ **Start FEATURE-036** - Remove "Part of:" section (quick win)
+3. ⏳ **Investigate BUG-010** - Check if briefing type field needs fixing
+
+### This Week
+1. Complete FEATURE-033 and FEATURE-036
+2. Start FEATURE-034 (narrative detail pages)
+3. Deploy first batch to production
+4. Monitor cost tracking with new model
+
+### Next Week
+1. Complete FEATURE-034 and FEATURE-035
+2. Verify all features in production
+3. Sprint review and retrospective
+
+---
+
+## Open Questions
+
+- [ ] **FEATURE-034:** Does backend endpoint `/api/narratives/:id` exist?
+- [ ] **BUG-010:** Is briefing `type` field being set correctly?
+- [ ] **Cost:** Will Haiku 4.5 pricing increase impact monthly budget significantly?
+
+---
+
+## Lessons from Sprint 6
+
+**What worked well:**
+- ✅ Clear ticket templates with implementation details
+- ✅ Comprehensive testing before deployment
+- ✅ Breaking critical bugs into separate tickets
+- ✅ Actual effort was 55% less than estimated (good padding)
+
+**What to improve:**
+- 🔄 Add deployment verification checklist
+- 🔄 Monitor production more proactively
+- 🔄 Create integration tests for Celery tasks
+- 🔄 Document Railway environment variables
+
+**Apply to Sprint 7:**
+- Use detailed tickets (working well)
+- Add production monitoring to each deployment
+- Create verification script for briefing generation
+- Test in production immediately after deploy
+
+---
+
+**Sprint Health:** 🟡 **READY TO START**
+
+**Last Updated:** 2026-02-06  
+**Next Review:** 2026-02-13 (mid-sprint check-in)
+
+---
+
+## Files Delivered This Sprint
+
+### To Be Created
+- `context-owl-ui/src/pages/NarrativeDetail.tsx`
+- `context-owl-ui/src/components/LifecycleBadge.tsx`
+- `context-owl-ui/src/components/ArticleCard.tsx`
+
+### To Be Modified
+- `src/crypto_news_aggregator/llm/optimized_anthropic.py`
+- `src/crypto_news_aggregator/services/cost_tracker.py`
+- `src/crypto_news_aggregator/services/briefing_agent.py`
+- `context-owl-ui/src/pages/Briefing.tsx`
+- `context-owl-ui/src/pages/Signals.tsx`
+- `context-owl-ui/src/pages/Narratives.tsx`
+- `context-owl-ui/src/App.tsx`
+- `context-owl-ui/src/api/narratives.ts`
+
+**Total:** 3 new files, 8 modified files

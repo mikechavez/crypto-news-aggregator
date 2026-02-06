@@ -26,8 +26,8 @@ class OptimizedAnthropicLLM:
     """
     
     # Model selection
-    HAIKU_MODEL = "claude-3-5-haiku-20241022"  # 12x cheaper
-    SONNET_MODEL = "claude-sonnet-4-20250514"  # For complex reasoning
+    HAIKU_MODEL = "claude-haiku-4-5-20251001"  # 4-5x faster, better quality
+    SONNET_MODEL = "claude-sonnet-4-5-20250929"  # For complex reasoning
     API_URL = "https://api.anthropic.com/v1/messages"
     
     def __init__(self, db, api_key: Optional[str] = None):

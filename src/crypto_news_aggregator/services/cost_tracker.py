@@ -27,9 +27,17 @@ class CostTracker:
     # Anthropic pricing as of February 2026
     # Prices per 1 million tokens
     PRICING = {
+        "claude-haiku-4-5-20251001": {
+            "input": 1.00,   # $1.00 per 1M input tokens
+            "output": 5.00,  # $5.00 per 1M output tokens
+        },
         "claude-3-5-haiku-20241022": {
-            "input": 0.80,   # $0.80 per 1M input tokens
-            "output": 4.00,  # $4.00 per 1M output tokens
+            "input": 0.80,   # $0.80 per 1M input tokens (deprecated)
+            "output": 4.00,  # $4.00 per 1M output tokens (deprecated)
+        },
+        "claude-sonnet-4-5-20250929": {
+            "input": 3.00,
+            "output": 15.00,
         },
         "claude-3-5-sonnet-20241022": {
             "input": 3.00,
