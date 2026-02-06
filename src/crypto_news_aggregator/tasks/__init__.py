@@ -48,7 +48,6 @@ app.autodiscover_tasks(
         "crypto_news_aggregator.tasks.briefing_tasks",
         "crypto_news_aggregator.tasks.alert_tasks",
         "crypto_news_aggregator.tasks.fetch_news",
-        "crypto_news_aggregator.tasks.price_monitor",
         "crypto_news_aggregator.tasks.process_article",
         "crypto_news_aggregator.tasks.narrative_consolidation",
     ]
