@@ -172,9 +172,10 @@ class CoinDeskSource(NewsSource):
                                 f"Could not decode JSON from CoinDesk. The service may be blocking requests. "
                                 f"Status: {response.status_code}. Response: {response.text[:200]}..."
                             )
-                            # Treat this as a non-retryable error for this attempt, but don't crash.
-                            # The outer loop will continue to the next source.
-                            break  # Exit the retry loop for this source
+                            # CoinDesk is returning HTML instead of JSON (likely blocking).
+                            # Stop fetching from this source and return what we have.
+                            logger.info(f"Stopping fetch from CoinDesk due to HTML response (blocking detected)")
+                            return  # Exit both retry loop AND outer while loop
 
                         if not articles:
                             logger.info(f"No more articles found at page {page}")
