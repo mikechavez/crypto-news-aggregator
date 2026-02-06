@@ -2,6 +2,7 @@
 Background tasks for price alert notifications.
 """
 
+import asyncio
 import logging
 from datetime import timedelta
 from typing import Tuple
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(name="check_price_alerts")
-async def check_price_alerts() -> Tuple[int, int]:
+def check_price_alerts() -> Tuple[int, int]:
     """
     Celery task to check price alerts and send notifications.
 
@@ -34,7 +35,7 @@ async def check_price_alerts() -> Tuple[int, int]:
         notification_service = get_notification_service()
 
         # Process alerts and get stats
-        processed, sent = await notification_service.process_price_alert(alert_service)
+        processed, sent = asyncio.run(notification_service.process_price_alert(alert_service))
         logger.info(
             f"Price alert check completed. Processed: {processed}, Sent: {sent}"
         )

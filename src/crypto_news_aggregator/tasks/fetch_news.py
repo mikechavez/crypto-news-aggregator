@@ -34,6 +34,7 @@ async def fetch_articles_from_source(
         Number of new articles fetched and saved
     """
     if since is None:
+        settings = get_settings()
         since = datetime.now(timezone.utc) - timedelta(
             days=settings.MAX_ARTICLE_AGE_DAYS
         )
@@ -43,6 +44,7 @@ async def fetch_articles_from_source(
     )
 
     try:
+        settings = get_settings()
         # Create the source instance
         source = create_source(
             source_id,
@@ -81,7 +83,7 @@ async def fetch_articles_from_source(
     soft_time_limit=600,  # 10 minutes
     time_limit=660,  # 11 minutes (slightly more than soft_time_limit)
 )
-async def fetch_news(self, source_id: Optional[str] = None) -> Dict[str, Any]:
+def fetch_news(self, source_id: Optional[str] = None) -> Dict[str, Any]:
     """Fetch news from one or all enabled sources.
 
     Args:
@@ -94,6 +96,7 @@ async def fetch_news(self, source_id: Optional[str] = None) -> Dict[str, Any]:
     logger.info(f"Starting news fetch task {task_id} for source: {source_id or 'all'}")
 
     article_service = get_article_service()
+    settings = get_settings()
     results = {}
 
     try:
@@ -106,13 +109,13 @@ async def fetch_news(self, source_id: Optional[str] = None) -> Dict[str, Any]:
         # Fetch from each source
         for src in sources:
             try:
-                count = await fetch_articles_from_source(
+                count = asyncio.run(fetch_articles_from_source(
                     source_id=src,
                     article_service=article_service,
                     max_articles=settings.MAX_ARTICLES_PER_SOURCE,
                     since=datetime.now(timezone.utc)
                     - timedelta(days=settings.MAX_ARTICLE_AGE_DAYS),
-                )
+                ))
                 results[src] = {"status": "success", "articles_fetched": count}
             except Exception as e:
                 logger.error(f"Failed to fetch from {src}: {str(e)}", exc_info=True)
