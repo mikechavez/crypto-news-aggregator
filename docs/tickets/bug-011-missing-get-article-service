@@ -1,0 +1,259 @@
+---
+id: BUG-011
+type: bug
+status: fixed
+priority: critical
+severity: high
+created: 2026-02-05
+updated: 2026-02-05
+fixed_date: 2026-02-05
+sprint: Sprint 6
+estimated_effort: 5 minutes
+actual_effort: 5 minutes
+commit: edb385d
+---
+
+# BUG-011: Missing get_article_service() Function
+
+## Problem
+
+**Celery worker and beat services crash on startup** with ImportError when trying to load tasks module.
+
+Railway logs show:
+```
+ImportError: cannot import name 'get_article_service' from 'crypto_news_aggregator.services.article_service'
+```
+
+This prevents both services from starting, causing all scheduled tasks (including briefings) to fail.
+
+## Root Cause
+
+**File:** `src/crypto_news_aggregator/services/article_service.py`
+
+The file exports:
+- ✅ `ArticleService` class
+- ✅ `article_service` singleton instance
+- ❌ **Missing:** `get_article_service()` function
+
+**Files trying to import it:**
+- `src/crypto_news_aggregator/tasks/fetch_news.py` (line 13)
+- Potentially other task files
+
+**Import statement:**
+```python
+from ..services.article_service import ArticleService, get_article_service
+```
+
+## Impact
+
+- **Critical:** Celery worker cannot start (crashes on import)
+- **Critical:** Celery beat cannot start (crashes on import)
+- **Critical:** All scheduled tasks fail (briefings, news fetching, etc.)
+- **User impact:** Complete system failure - no automation running
+
+## Evidence from Railway Logs
+
+### Worker Service (2026-02-05 20:49 UTC)
+```
+[2026-02-05 20:49:53,048: ERROR/MainProcess] Received unregistered task
+Did you remember to import the module containing this task?
+
+File "/app/src/crypto_news_aggregator/tasks/fetch_news.py", line 13, in <module>
+    from ..services.article_service import ArticleService, get_article_service
+ImportError: cannot import name 'get_article_service' from 'crypto_news_aggregator.services.article_service'
+```
+
+### Beat Service (2026-02-05 20:54 UTC)
+```
+Unable to load celery application.
+File "/app/src/crypto_news_aggregator/tasks/__init__.py", line 18, in <module>
+    from .fetch_news import fetch_news as fetch_news_task
+File "/app/src/crypto_news_aggregator/tasks/fetch_news.py", line 13, in <module>
+    from ..services.article_service import ArticleService, get_article_service
+ImportError: cannot import name 'get_article_service' from 'crypto_news_aggregator.services.article_service'
+```
+
+## Solution - IMPLEMENTED ✅
+
+Added the missing function to `article_service.py`:
+
+**Location:** Bottom of file, after the singleton declaration (line ~637-638)
+
+**CHANGE MADE:**
+```python
+# Singleton instance
+article_service = ArticleService()
+
+
+def get_article_service() -> ArticleService:
+    """Get the singleton ArticleService instance."""
+    return article_service
+```
+
+**Commit:** edb385d (2026-02-05 21:00 UTC)
+**Branch:** feature/cost-tracking-service
+**Status:** ✅ Pushed to remote, Railway redeploy triggered
+
+## Implementation Completed ✅
+
+### Step 1: Add Function to article_service.py ✅
+
+**File:** `src/crypto_news_aggregator/services/article_service.py`
+
+**Status:** ✅ COMPLETED
+- Function added to end of file
+- Proper type hints included
+- Docstring added
+
+### Step 2: Commit and Push ✅
+
+**Command executed:**
+```bash
+git add src/crypto_news_aggregator/services/article_service.py
+git commit -m "fix(article_service): add missing get_article_service() function"
+git push origin feature/cost-tracking-service
+```
+
+**Result:** ✅ Success
+- Commit: edb385d
+- Pushed to feature/cost-tracking-service
+- Railway redeploy triggered automatically
+
+### Step 3: Investigate Deployment Crash (CURRENT)
+
+⚠️ **UPDATE:** Railway deployment crashed after fix was pushed!
+
+**Status:** Code fix applied and pushed, but deployment is failing
+**Need to investigate:** What is causing the crash in Railway?
+
+**Investigation Commands:**
+
+**Check Worker Logs:**
+```bash
+railway logs --service celery-worker --tail 50
+```
+
+**Expected Worker Logs:**
+```
+celery@worker v5.5.3 (immunity) ready.
+Connected to redis://default:**@redis.railway.internal:6379/0
+[Tasks]
+  . crypto_news_aggregator.tasks.fetch_news.fetch_news
+  . crypto_news_aggregator.tasks.briefing_tasks.generate_morning_briefing
+  . crypto_news_aggregator.tasks.briefing_tasks.generate_evening_briefing
+  [... all 12 tasks registered ...]
+```
+
+**Check Beat Logs:**
+```bash
+railway logs --service celery-beat --tail 50
+```
+
+**Expected Beat Logs:**
+```
+celery beat v5.5.3 (immunity) is starting.
+Scheduler: PersistentScheduler
+Schedule DB: celerybeat-schedule
+```
+
+**What you should NOT see:**
+- ❌ `ImportError: cannot import name 'get_article_service'`
+- ❌ `Received unregistered task`
+- ❌ `Unable to load celery application`
+
+### Step 4: Verify Tasks Processing (NEXT SESSION)
+
+Run manual test to confirm end-to-end functionality:
+
+```bash
+poetry run python scripts/test_briefing_trigger.py
+```
+
+**Expected Result:**
+- ✅ Task state: PENDING → STARTED → SUCCESS
+- ✅ Completion time: 30-60 seconds (not 120+ timeout)
+- ✅ Briefing generated successfully
+- ✅ No errors in output
+
+**If successful, you should see:**
+```
+Task triggered successfully!
+Task ID: [some-uuid]
+Task state: PENDING
+...
+Task state: STARTED
+...
+Task state: SUCCESS
+Briefing generated successfully!
+```
+
+## Success Criteria
+
+- [x] Code fix applied ✅ (commit edb385d)
+- [x] Pushed to remote ✅
+- [ ] **BLOCKER:** Railway deployment succeeds (INVESTIGATE NOW)
+- [ ] Worker service starts without ImportError (AFTER DEPLOYMENT FIXED)
+- [ ] Beat service starts without ImportError (AFTER DEPLOYMENT FIXED)
+- [ ] All 12 tasks registered successfully (AFTER DEPLOYMENT FIXED)
+- [ ] Manual test passes (briefing generated) (AFTER DEPLOYMENT FIXED)
+- [ ] No "unregistered task" errors in logs (AFTER DEPLOYMENT FIXED)
+
+**Current Blocker:** Railway deployment crash preventing verification
+
+## Related Issues
+
+- **BUG-010:** Celery services not processing tasks → **ROOT CAUSE FOUND**
+- **BUG-007:** Procfile fixed ✅
+- **BUG-008:** Redis configuration fixed ✅
+- **BUG-009:** Event loop management fixed ✅
+
+## Timeline
+
+**2026-02-05 20:35 UTC:** Railway logs examined
+**2026-02-05 20:40 UTC:** ImportError identified as root cause
+**2026-02-05 20:45 UTC:** Missing function discovered
+**2026-02-05 20:50 UTC:** BUG-011 ticket created
+**2026-02-05 21:00 UTC:** Fix applied and pushed (commit edb385d) ✅
+**Next:** Verify Railway deployment and run manual tests
+
+## Files Modified
+
+- `src/crypto_news_aggregator/services/article_service.py` (add function)
+
+## Testing Required
+
+1. [ ] Local import test: `python -c "from src.crypto_news_aggregator.services.article_service import get_article_service; print(get_article_service())"`
+2. [ ] Railway worker logs: No ImportError
+3. [ ] Railway beat logs: No ImportError
+4. [ ] Manual briefing test: Task completes successfully
+
+---
+
+**Status:** ⚠️ **CODE FIX APPLIED - DEPLOYMENT CRASH**
+**Owner:** Mike
+**Priority:** P0 - Critical
+**Estimated Time:** 5 minutes (code fix) + deployment investigation
+**Actual Time:** 45+ minutes (includes deployment crash investigation)
+**Commit:** edb385d (2026-02-05 21:00 UTC)
+**Current Blocker:** Railway deployment failed - unknown root cause
+
+---
+
+## Summary
+
+⚠️ **CODE FIX APPLIED - DEPLOYMENT CRASH BLOCKING**
+
+This simple missing function was blocking the entire Celery infrastructure. The code fix has been applied and pushed, but Railway deployment has crashed.
+
+**Current Status:**
+- ✅ Code fix added to `article_service.py`
+- ✅ Commit edb385d pushed to feature/cost-tracking-service
+- ❌ Railway deployment crashed - need to investigate why
+
+**What's Next:**
+1. ❌ **BLOCKER:** Investigate Railway deployment crash
+2. Find root cause - is it related to BUG-011 fix or separate issue?
+3. Fix the deployment issue
+4. Once deployment succeeds, verify worker/beat services start successfully
+5. Run manual test to confirm end-to-end functionality
+6. Mark sprint complete when verified
