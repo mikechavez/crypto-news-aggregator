@@ -70,60 +70,51 @@ Full traceback shows crash occurs during module loading, before application star
 
 ## Resolution
 
-**Status:** Identified - Fix Ready
+**Status:** ✅ FIXED (2026-02-06 01:50 UTC)
 **Branch:** feature/cost-tracking-service
-**Estimated Time:** 5 minutes
+**Commits:**
+- `c1bd804` - fix(tasks): remove non-existent check_price_movements import
+- `618e4c7` - fix(tasks): remove price_monitor from autodiscover tasks (related)
 
-### Root Cause
+### Root Cause (CONFIRMED)
 
-**File:** `src/crypto_news_aggregator/api/v1/tasks.py` (line ~10)
+The `check_price_movements` function never existed in `tasks/price_monitor.py`
 
-The file imports a function that doesn't exist:
-```python
-from crypto_news_aggregator.tasks.price_monitor import check_price_movements
-```
+**Import location:** `src/crypto_news_aggregator/tasks/__init__.py` (line 19)
+**Also in:** `beat_schedule.py` (line 30)
 
-**Problem:** The `check_price_movements` function is not defined in `tasks/price_monitor.py`
+**Why:** Likely planned feature that was never implemented, leaving stale imports behind
 
-**Why it exists:** Likely an old/unused import from:
-- Planned feature that wasn't implemented
-- Function was renamed/removed but import wasn't cleaned up
-- Copy-paste from template code
+### Changes Made
 
-### Changes Required
+**File 1: `src/crypto_news_aggregator/tasks/__init__.py`**
+- ❌ Removed: `from .price_monitor import check_price_movements` (line 19)
+- ❌ Removed: `"check_price_movements"` from `__all__` exports (line 42)
 
-**File to modify:** `src/crypto_news_aggregator/api/v1/tasks.py`
+**File 2: `src/crypto_news_aggregator/tasks/beat_schedule.py`**
+- ❌ Removed: `"check-price-movements"` task from beat schedule (lines 29-37)
 
-**Option 1 - Comment out (recommended for safety):**
-```python
-# from crypto_news_aggregator.tasks.price_monitor import check_price_movements  # FIXME: Function doesn't exist
-```
+**File 3: `src/crypto_news_aggregator/tasks/__init__.py`** (related BUG-013)
+- ❌ Removed: `"crypto_news_aggregator.tasks.price_monitor"` from autodiscover_tasks list (line 51)
 
-**Option 2 - Delete the line entirely:**
-Remove the import line completely if not used anywhere in the file.
+### Testing & Verification
 
-### Testing
+**✅ Deployment verification (2026-02-06 01:34 UTC):**
+1. ✅ Push fix to Railway
+2. ✅ Web service started successfully (no import errors)
+3. ✅ Celery worker connected and ready
+4. ✅ 11 tasks registered (down from 12 - removed check_price_movements)
+5. ✅ No ImportError for check_price_movements
 
-**Local verification:**
-```bash
-# Test import works:
-cd src
-python -c "from crypto_news_aggregator.api.v1 import tasks"
-# Should complete without error
-```
+**⏳ Next verification (after BUG-013 fix merges):**
+1. Celery worker should process queued tasks
+2. Run: `poetry run python scripts/test_briefing_trigger.py`
+3. Verify briefing generation completes
 
-**Deployment verification:**
-1. Push fix to Railway
-2. Check web service logs for: "Uvicorn running on http://0.0.0.0:8000"
-3. Check worker logs for: "celery@worker ready" with 12 tasks
-4. Check beat logs for: "celery beat is starting"
-5. No ImportError messages in any service
-
-**Integration test:**
-```bash
-poetry run python scripts/test_briefing_trigger.py
-# Should complete successfully
-```
+**❌ Current blocker:**
+Tasks are queued but worker shows "unregistered task" errors
+→ Related to BUG-013 (autodiscover issue)
+→ Fix: Remove price_monitor from autodiscover list (already committed)
 
 ### Files Changed
 
@@ -131,10 +122,25 @@ poetry run python scripts/test_briefing_trigger.py
 
 ### Impact on Other Bugs
 
-**Positive impact:**
-- Unblocks BUG-011 verification (get_article_service fix was correct all along)
-- Allows all services to start
-- Enables end-to-end testing of Sprint 6 features
+**✅ Positive impact achieved:**
+- ✅ Unblocked BUG-011 verification (get_article_service fix was correct)
+- ✅ All services now start (web, worker, beat)
+- ⏳ Enables end-to-end testing (after BUG-013 fix)
 
 **Related bugs:**
-- BUG-011: Will be proven fixed once BUG-012 is resolved
+- BUG-011: Verified correct (function is being imported successfully)
+- BUG-013: Discovered during fix (unregistered tasks) - FIX READY (618e4c7)
+
+---
+
+## BUG-013: Related Discovery
+
+During BUG-012 fix testing, discovered that tasks registered during startup are not being found when Celery worker processes them.
+
+**Error:** `Received unregistered task of type 'crypto_news_aggregator.tasks.fetch_news.fetch_news'`
+
+**Root cause:** `app.autodiscover_tasks()` still includes `crypto_news_aggregator.tasks.price_monitor` module, which no longer has any Celery tasks.
+
+**Fix:** Remove the module from autodiscover list (ALREADY COMMITTED: 618e4c7)
+
+**Status:** ⏳ PR ready, awaiting merge to main

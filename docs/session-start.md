@@ -5,30 +5,36 @@
 
 ---
 
-## 🎯 CURRENT STATUS: BUG-012 IDENTIFIED
+## 🎯 CURRENT STATUS: BUG-013 DISCOVERED DURING BUG-012 FIX
 
-**Railway deployment is crashing**, but the cause has been identified:
+**Progress Update:** BUG-012 fixed, but discovered related issue BUG-013
 
-### The Real Issue:
+### What We Fixed (BUG-012):
+✅ Removed non-existent `check_price_movements` import from:
+- `src/crypto_news_aggregator/tasks/__init__.py` (line 19)
+- Removed from `__all__` exports
+- Removed from `beat_schedule.py` (line 30)
+
+**Commit:** `c1bd804` - fix(tasks): remove non-existent check_price_movements import
+
+### Latest Status (After BUG-012 Fix):
+✅ Web service now starts successfully
+✅ Celery worker started and registered 11 tasks
+❌ **NEW ISSUE (BUG-013):** Worker can't find task definitions
+
+**Error from latest logs:**
 ```
-ImportError: cannot import name 'check_price_movements' 
-from 'crypto_news_aggregator.tasks.price_monitor'
+[ERROR] Received unregistered task of type 'crypto_news_aggregator.tasks.fetch_news.fetch_news'
+[ERROR] Received unregistered task of type 'crypto_news_aggregator.tasks.alert_tasks.check_price_alerts'
 ```
 
-**Location:** `src/crypto_news_aggregator/api/v1/tasks.py` (line ~10)
+### Root Cause (BUG-013):
+`app.autodiscover_tasks()` still includes `crypto_news_aggregator.tasks.price_monitor` module, but we removed all Celery tasks from that module.
 
-### What's Happening:
-1. Web service starts
-2. Imports API router
-3. Router imports `tasks.py`
-4. **tasks.py tries to import non-existent function** ❌
-5. Web service crashes
-6. Celery can't start (web must start first)
+### The Fix (BUG-013):
+Remove price_monitor from autodiscover list in `tasks/__init__.py` line 51
 
-### The Fix:
-Remove or comment out the unused import in `src/crypto_news_aggregator/api/v1/tasks.py`
-
-**Estimated time:** 5 minutes
+**Commit:** `618e4c7` - fix(tasks): remove price_monitor from autodiscover tasks
 
 ---
 
@@ -63,25 +69,31 @@ Remove or comment out the unused import in `src/crypto_news_aggregator/api/v1/ta
 
 ## 🎯 Next Actions (Priority Order)
 
-### IMMEDIATE (5 minutes):
-1. [ ] Fix BUG-012: Remove `check_price_movements` import from `api/v1/tasks.py`
-2. [ ] Commit and push to trigger Railway redeploy
+### COMPLETED:
+1. ✅ BUG-012 Fix: Removed `check_price_movements` import from multiple files
+2. ✅ Deployed to Railway - web service now starts
+3. ✅ Celery worker started successfully
 
-### VERIFICATION (15 minutes):
-3. [ ] Verify web service starts successfully
-4. [ ] Check Celery worker logs (should show 12 tasks registered)
-5. [ ] Check Celery beat logs (should show scheduler started)
-6. [ ] Confirm no ImportError for `get_article_service` (proves BUG-011 fixed)
+### IMMEDIATE:
+4. [ ] **WAITING:** Merge BUG-013 fix to main (PR ready)
+5. [ ] After merge: Railway should redeploy with autodiscover fix
+6. [ ] Verify Celery worker can discover all 11 tasks
 
-### TESTING (10 minutes):
-7. [ ] Run manual test: `poetry run python scripts/test_briefing_trigger.py`
-8. [ ] Verify briefing generation works end-to-end
-9. [ ] Check cost tracking data in dashboard
+### VERIFICATION (after BUG-013 fix):
+7. [ ] Check Celery worker logs (should show tasks discovered, not "unregistered")
+8. [ ] Check Celery beat logs (should show scheduler started)
+9. [ ] Confirm no ImportError for `get_article_service` (proves BUG-011 fixed)
+
+### TESTING (after tasks are registered):
+10. [ ] Run manual test: `poetry run python scripts/test_briefing_trigger.py`
+11. [ ] Verify briefing generation works end-to-end
+12. [ ] Check cost tracking data in dashboard
 
 ### COMPLETION:
-10. [ ] Mark BUG-012 as fixed ✅
-11. [ ] Mark BUG-011 as verified ✅
-12. [ ] Mark Sprint 6 as COMPLETE ✅
+13. [ ] Mark BUG-012 as fixed ✅
+14. [ ] Mark BUG-013 as fixed ✅
+15. [ ] Mark BUG-011 as verified ✅
+16. [ ] Mark Sprint 6 as COMPLETE ✅
 
 ---
 
@@ -108,20 +120,37 @@ Remove or comment out the unused import in `src/crypto_news_aggregator/api/v1/ta
 **2026-02-05 21:00 UTC:** BUG-011 fix applied and pushed (commit edb385d) ✅
 **2026-02-05 21:45 UTC:** Deployment crashed - investigation started 🔍
 **2026-02-05 22:00 UTC:** Railway logs analyzed - BUG-012 identified 💡
+**2026-02-06 01:34 UTC:** Railway redeployed with BUG-012 fix ✅
+**2026-02-06 01:35 UTC:** Web service started, Celery worker started ✅
+**2026-02-06 01:40 UTC:** Discovered unregistered task errors (BUG-013) ❌
+**2026-02-06 01:45 UTC:** Root cause: price_monitor in autodiscover list 💡
+**2026-02-06 01:50 UTC:** BUG-013 fix committed (618e4c7) - awaiting merge ⏳
 
 ---
 
-## 🎯 Key Insight
+## 🎯 Key Insights
 
+### Insight 1: Cascading Failures
 **What we thought:** BUG-011 fix broke the deployment
 **What actually happened:** Unrelated import error (BUG-012) existed before BUG-011
 **Why it confused us:** Web service crashes before Celery starts, so we couldn't test BUG-011
 
-**Resolution:** Fix BUG-012 first, then BUG-011 will be proven correct ✅
+### Insight 2: Incomplete Cleanup
+**BUG-012 Fix:** Removed `check_price_movements` function import
+**BUG-013 Discovery:** Function removed but autodiscover still references module
+**Lesson:** When removing features, check ALL references (imports, autodiscover, beat schedule)
+
+**Resolution:**
+- ✅ Fix BUG-012 (remove imports)
+- ✅ Fix BUG-013 (remove autodiscover reference)
+- Then BUG-011 will be proven correct ✅
 
 ---
 
-**Sprint Status:** 🟡 **99% Complete - One 5-minute fix remaining**
+**Sprint Status:** 🟡 **99% Complete - BUG-013 fix in PR, awaiting merge**
 
-**Current Blocker:** BUG-012 (import error)
-**Next Action:** Remove unused import → Deploy → Verify → Sprint DONE ✅
+**Recent Fixes:**
+- ✅ BUG-012: Removed check_price_movements import (3 locations)
+- ⏳ BUG-013: Remove price_monitor from autodiscover (PR ready)
+
+**Next Action:** Merge BUG-013 fix to main → Deploy → Verify → Sprint DONE ✅
