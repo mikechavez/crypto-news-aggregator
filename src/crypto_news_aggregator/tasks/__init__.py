@@ -11,6 +11,7 @@ from .briefing_tasks import (
     generate_morning_briefing_task,
     generate_evening_briefing_task,
     cleanup_old_briefings_task,
+    force_generate_briefing_task,
 )
 
 # FIXED: Import missing task modules
@@ -35,6 +36,7 @@ __all__ = [
     "generate_morning_briefing_task",
     "generate_evening_briefing_task",
     "cleanup_old_briefings_task",
+    "force_generate_briefing_task",
     "consolidate_narratives_task",
     "check_price_alerts",
     "fetch_news_task",
