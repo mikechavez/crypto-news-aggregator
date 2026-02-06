@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import { TrendingUp, ArrowUp, Activity, Minus, TrendingDown } from 'lucide-react';
 import { signalsAPI } from '../api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { formatRelativeTime, formatEntityType, getEntityTypeColor, formatTheme, getThemeColor } from '../lib/formatters';
+import { formatRelativeTime, formatEntityType, getEntityTypeColor } from '../lib/formatters';
 import { cn } from '../lib/cn';
 
 /**
@@ -68,7 +67,6 @@ const getVelocityIndicator = (velocity: number): { icon: any; label: string; col
 
 
 export function Signals() {
-  const navigate = useNavigate();
   const [expandedArticles, setExpandedArticles] = useState<Set<number>>(new Set());
   
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
@@ -149,34 +147,18 @@ export function Signals() {
                     {formatRelativeTime(parseDateSafe(signal.last_updated))}
                   </span>
                 </div>
-                
-                {/* Narrative context section */}
-                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-dark-border">
-                  {signal.is_emerging ? (
+
+                {/* Emerging badge */}
+                {signal.is_emerging && (
+                  <div className="mt-3 pt-3 border-t border-gray-200 dark:border-dark-border">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-medium text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-1 rounded-full">
                         🆕 Emerging
                       </span>
                       <span className="text-xs text-gray-500 dark:text-gray-400">Not yet part of any narrative</span>
                     </div>
-                  ) : signal.narratives && signal.narratives.length > 0 ? (
-                    <div>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Part of:</span>
-                      <div className="flex flex-wrap gap-1">
-                        {signal.narratives.map((narrative) => (
-                          <button
-                            key={narrative.id}
-                            onClick={() => navigate('/narratives')}
-                            className={`text-xs font-medium px-2 py-1 rounded-full transition-colors ${getThemeColor(narrative.theme)}`}
-                            title={narrative.title}
-                          >
-                            {formatTheme(narrative.theme)}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
+                  </div>
+                )}
                 
                 {/* Recent articles section */}
                 {signal.recent_articles && signal.recent_articles.length > 0 && (
