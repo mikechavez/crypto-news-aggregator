@@ -5,11 +5,13 @@ import { cn } from '../lib/cn';
 interface CardProps {
   children: ReactNode;
   className?: string;
+  id?: string;
 }
 
-export function Card({ children, className }: CardProps) {
+export function Card({ children, className, id }: CardProps) {
   return (
     <motion.div
+      id={id}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -4 }}
