@@ -6,7 +6,7 @@
 
 **Velocity Target:** 4 features + 1 bug = 5 tickets
 
-**Status:** 🟡 **IN PROGRESS** - 0/5 complete (0%)
+**Status:** 🟡 **IN PROGRESS** - 1/5 complete (20%)
 
 ---
 
@@ -31,10 +31,10 @@
 ### 🚨 High Priority
 
 #### FEATURE-033: Migrate to Claude Haiku 4.5
-**Priority:** HIGH  
-**Status:** Ready  
-**Complexity:** Low  
-**Effort:** 1 hour estimated
+**Priority:** HIGH
+**Status:** ✅ COMPLETE
+**Complexity:** Low
+**Effort:** 0.25 hours (actual)
 
 **Why this matters:**
 - Claude 3.5 Haiku deprecated Jan 5, 2026
@@ -178,10 +178,10 @@ Backend should set `type` based on scheduled hour:
 
 ### Velocity Tracker
 - **Total tickets:** 5 (4 features + 1 bug)
-- **Completed:** 0/5 (0%)
+- **Completed:** 1/5 (20%)
 - **In Progress:** 0
 - **Blocked:** 1 (FEATURE-035 blocked by FEATURE-034)
-- **Estimated hours:** 6.5 hours total
+- **Estimated hours remaining:** 6.25 hours (started with 6.5 total)
 
 ### Current Focus
 1. 🔴 **FEATURE-033** - Haiku migration (do first, highest priority)
