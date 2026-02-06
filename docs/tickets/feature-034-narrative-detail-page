@@ -1,0 +1,312 @@
+---
+id: FEATURE-034
+type: feature
+status: ready
+priority: high
+complexity: medium
+created: 2026-02-06
+updated: 2026-02-06
+---
+
+# Build Narrative Detail Page
+
+## Problem/Opportunity
+Currently, the Narratives page only shows a list view with expandable cards. Users cannot:
+- Deep-dive into a specific narrative with dedicated focus
+- Share links to specific narratives
+- See extended analysis or visualizations for a single narrative
+
+**This blocks:**
+- FEATURE-035 (Briefing recommended reading links need somewhere to point)
+- Future features (timeline visualization, export, related signals)
+- User experience (clicking a narrative in signals/briefings has nowhere to go)
+
+## Proposed Solution
+Create a dedicated narrative detail page at `/narratives/:id` that provides an immersive, focused view of a single narrative with:
+- Full narrative header (title, lifecycle, entities)
+- Extended summary/analysis
+- Complete article list (better pagination UX than accordion)
+- Metadata (first seen, last updated, source breakdown)
+- Related signals section (if available)
+
+## User Story
+As a crypto analyst, I want to view a dedicated page for each narrative so that I can deeply explore a story, share it with colleagues, and understand its full context without distraction.
+
+## Acceptance Criteria
+- [ ] Route `/narratives/:id` exists and renders correctly
+- [ ] Page displays narrative title, lifecycle badge, and summary
+- [ ] All entities shown as tags
+- [ ] Complete article list with pagination (20 per page)
+- [ ] Each article shows: title, source, timestamp, link to original
+- [ ] Metadata section: first_seen, last_updated, article_count, source_breakdown
+- [ ] Back button/link to return to narratives list
+- [ ] Page works with direct URL access (shareable)
+- [ ] Loading state while fetching narrative data
+- [ ] Error state if narrative not found (404 equivalent)
+- [ ] Responsive design (mobile, tablet, desktop)
+- [ ] Dark mode support
+
+## Dependencies
+- Backend endpoint: `GET /api/narratives/:id` (verify if exists, or create)
+
+## Open Questions
+- [x] Does backend endpoint `/api/narratives/:id` exist? (Need to verify)
+- [ ] Should we show lifecycle history timeline? (Phase 2 - not MVP)
+- [ ] Should we show related narratives? (Phase 2 - not MVP)
+- [ ] Should we include signal references? (Yes, if available in API response)
+
+## Implementation Notes
+
+### Backend Verification
+
+**Check if endpoint exists:**
+```bash
+# Search backend routes
+grep -r "narratives/:id\|narratives/<" src/crypto_news_aggregator/api/
+```
+
+**Expected endpoint:**
+```python
+@router.get("/narratives/{narrative_id}")
+async def get_narrative(narrative_id: str):
+    """Get single narrative by ID with full details"""
+    narrative = await db.narratives.find_one({"_id": ObjectId(narrative_id)})
+    if not narrative:
+        raise HTTPException(status_code=404, detail="Narrative not found")
+    return narrative
+```
+
+**If endpoint doesn't exist, create it in:** `src/crypto_news_aggregator/api/narratives.py`
+
+---
+
+### Frontend Implementation
+
+#### 1. Create New Route
+**File:** `context-owl-ui/src/App.tsx` (or router config file)
+
+```typescript
+import { NarrativeDetail } from './pages/NarrativeDetail';
+
+// Add route
+<Route path="/narratives/:id" element={<NarrativeDetail />} />
+```
+
+---
+
+#### 2. Create API Function
+**File:** `context-owl-ui/src/api/narratives.ts`
+
+```typescript
+export const narrativesAPI = {
+  // ... existing functions
+  
+  async getNarrative(id: string) {
+    const response = await api.get(`/narratives/${id}`);
+    return response.data;
+  },
+};
+```
+
+---
+
+#### 3. Create NarrativeDetail Component
+**File:** `context-owl-ui/src/pages/NarrativeDetail.tsx`
+
+**Component Structure:**
+```typescript
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { narrativesAPI } from '../api';
+import { Loading } from '../components/Loading';
+import { ErrorMessage } from '../components/ErrorMessage';
+import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
+import { formatRelativeTime } from '../lib/formatters';
+import { ArrowLeft } from 'lucide-react';
+
+export function NarrativeDetail() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  
+  const { data: narrative, isLoading, error } = useQuery({
+    queryKey: ['narrative', id],
+    queryFn: () => narrativesAPI.getNarrative(id!),
+    enabled: !!id,
+  });
+
+  if (isLoading) return <Loading />;
+  if (error) return <ErrorMessage message="Narrative not found" />;
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      {/* Back button */}
+      <button
+        onClick={() => navigate('/narratives')}
+        className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-6 hover:text-blue-800 dark:hover:text-blue-300"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to Narratives
+      </button>
+
+      {/* Narrative Header */}
+      <div className="mb-8">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <h1 className="text-3xl font-bold">{narrative.title}</h1>
+          {/* Lifecycle badge (reuse from Narratives.tsx) */}
+        </div>
+        
+        <p className="text-lg text-gray-700 dark:text-gray-300">
+          {narrative.summary}
+        </p>
+      </div>
+
+      {/* Entities */}
+      {narrative.entities && narrative.entities.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-8">
+          {narrative.entities.map((entity, idx) => (
+            <span key={idx} className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-3 py-1 rounded-full text-sm">
+              {entity}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Metadata Card */}
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Narrative Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <dl className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <dt className="text-gray-500 dark:text-gray-400">First Seen</dt>
+              <dd className="font-medium">{formatRelativeTime(narrative.first_seen)}</dd>
+            </div>
+            <div>
+              <dt className="text-gray-500 dark:text-gray-400">Last Updated</dt>
+              <dd className="font-medium">{formatRelativeTime(narrative.last_updated)}</dd>
+            </div>
+            <div>
+              <dt className="text-gray-500 dark:text-gray-400">Articles</dt>
+              <dd className="font-medium">{narrative.article_count}</dd>
+            </div>
+            <div>
+              <dt className="text-gray-500 dark:text-gray-400">Lifecycle</dt>
+              <dd className="font-medium capitalize">{narrative.lifecycle_state}</dd>
+            </div>
+          </dl>
+        </CardContent>
+      </Card>
+
+      {/* Articles Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Related Articles ({narrative.article_count})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {/* Paginated article list - reuse logic from Narratives.tsx */}
+          {/* Show 20 articles per page with Load More button */}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+```
+
+---
+
+### Design Considerations
+
+**Layout:**
+- Max width: 4xl (same as Briefing page for consistency)
+- Clean, focused design
+- Plenty of whitespace
+- Clear hierarchy
+
+**Components to Reuse:**
+- Lifecycle badge (from Narratives.tsx) - extract to shared component
+- Article list item (from Narratives.tsx) - extract to ArticleCard component
+- Loading and Error states (already exist)
+
+**New Shared Components to Create:**
+```typescript
+// context-owl-ui/src/components/LifecycleBadge.tsx
+export function LifecycleBadge({ lifecycle }: { lifecycle: string }) {
+  // Extract logic from Narratives.tsx lines 278-306
+}
+
+// context-owl-ui/src/components/ArticleCard.tsx
+export function ArticleCard({ article }: { article: Article }) {
+  // Extract article rendering from Narratives.tsx
+}
+```
+
+---
+
+### Testing Checklist
+
+#### Unit/Component Tests
+- [ ] NarrativeDetail renders with valid narrative data
+- [ ] Shows loading state while fetching
+- [ ] Shows error state for invalid ID
+- [ ] Back button navigates to /narratives
+- [ ] All metadata fields display correctly
+
+#### Integration Tests
+- [ ] Direct URL access works (e.g., /narratives/abc123)
+- [ ] Shareable URL loads correct narrative
+- [ ] Works with browser back/forward
+- [ ] Deep linking from other pages (briefings, signals)
+
+#### Visual/UX Tests
+- [ ] Responsive on mobile (320px+)
+- [ ] Responsive on tablet (768px+)
+- [ ] Responsive on desktop (1024px+)
+- [ ] Dark mode renders correctly
+- [ ] Lifecycle badge matches list view
+- [ ] Typography is readable
+
+---
+
+### File Checklist
+
+**Files to Create:**
+- [ ] `context-owl-ui/src/pages/NarrativeDetail.tsx` (main component)
+- [ ] `context-owl-ui/src/components/LifecycleBadge.tsx` (extracted)
+- [ ] `context-owl-ui/src/components/ArticleCard.tsx` (extracted)
+
+**Files to Modify:**
+- [ ] `context-owl-ui/src/App.tsx` (add route)
+- [ ] `context-owl-ui/src/api/narratives.ts` (add getNarrative function)
+- [ ] `context-owl-ui/src/pages/Narratives.tsx` (refactor to use LifecycleBadge)
+- [ ] Backend: `src/crypto_news_aggregator/api/narratives.py` (if endpoint missing)
+
+**Total:** 3 new files, 4 modified files
+
+---
+
+### Estimated Effort
+- Backend endpoint verification/creation: 30 min
+- Frontend component: 2 hours
+- Extract shared components: 1 hour
+- Testing and polish: 30 min
+- **Total: 4 hours**
+
+---
+
+### Success Metrics
+- [ ] Can access narrative detail via direct URL
+- [ ] Links from briefings/signals work (after FEATURE-035)
+- [ ] Page load time < 500ms
+- [ ] No console errors
+- [ ] Passes accessibility checks (WCAG AA)
+
+---
+
+## Completion Summary
+<!-- Fill in after completion -->
+- Actual complexity:
+- Key decisions made:
+- Deviations from plan:
+- Shared components created:
+- Backend changes required:

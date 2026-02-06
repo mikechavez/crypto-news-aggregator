@@ -1,0 +1,121 @@
+---
+id: BUG-019
+type: bug
+status: completed
+priority: medium
+severity: medium
+created: 2026-02-07
+updated: 2026-02-07
+completed: 2026-02-07
+fixed_commit: 6cf6bf8
+---
+
+# Disable Failing API-Based News Fetching
+
+## Problem
+The API-based news fetching system (`fetch_news` task) runs every 5 minutes but consistently fails for both CoinDesk and Bloomberg sources:
+- **CoinDesk**: Returns HTML instead of JSON (blocking/403)
+- **Bloomberg**: Returns 403 Forbidden
+- **Result**: 0 articles fetched, but task runs repeatedly every 5 minutes
+
+This wastes worker cycles, clutters logs with errors, and provides no value since RSS-based system appears to be providing articles successfully.
+
+## Expected Behavior
+News fetching tasks should either:
+1. Successfully fetch articles from API endpoints, OR
+2. Not run at all if APIs are deprecated/blocked
+
+## Actual Behavior
+`fetch_news` task executes every 5 minutes via beat schedule and fails consistently:
+```
+[15:21:01] Fetching from coindesk
+[15:21:01] Could not decode JSON from CoinDesk (HTML response)
+[15:21:01] Fetched 0 articles
+[15:21:01] Fetching from bloomberg  
+[15:21:01] Bloomberg markets page: 403 Forbidden
+[15:21:01] Fetched 0 articles
+```
+
+## Steps to Reproduce
+1. Monitor Railway worker logs for 5+ minutes
+2. Observe `fetch_news` task execution every 5 minutes
+3. Observe both CoinDesk and Bloomberg fail with 0 articles
+4. Note that briefings still update successfully (RSS must be working)
+
+## Environment
+- Environment: **production** (Railway)
+- User impact: **low** (no user-facing impact, but wastes resources)
+- Observed in: Railway worker logs (2026-02-06 15:16-15:36 UTC)
+
+## Screenshots/Logs
+```
+[2026-02-06 15:21:01,346: WARNING] Could not decode JSON from CoinDesk. Status: 200. Response: <!DOCTYPE html>...
+[2026-02-06 15:21:01,346: INFO] Stopping fetch from CoinDesk due to HTML response (blocking detected)
+[2026-02-06 15:21:01,215: INFO] Fetched 0 articles in total
+
+[2026-02-06 15:36:01,284: INFO] HTTP Request: GET https://www.bloomberg.com/markets "HTTP/1.1 403 Forbidden"
+[2026-02-06 15:36:01,285: ERROR] Error fetching from bloomberg: Failed to fetch Bloomberg markets page: 403
+```
+
+---
+
+## Resolution
+
+**Status:** Ready to implement
+**Priority:** Medium (cleanup, not critical)
+**Effort:** 5 minutes
+
+### Proposed Fix - Option A (Quick Win)
+
+**Disable the scheduled API-based news fetching:**
+
+1. **File**: `src/crypto_news_aggregator/tasks/beat_schedule.py`
+2. **Change**: Comment out or remove the `fetch_news` schedule entry
+3. **Result**: Stop wasting cycles on failing API calls
+
+**Code change:**
+```python
+# Line ~20-30 in beat_schedule.py
+# COMMENTED OUT - API-based news fetching deprecated (BUG-019)
+# Both CoinDesk and Bloomberg APIs blocked/failing
+# RSS-based system provides articles successfully
+# 
+# 'fetch-news': {
+#     'task': 'fetch_news',
+#     'schedule': crontab(minute='*/5'),
+#     'options': {'queue': 'news'}
+# },
+```
+
+**Testing:**
+1. Commit change
+2. Deploy to Railway
+3. Monitor logs for 15+ minutes
+4. Confirm `fetch_news` task no longer runs
+5. Verify briefings still update successfully (RSS working)
+
+### Alternative - Option B (Proper Fix)
+
+Investigate and document architecture decision (covered in TASK-001):
+1. Determine which system (API vs RSS) is primary
+2. Test both systems independently
+3. Remove unused code completely
+4. Update documentation
+
+### Files to Change
+- `src/crypto_news_aggregator/tasks/beat_schedule.py` (disable schedule)
+
+### Notes
+- **No user impact**: Briefings are already working (RSS system active)
+- **Cleanup only**: This is technical debt removal, not a critical fix
+- **Can be done immediately**: No testing required beyond log verification
+- **Blocked by**: None
+- **Blocks**: Nothing (TASK-001 can investigate properly later)
+- **Related**: TASK-001 (architecture investigation), BUG-016 (CoinDesk), BUG-018 (infinite loop)
+
+### Follow-up Actions
+After disabling:
+1. Monitor briefing updates to confirm RSS is sufficient
+2. Complete TASK-001 to document architecture decision
+3. Consider removing API-based code entirely if RSS is sufficient
+4. Update documentation to reflect single news source system

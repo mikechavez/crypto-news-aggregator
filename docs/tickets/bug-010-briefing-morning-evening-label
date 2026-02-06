@@ -1,0 +1,191 @@
+---
+id: BUG-010
+type: bug
+status: ready
+priority: medium
+severity: low
+created: 2026-02-06
+updated: 2026-02-06
+---
+
+# Briefing Page Should Display Accurate Morning/Evening Label
+
+## Problem
+The briefing page should accurately display "Your Morning Crypto Briefing" or "Your Evening Crypto Briefing" based on the actual generation time from the database, not a client-side calculation.
+
+**Current Implementation:** The `getBriefingTitle()` function uses `briefing.type` field from the backend, but we need to verify this is being set correctly based on actual generation timestamp (8 AM or 8 PM EST).
+
+## Expected Behavior
+- Briefings generated at ~8:00 AM EST should display: **"Your Morning Crypto Briefing"**
+- Briefings generated at ~8:00 PM EST should display: **"Your Evening Crypto Briefing"**
+- The label should be accurate even if user views briefing hours later
+- The label should persist correctly in briefing history
+
+## Actual Behavior
+Unknown - requires investigation. The `briefing.type` field exists in the frontend code, but we need to verify:
+1. Is the backend setting this field correctly?
+2. Is it based on scheduled time (8 AM/8 PM) or actual generation time?
+3. Does it persist correctly in the database?
+
+## Steps to Reproduce
+1. Wait for next scheduled briefing (8 AM or 8 PM EST)
+2. Navigate to /briefing page
+3. Check if label displays "Morning" or "Evening" correctly
+4. View same briefing several hours later
+5. Verify label hasn't changed
+
+## Environment
+- Environment: production
+- Browser/Client: All browsers
+- User impact: low (cosmetic issue, doesn't affect functionality)
+
+---
+
+## Investigation Plan
+
+### Step 1: Check Backend Briefing Generation
+**File:** `src/crypto_news_aggregator/services/briefing_agent.py`
+
+Need to verify:
+- Does the briefing generation set `type` field?
+- Is it based on scheduled time or actual generation time?
+- What timezone is used (should be America/New_York)?
+
+**Look for:**
+```python
+# Expected pattern
+briefing_type = "morning" if hour < 12 else "evening"
+# Or based on scheduled time
+briefing_type = "morning" if scheduled_hour == 8 else "evening"
+```
+
+### Step 2: Check Database Schema
+**Collection:** `briefings`
+
+Query a recent briefing:
+```python
+db.briefings.findOne({}, {type: 1, generated_at: 1}).sort({generated_at: -1})
+```
+
+Verify:
+- `type` field exists and is either "morning" or "evening"
+- `generated_at` timestamp is accurate
+- Timezone handling is correct
+
+### Step 3: Check Frontend Display Logic
+**File:** `context-owl-ui/src/pages/Briefing.tsx`  
+**Line:** 32-37
+
+Current implementation:
+```typescript
+function getBriefingTitle(type: 'morning' | 'evening'): string {
+  return type === 'morning'
+    ? 'Your Morning Crypto Briefing'
+    : 'Your Evening Crypto Briefing';
+}
+```
+
+This looks correct - it's just displaying whatever the backend provides.
+
+---
+
+## Resolution
+
+**Status:** Open  
+**Investigation Required:** Yes - need to check backend implementation
+
+### Likely Root Cause
+Backend briefing generation may not be setting the `type` field, or may be setting it incorrectly.
+
+### Proposed Fix
+
+#### Option A: Backend sets type based on scheduled time (RECOMMENDED)
+**File:** `src/crypto_news_aggregator/services/briefing_agent.py`
+
+```python
+# In the briefing generation function
+from datetime import datetime
+import pytz
+
+def generate_briefing(scheduled_hour: int):
+    # Determine type based on scheduled time (8 AM = morning, 8 PM = evening)
+    briefing_type = "morning" if scheduled_hour == 8 else "evening"
+    
+    briefing_doc = {
+        "type": briefing_type,  # "morning" or "evening"
+        "generated_at": datetime.now(pytz.timezone('America/New_York')),
+        "content": {...},
+        # ... rest of briefing
+    }
+```
+
+**Pros:**
+- Consistent labeling (8 AM always = morning, 8 PM always = evening)
+- Not affected by generation delays
+- Clearer intent
+
+#### Option B: Backend sets type based on actual generation time
+**File:** `src/crypto_news_aggregator/services/briefing_agent.py`
+
+```python
+def generate_briefing():
+    ny_tz = pytz.timezone('America/New_York')
+    now = datetime.now(ny_tz)
+    
+    # Determine type based on actual generation time
+    briefing_type = "morning" if now.hour < 12 else "evening"
+    
+    briefing_doc = {
+        "type": briefing_type,
+        "generated_at": now,
+        "content": {...},
+    }
+```
+
+**Cons:**
+- If briefing is delayed and generates at 12:01 PM, it would be labeled "evening"
+- Less predictable
+
+**RECOMMENDATION:** Use Option A (scheduled time) for consistency.
+
+---
+
+### Changes Required
+
+1. **Verify current implementation in briefing_agent.py**
+2. **Add or fix type field assignment** (if missing/incorrect)
+3. **Ensure timezone is America/New_York** (EST/EDT)
+4. **Test briefing generation** at both scheduled times
+5. **Verify type field persists** in MongoDB
+
+### Testing
+- Generate test briefing with scheduled_hour=8 → verify type="morning"
+- Generate test briefing with scheduled_hour=20 → verify type="evening"
+- Check MongoDB document has correct type field
+- Load briefing in frontend → verify title displays correctly
+- Load same briefing hours later → verify title unchanged
+
+### Files to Check/Modify
+- `src/crypto_news_aggregator/services/briefing_agent.py` (likely needs fix)
+- `src/crypto_news_aggregator/tasks/briefing_tasks.py` (check how scheduled_hour is passed)
+- Database: `briefings` collection (verify schema)
+
+---
+
+## Additional Notes
+
+This is connected to BUG-011 (production briefing generation). If briefings aren't generating in production, we won't be able to verify this fix until that's resolved.
+
+**Priority Order:**
+1. Fix BUG-011 (get briefings generating in prod)
+2. Fix BUG-010 (ensure type field is correct)
+3. Verify in production at next scheduled time
+
+---
+
+**Status:** Open  
+**Next Steps:** 
+1. Investigate backend briefing generation code
+2. Verify type field implementation
+3. Test with manual briefing generation
+4. Deploy and verify at next scheduled briefing time
