@@ -466,6 +466,15 @@ WRITING RULES:
    - Open with most significant development
    - End with specific "immediate focus" areas
 
+8. RECOMMENDATIONS (CRITICAL)
+   - Include 2-3 recommendations for further reading
+   - ONLY recommend narratives from the "ALLOWED NARRATIVES" list above
+   - Use the EXACT narrative title as the recommendation title (matching case)
+   - For theme, use the topic/category the narrative falls under (e.g., "Regulation", "Trading", "Infrastructure")
+   - Example: {{"title": "Binance Expands in South Korea", "theme": "Regulatory Expansion"}}
+   - NEVER create recommendation titles that aren't in the allowed list
+   - NEVER suggest topics or narratives that weren't provided
+
 GOOD EXAMPLE:
 "Binance has expanded its stablecoin offerings with the listing of a Kyrgyzstan som-pegged stablecoin, marking a strategic move into Central Asian markets. The exchange is simultaneously addressing security concerns through its anti-scam initiatives, though the specific technical measures remain undisclosed in available reporting. This parallel focus on market expansion and security infrastructure reflects the operational priorities of centralized exchanges navigating growth and trust simultaneously."
 
@@ -550,6 +559,7 @@ Return valid JSON:
         parts.append("- Include specific details from the narrative summaries\n")
         parts.append("- If a narrative lacks details, either skip it or acknowledge the limitation\n")
         parts.append("- No generic openings or closings\n")
+        parts.append("- RECOMMENDATIONS: Include 2-3 recommendations ONLY from the ALLOWED NARRATIVES list (matching exact titles)\n")
         parts.append("\nReturn ONLY valid JSON.")
 
         return "".join(parts)
