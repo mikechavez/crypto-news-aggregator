@@ -6,7 +6,53 @@
 
 **Velocity Target:** 5 features + critical bugs
 
-**Status:** 🟢 **~95% COMPLETE** - All bugs fixed! Worker executing tasks in real-time! ✅
+**Status:** 🟡 **~96% COMPLETE** - All bugs fixed! BUG-018 deployed, worker healthy, awaiting briefing verification ⏳
+
+---
+
+## ✅ BUG-018: CoinDesk Infinite Retry Loop - FIXED ✅
+
+**Priority:** P0 - CRITICAL (starves worker pool)
+**Status:** ✅ FIXED & DEPLOYED - 2026-02-06 23:30 UTC
+**Discovered:** 2026-02-07 01:10 UTC (during log analysis)
+**Root Cause:** JSONDecodeError breaks from retry loop but not outer while loop → infinite retry
+**Commit:** 4a5b673
+**Deployment:** ✅ Deployed to Railway, worker restarted 2026-02-07 15:16 UTC
+
+**The Problem:**
+Workers stuck in infinite loop making duplicate HTTP requests to CoinDesk API:
+```
+[14:54:08] HTTP Request: GET https://www.coindesk.com/v2/news?page=1&per_page=20...
+[14:54:08] Could not decode JSON from CoinDesk. Status: 200. Response: <!DOCTYPE html>
+[14:54:09] HTTP Request: GET https://www.coindesk.com/v2/news?page=1...  ← SAME PAGE!
+[14:54:09] Could not decode JSON from CoinDesk. Status: 200. Response: <!DOCTYPE html>
+...INFINITE LOOP...
+```
+
+**Root Cause (coindesk.py line 177):**
+```python
+except json.JSONDecodeError:
+    logger.warning(f"Could not decode JSON from CoinDesk...")
+    break  # ← Only exits retry loop, not outer while loop!
+    # Code continues: while count < limit → retries same page forever
+```
+
+**Fix Applied:**
+Changed `break` to `return` in JSONDecodeError handler:
+```python
+except json.JSONDecodeError:
+    logger.warning(f"Could not decode JSON from CoinDesk...")
+    logger.info(f"Stopping fetch from CoinDesk due to HTML response (blocking detected)")
+    return  # Exit both retry loop AND outer while loop
+```
+
+**Result:** ✅ Worker pool recovered, fetch_news now completes in 0.25 seconds
+
+**Verification (2026-02-07 15:21 UTC Railway logs):**
+- ✅ fetch_news[0ecf2d40-2d75-4dea-88b5-df8402e79afd] completed in 0.254s
+- ✅ No more infinite retry loop
+- ✅ Worker processing tasks normally
+- ✅ check_price_alerts completed in 0.069s
 
 ---
 
