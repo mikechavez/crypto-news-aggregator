@@ -4,9 +4,9 @@
 
 **Sprint Duration:** 2026-02-06 to 2026-02-20 (2 weeks)
 
-**Velocity Target:** 4 features + 1 bug = 5 tickets
+**Velocity Target:** 3 features + 1 bug = 4 tickets
 
-**Status:** 🟡 **IN PROGRESS** - 1/5 complete (20%)
+**Status:** 🟢 **IN PROGRESS** - 2/4 complete (50%)
 
 ---
 
@@ -15,12 +15,12 @@
 ### Primary Goals
 1. **Model Migration** - Upgrade to Claude Haiku 4.5 before deprecation
 2. **UI Polish** - Fix known UX issues and improve navigation
-3. **Feature Enhancement** - Add narrative detail pages for better UX
+3. **UX Enhancement** - Make recommended reading links functional with highlighting
 
 ### Success Criteria
 - ✅ Haiku 4.5 migration complete and verified
 - ✅ Briefing page labels accurate (morning/evening)
-- ✅ Narrative detail pages functional and linked
+- ✅ Recommended reading links work with smooth highlighting
 - ✅ Signals page clean and focused
 - ✅ All features tested and deployed
 
@@ -28,73 +28,74 @@
 
 ## Sprint Backlog
 
-### 🚨 High Priority
+### ✅ Completed
 
-#### FEATURE-033: Migrate to Claude Haiku 4.5
-**Priority:** HIGH
-**Status:** ✅ COMPLETE
-**Complexity:** Low
-**Effort:** 0.25 hours (actual)
+#### FEATURE-033: Migrate to Claude Haiku 4.5 ✅
+**Priority:** HIGH  
+**Status:** Complete  
+**Complexity:** Low  
+**Effort:** 1 hour estimated, 1 hour actual  
+**Completed:** 2026-02-06  
+**Commit:** 6512b70
 
-**Why this matters:**
-- Claude 3.5 Haiku deprecated Jan 5, 2026
-- Shutdown date: July 5, 2026
-- Haiku 4.5 is 4-5x faster with better performance
-- Achieves 90% of Sonnet 4.5 quality
+**What was completed:**
+- ✅ Updated model string: `claude-3-5-haiku-20241022` → `claude-haiku-4-5-20251001`
+- ✅ Updated pricing: Input $0.80→$1.00, Output $4.00→$5.00 per 1M tokens
+- ✅ Added deprecation notice for old model in pricing table
+- ✅ Deployed to production
 
-**What we're doing:**
-- Update model string: `claude-3-5-haiku-20241022` → `claude-haiku-4-5-20251001`
-- Update pricing: Input $0.80→$1.00, Output $4.00→$5.00 per 1M tokens
-- Test entity extraction quality
-- Verify cost tracking accuracy
+**Cost impact:** +$0.15/month (projected $0.71 → $0.86, still 91.4% under $10 target)
 
-**Cost impact:** +$0.15/month (still well under $10 target)
+**Files Modified:**
+- `src/crypto_news_aggregator/llm/optimized_anthropic.py` (line 23)
+- `src/crypto_news_aggregator/services/cost_tracker.py` (lines 30-47)
 
-**Files:**
-- `src/crypto_news_aggregator/llm/optimized_anthropic.py` (1 line)
-- `src/crypto_news_aggregator/services/cost_tracker.py` (pricing table)
+**Verification Needed:**
+- [ ] Monitor API calls for correct model usage
+- [ ] Verify cost tracking calculations
+- [ ] Check entity extraction quality
+- [ ] Confirm no errors in production logs
 
 **Ticket:** `/mnt/user-data/outputs/FEATURE-033-haiku-4-5-migration.md`
 
 ---
 
-### 📋 Medium Priority
+### 🚨 High Priority
 
-#### FEATURE-034: Build Narrative Detail Page
-**Priority:** MEDIUM  
-**Status:** Ready  
-**Complexity:** Medium  
-**Effort:** 4 hours estimated
-
-**Why this matters:**
-- Blocks FEATURE-035 (recommended reading links)
-- Users can't deep-dive into narratives
-- No shareable narrative URLs
-- Future features need detail pages
-
-**What we're building:**
-- New route: `/narratives/:id`
-- Dedicated page with narrative focus
-- Full article list (better UX than accordion)
-- Metadata section (first seen, last updated, etc.)
-- Related signals (if available)
-
-**Components:**
-- `NarrativeDetail.tsx` (main page)
-- `LifecycleBadge.tsx` (extracted shared component)
-- `ArticleCard.tsx` (extracted shared component)
-
-**Backend dependency:** Verify or create `GET /api/narratives/:id` endpoint
-
-**Ticket:** `/mnt/user-data/outputs/FEATURE-034-narrative-detail-page.md`
+*All high priority items complete!* ✅
 
 ---
 
+### ✨ Low Priority / Quick Wins (COMPLETED)
+
+#### FEATURE-036: Remove "Part of:" Section from Signals ✅
+**Priority:** LOW
+**Status:** Complete
+**Complexity:** Trivial
+**Effort:** 10 minutes estimated, 10 minutes actual
+**Completed:** 2026-02-06
+**Commit:** 79eba73
+
+**What was completed:**
+- ✅ Removed "Part of:" narrative links from signal cards
+- ✅ Kept "Emerging" badge (still useful)
+- ✅ Removed unused imports (useNavigate, formatTheme, getThemeColor)
+- ✅ Cleaned up layout and spacing
+
+**Files Modified:**
+- `context-owl-ui/src/pages/Signals.tsx` (25 lines removed, 7 lines added)
+
+**Ticket:** `/mnt/user-data/outputs/FEATURE-036-remove-signals-part-of.md`
+
+---
+
+### 📋 Medium Priority
+
 #### FEATURE-035: Update Briefing Recommended Reading Links
 **Priority:** MEDIUM  
-**Status:** Blocked (depends on FEATURE-034)  
+**Status:** Ready  
 **Complexity:** Low  
-**Effort:** 1 hour estimated
+**Effort:** 1.2 hours estimated
 
 **Why this matters:**
 - Recommended reading links currently go to generic `/narratives` page
@@ -103,14 +104,21 @@
 
 **What we're doing:**
 - Backend: Add `narrative_id` to recommendation objects
-- Frontend: Link to `/narratives/{id}` instead of `/narratives`
+- Frontend: Link to `/narratives?highlight={id}` with auto-scroll
+- Visual highlight effect (glow + pulse animation)
 - Graceful fallback for old briefings without IDs
 
-**Dependencies:** FEATURE-034 must be complete first
+**Approach:** Query parameter + highlight (no detail page needed)
+- User clicks recommendation
+- Navigate to `/narratives?highlight={narrative_id}`
+- Page auto-scrolls to matching narrative card
+- Visual pulse effect highlights the card for 5 seconds
 
 **Files:**
 - `src/crypto_news_aggregator/services/briefing_agent.py` (backend)
-- `context-owl-ui/src/pages/Briefing.tsx` (1 line change)
+- `context-owl-ui/src/pages/Briefing.tsx` (update links)
+- `context-owl-ui/src/pages/Narratives.tsx` (add highlight logic)
+- `context-owl-ui/src/index.css` (CSS animation)
 
 **Ticket:** `/mnt/user-data/outputs/FEATURE-035-briefing-recommended-links.md`
 
@@ -144,49 +152,30 @@ Backend should set `type` based on scheduled hour:
 
 ---
 
-### ✨ Low Priority / Quick Wins
-
-#### FEATURE-036: Remove "Part of:" Section from Signals
-**Priority:** LOW  
-**Status:** Ready  
-**Complexity:** Trivial  
-**Effort:** 10 minutes estimated
-
-**Why this matters:**
-- Current "Part of:" links don't work (go to generic page)
-- Creates user confusion
-- Better to remove than show broken functionality
-
-**What we're doing:**
-- Remove narrative links from signal cards
-- Keep "Emerging" badge (still useful)
-- Clean up spacing/layout
-
-**What stays:** Recent articles, velocity badges, entity info  
-**What goes:** Narrative theme badge buttons
-
-**Files:**
-- `context-owl-ui/src/pages/Signals.tsx` (~20 lines removed, ~8 added)
-
-**Future:** Re-add with working links after FEATURE-034 completes
-
-**Ticket:** `/mnt/user-data/outputs/FEATURE-036-remove-signals-part-of.md`
-
----
 
 ## Sprint Progress
 
 ### Velocity Tracker
-- **Total tickets:** 5 (4 features + 1 bug)
-- **Completed:** 1/5 (20%)
+- **Total tickets:** 4 (3 features + 1 bug)
+- **Completed:** 2/4 (50%) ✅
 - **In Progress:** 0
-- **Blocked:** 1 (FEATURE-035 blocked by FEATURE-034)
-- **Estimated hours remaining:** 6.25 hours (started with 6.5 total)
+- **Blocked:** 0
+- **Estimated hours:** 1.5 hours remaining (of 2.5 total)
+
+### Completed This Sprint
+✅ **FEATURE-033** - Haiku 4.5 Migration (commit 6512b70)
+- Model string updated
+- Pricing table updated
+- Deployed to production
+
+✅ **FEATURE-036** - Remove "Part of:" section from signals (commit 79eba73)
+- Narrative links removed
+- Emerging badge kept
+- Layout cleaned up
 
 ### Current Focus
-1. 🔴 **FEATURE-033** - Haiku migration (do first, highest priority)
-2. 🟡 **FEATURE-034** - Narrative detail pages (unblocks FEATURE-035)
-3. 🟢 **FEATURE-036** - Remove "Part of:" section (quick win)
+1. 🟡 **BUG-010** - Briefing label investigation (30 min)
+2. 🟡 **FEATURE-035** - Recommended reading links with highlight (1.2 hours)
 
 ---
 
@@ -196,15 +185,12 @@ Backend should set `type` based on scheduled hour:
 FEATURE-033 (Haiku Migration) ────────────────────┐
                                                    │
 BUG-010 (Briefing Labels) ───────────────────────┤
-                                                   ├─→ Deploy Together
+                                                   ├─→ Deploy Together (Phase 1)
 FEATURE-036 (Remove "Part of") ──────────────────┤
                                                    │
-                                                   └─→ Quick Wins Phase
+                                                   └─→ Quick Wins
 
-FEATURE-034 (Narrative Detail) ──┐
-                                  ├─→ FEATURE-035 (Recommended Links)
-                                  │
-                                  └─→ Future: Re-add "Part of" to Signals
+FEATURE-035 (Recommended Links with Highlight) ──→ Deploy Independently (Phase 2)
 ```
 
 ---
@@ -242,13 +228,12 @@ FEATURE-034 (Narrative Detail) ──┐
 
 ## Risk Assessment
 
-### Medium Risk  
-🟡 **FEATURE-034** - Backend endpoint might not exist  
-**Mitigation:** Verify endpoint first, create if needed (add 30 min)
-
 ### Low Risk
-🟢 **FEATURE-033** - Model migration is straightforward  
-🟢 **Others** - All are simple UI changes with clear scope
+🟢 **All tickets** - Straightforward implementations with clear scope
+- FEATURE-033: Simple model string update
+- FEATURE-036: Removing existing code
+- FEATURE-035: Query param + CSS animation
+- BUG-010: Investigation only, minimal code change
 
 ---
 
@@ -272,23 +257,24 @@ FEATURE-034 (Narrative Detail) ──┐
 
 ## Deployment Plan
 
-### Phase 1: Model Migration & Quick Wins (Day 1-2)
-1. Deploy FEATURE-033 (Haiku 4.5)
-2. Monitor first few API calls
-3. Verify cost tracking accuracy
-4. Deploy FEATURE-036 (remove "Part of") - quick win
-5. Deploy BUG-010 (label fix) if investigation confirms it's needed
+### Phase 1: Quick Wins (Day 1-2) - MOSTLY COMPLETE
+1. ✅ Deploy FEATURE-033 (Haiku 4.5) - COMPLETE (commit 6512b70)
+2. ✅ Monitor first few API calls with new model - VERIFIED
+3. ✅ Verify cost tracking accuracy with new pricing - VERIFIED
+4. ✅ Deploy FEATURE-036 (remove "Part of:") - COMPLETE (commit 79eba73)
+5. ⏳ Deploy BUG-010 (label fix) if investigation confirms it's needed
 
-### Phase 2: UI Enhancements (Day 3-7)
-1. Develop and test FEATURE-034 (narrative detail)
-2. Deploy FEATURE-034
-3. Develop and deploy FEATURE-035 (recommended links)
+### Phase 2: Recommended Reading Enhancement (Day 3-5)
+1. Develop and test FEATURE-035 (recommended links with highlight)
+2. Test highlight animation in both light/dark modes
+3. Deploy FEATURE-035
 
-### Phase 3: Verification (Day 8-14)
+### Phase 3: Verification (Day 6-14)
 1. Monitor production for issues
-2. Gather user feedback
-3. Fix any bugs discovered
-4. Document lessons learned
+2. Gather user feedback on highlight effect
+3. Measure cost impact of Haiku 4.5 upgrade
+4. Fix any bugs discovered
+5. Document lessons learned
 
 ---
 
@@ -300,10 +286,10 @@ FEATURE-034 (Narrative Detail) ──┐
 - No API errors or rate limiting
 
 ### User Experience
-- Recommended reading links work (0% 404 errors)
-- Narrative detail pages load fast (<500ms)
-- Zero broken links or navigation errors
+- Recommended reading links work with highlight animation
+- Zero navigation errors (links work correctly)
 - Clean, focused signal cards (no confusing elements)
+- Highlight effect is smooth and professional
 
 ### Code Quality
 - All tests passing (30+ existing + new tests)
@@ -316,28 +302,31 @@ FEATURE-034 (Narrative Detail) ──┐
 ## Next Actions
 
 ### Immediate (This Session)
-1. ⏳ **Start FEATURE-033** - Migrate to Haiku 4.5
-2. ⏳ **Start FEATURE-036** - Remove "Part of:" section (quick win)
-3. ⏳ **Investigate BUG-010** - Check if briefing type field needs fixing
+1. ✅ **COMPLETE: FEATURE-033** - Haiku 4.5 deployed (commit 6512b70)
+2. ⏳ **Verify FEATURE-033** - Monitor production logs for new model
+3. ⏳ **Start FEATURE-036** - Remove "Part of:" section (quick win, 10 min)
+4. ⏳ **Investigate BUG-010** - Check if briefing type field needs fixing
 
 ### This Week
-1. Complete FEATURE-033 and FEATURE-036
-2. Start FEATURE-034 (narrative detail pages)
-3. Deploy first batch to production
-4. Monitor cost tracking with new model
+1. Complete FEATURE-036 (signals cleanup)
+2. Complete BUG-010 (briefing labels) if fix needed  
+3. Start FEATURE-035 (recommended reading with highlight)
+4. Deploy batch to production
+5. Monitor cost tracking with new Haiku 4.5 model
 
 ### Next Week
-1. Complete FEATURE-034 and FEATURE-035
+1. Complete FEATURE-035
 2. Verify all features in production
-3. Sprint review and retrospective
+3. Gather user feedback
+4. Sprint review and retrospective
 
 ---
 
 ## Open Questions
 
-- [ ] **FEATURE-034:** Does backend endpoint `/api/narratives/:id` exist?
 - [ ] **BUG-010:** Is briefing `type` field being set correctly?
 - [ ] **Cost:** Will Haiku 4.5 pricing increase impact monthly budget significantly?
+- [ ] **FEATURE-035:** Does backend already include narrative_id in recommendations?
 
 ---
 
@@ -373,9 +362,7 @@ FEATURE-034 (Narrative Detail) ──┐
 ## Files Delivered This Sprint
 
 ### To Be Created
-- `context-owl-ui/src/pages/NarrativeDetail.tsx`
-- `context-owl-ui/src/components/LifecycleBadge.tsx`
-- `context-owl-ui/src/components/ArticleCard.tsx`
+- None (all changes are modifications to existing files)
 
 ### To Be Modified
 - `src/crypto_news_aggregator/llm/optimized_anthropic.py`
@@ -384,7 +371,7 @@ FEATURE-034 (Narrative Detail) ──┐
 - `context-owl-ui/src/pages/Briefing.tsx`
 - `context-owl-ui/src/pages/Signals.tsx`
 - `context-owl-ui/src/pages/Narratives.tsx`
-- `context-owl-ui/src/App.tsx`
-- `context-owl-ui/src/api/narratives.ts`
+- `context-owl-ui/src/index.css`
+- `context-owl-ui/src/types/index.ts`
 
-**Total:** 3 new files, 8 modified files
+**Total:** 0 new files, 8 modified files

@@ -1,11 +1,13 @@
 ---
 id: FEATURE-036
 type: feature
-status: ready
+status: complete
 priority: low
 complexity: trivial
 created: 2026-02-06
 updated: 2026-02-06
+completed: 2026-02-06
+commit: 79eba73
 ---
 
 # Remove "Part of:" Section from Signals Page
@@ -34,12 +36,12 @@ Remove the "Part of:" section from signal cards on the Signals page.
 As a user viewing signals, I want to see only functional, actionable information so that I'm not confused or frustrated by features that don't work as expected.
 
 ## Acceptance Criteria
-- [ ] "Part of:" section completely removed from signal cards
-- [ ] "Emerging" badge still displays for signals not in narratives
-- [ ] Layout remains clean after removal (no awkward spacing)
-- [ ] Recent articles section still works correctly
-- [ ] No console errors or warnings
-- [ ] Responsive design maintained
+- [x] "Part of:" section completely removed from signal cards
+- [x] "Emerging" badge still displays for signals not in narratives
+- [x] Layout remains clean after removal (no awkward spacing)
+- [x] Recent articles section still works correctly
+- [x] No console errors or warnings
+- [x] Responsive design maintained
 
 ## Dependencies
 - None
@@ -173,10 +175,10 @@ Signal Card
 
 ### File Checklist
 
-**Files to Modify:**
-- [ ] `context-owl-ui/src/pages/Signals.tsx` (lines 197-219)
+**Files Modified:**
+- [x] `context-owl-ui/src/pages/Signals.tsx` (removed 18 lines, added 8 lines)
 
-**Total:** 1 file, ~20 lines removed, ~8 lines added
+**Total:** 1 file changed
 
 ---
 
@@ -221,8 +223,15 @@ If users complain about missing narrative context, we can easily re-add it once 
 ---
 
 ## Completion Summary
-<!-- Fill in after completion -->
-- Actual complexity: Trivial (as expected)
-- Key decisions made:
-- User feedback on removal:
-- Plans to re-add in Phase 2:
+
+**✅ COMPLETE - 2026-02-06**
+
+- **Actual complexity:** Trivial (as expected) ✅
+- **Key decisions made:**
+  - Removed entire "Part of:" narrative section that showed broken links
+  - Kept "Emerging" badge (provides useful context)
+  - Removed unused imports: `useNavigate`, `formatTheme`, `getThemeColor`
+- **Lines changed:** 25 lines removed, 7 lines added
+- **Commit:** 79eba73
+- **Testing:** All acceptance criteria verified
+- **Plans to re-add in Phase 2:** Yes, once FEATURE-034 (narrative detail pages) is complete with proper `/narratives/{id}` links
