@@ -645,6 +645,49 @@ AVAILABLE DATA:
 Address the issues identified in the critique and generate an improved briefing.
 Return ONLY valid JSON in the same format as before."""
 
+    def _match_recommendations_to_narratives(
+        self,
+        recommendations: List[Dict[str, str]],
+        narratives: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """
+        Match recommendation titles to narrative IDs.
+
+        Args:
+            recommendations: List of recommendations from LLM with {title, theme}
+            narratives: List of available narratives with {_id, title, ...}
+
+        Returns:
+            List of recommendations with narrative_id added where possible
+        """
+        # Build a map of narrative titles to their IDs (case-insensitive)
+        title_to_id = {}
+        for narrative in narratives:
+            narrative_title = narrative.get("title", "").strip().lower()
+            if narrative_title:
+                narrative_id = str(narrative.get("_id", ""))
+                if narrative_id and narrative_id != "":
+                    title_to_id[narrative_title] = narrative_id
+
+        # Match each recommendation to a narrative by title
+        matched_recommendations = []
+        for rec in recommendations:
+            rec_title = rec.get("title", "").strip().lower()
+            matched_rec = dict(rec)  # Copy recommendation
+
+            # Try to find matching narrative ID
+            if rec_title and rec_title in title_to_id:
+                matched_rec["narrative_id"] = title_to_id[rec_title]
+                logger.debug(f"Matched recommendation '{rec.get('title')}' to narrative {title_to_id[rec_title]}")
+            else:
+                # Log when we can't match (for debugging)
+                if rec_title:
+                    logger.debug(f"Could not match recommendation '{rec.get('title')}' to any narrative")
+
+            matched_recommendations.append(matched_rec)
+
+        return matched_recommendations
+
     def _parse_briefing_response(self, response_text: str) -> GeneratedBriefing:
         """Parse LLM response into GeneratedBriefing."""
         try:
@@ -796,6 +839,12 @@ Return ONLY valid JSON in the same format as before."""
                     iteration_count = int(match.group(1))
                     break
 
+        # Match recommendations to narrative IDs
+        matched_recommendations = self._match_recommendations_to_narratives(
+            generated.recommendations,
+            briefing_input.narratives,
+        )
+
         briefing_doc = {
             "type": briefing_type,
             "generated_at": briefing_input.generated_at,
@@ -805,7 +854,7 @@ Return ONLY valid JSON in the same format as before."""
                 "key_insights": generated.key_insights,
                 "entities_mentioned": generated.entities_mentioned,
                 "detected_patterns": generated.detected_patterns,
-                "recommendations": generated.recommendations,
+                "recommendations": matched_recommendations,
             },
             "metadata": {
                 "confidence_score": generated.confidence_score,

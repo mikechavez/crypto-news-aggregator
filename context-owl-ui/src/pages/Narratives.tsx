@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { Sparkles, TrendingUp, Flame, Zap, Star, Wind, AlertCircle } from 'lucide-react';
 import { narrativesAPI } from '../api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
@@ -48,12 +49,14 @@ interface PaginationState {
 }
 
 export function Narratives() {
+  const [searchParams] = useSearchParams();
   const [expandedArticles, setExpandedArticles] = useState<Set<number>>(new Set());
   const [narrativeArticles, setNarrativeArticles] = useState<Map<string, any[]>>(new Map());
   const [loadingArticles, setLoadingArticles] = useState<Set<string>>(new Set());
   const [loadingMore, setLoadingMore] = useState<Set<string>>(new Set());
   const [paginationState, setPaginationState] = useState<Map<string, PaginationState>>(new Map());
   const [loadErrors, setLoadErrors] = useState<Map<string, string>>(new Map());
+  const [highlightedNarrativeId, setHighlightedNarrativeId] = useState<string | null>(null);
   const ARTICLES_PER_PAGE = 20;
   
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
@@ -67,6 +70,25 @@ export function Narratives() {
   });
 
   const narratives = data || [];
+
+  // Handle highlight query parameter
+  useEffect(() => {
+    const highlightId = searchParams.get('highlight');
+    if (highlightId) {
+      setHighlightedNarrativeId(highlightId);
+
+      // Find the index of the narrative with this ID and scroll to it
+      const index = narratives.findIndex(n => n._id === highlightId);
+      if (index >= 0) {
+        setTimeout(() => {
+          const element = document.getElementById(`narrative-${highlightId}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 100);
+      }
+    }
+  }, [searchParams, narratives]);
 
   if (isLoading) return <Loading />;
   if (error) return <ErrorMessage message={error.message} onRetry={() => refetch()} />;
@@ -264,9 +286,13 @@ export function Narratives() {
             }
           };
 
+          const isHighlighted = highlightedNarrativeId === narrativeId;
+
           return (
-          <Card 
+          <Card
             key={`${narrative.theme}-${index}`}
+            id={`narrative-${narrativeId}`}
+            className={cn(isHighlighted && 'highlight-pulse')}
           >
             <div onClick={toggleExpanded}>
             <CardHeader>
