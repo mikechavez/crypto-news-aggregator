@@ -16,16 +16,19 @@ def get_schedule():
     """
     settings = get_settings()
     return {
-        # Fetch news from all enabled sources every 5 minutes
-        "fetch-news-every-5-minutes": {
-            "task": "fetch_news",  # Task registered with short name in tasks/__init__.py
-            "schedule": timedelta(seconds=settings.NEWS_FETCH_INTERVAL),
-            "args": (None,),  # None means fetch from all enabled sources
-            "options": {
-                "expires": settings.NEWS_FETCH_INTERVAL / 2,  # Prevent duplicate tasks
-                "time_limit": 600,  # 10 minutes
-            },
-        },
+        # DISABLED (BUG-019): API-based news fetching deprecated
+        # CoinDesk and Bloomberg APIs are blocked/failing
+        # RSS-based system provides articles successfully
+        # Uncomment if APIs are fixed or when switching news sources
+        # "fetch-news-every-5-minutes": {
+        #     "task": "fetch_news",  # Task registered with short name in tasks/__init__.py
+        #     "schedule": timedelta(seconds=settings.NEWS_FETCH_INTERVAL),
+        #     "args": (None,),  # None means fetch from all enabled sources
+        #     "options": {
+        #         "expires": settings.NEWS_FETCH_INTERVAL / 2,  # Prevent duplicate tasks
+        #         "time_limit": 600,  # 10 minutes
+        #     },
+        # },
         # Check and process price alerts every 5 minutes
         "check-price-alerts": {
             "task": "check_price_alerts",  # Task registered with short name in tasks/__init__.py
