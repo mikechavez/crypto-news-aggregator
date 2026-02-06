@@ -18,7 +18,7 @@ def get_schedule():
     return {
         # Fetch news from all enabled sources every 5 minutes
         "fetch-news-every-5-minutes": {
-            "task": "crypto_news_aggregator.tasks.fetch_news.fetch_news",
+            "task": "fetch_news",  # Task registered with short name in tasks/__init__.py
             "schedule": timedelta(seconds=settings.NEWS_FETCH_INTERVAL),
             "args": (None,),  # None means fetch from all enabled sources
             "options": {
@@ -28,7 +28,7 @@ def get_schedule():
         },
         # Check and process price alerts every 5 minutes
         "check-price-alerts": {
-            "task": "crypto_news_aggregator.tasks.alert_tasks.check_price_alerts",
+            "task": "check_price_alerts",  # Task registered with short name in tasks/__init__.py
             "schedule": timedelta(seconds=settings.PRICE_CHECK_INTERVAL),
             "options": {
                 "expires": 240,  # 4 minutes
@@ -83,35 +83,11 @@ def get_schedule():
         },
         # Consolidate duplicate narratives every hour
         "consolidate-narratives": {
-            "task": "consolidate_narratives",
+            "task": "consolidate_narratives",  # Task registered with short name in tasks/__init__.py
             "schedule": crontab(minute=0),  # Every hour at :00
             "options": {
                 "expires": 3600,  # 1 hour timeout
                 "time_limit": 3600,  # 1 hour
-            },
-        },
-        # Cleanup invalid narrative references nightly at 2 AM EST
-        "cleanup-invalid-narrative-references": {
-            "task": "crypto_news_aggregator.tasks.narrative_cleanup.cleanup_invalid_article_references",
-            "schedule": crontab(
-                hour=2,
-                minute=0,
-            ),
-            "options": {
-                "expires": 3600,  # 1 hour
-                "time_limit": 1800,  # 30 minutes
-            },
-        },
-        # Validate narrative data integrity nightly at 2:30 AM EST
-        "validate-narrative-data-integrity": {
-            "task": "crypto_news_aggregator.tasks.narrative_cleanup.validate_narrative_data_integrity",
-            "schedule": crontab(
-                hour=2,
-                minute=30,
-            ),
-            "options": {
-                "expires": 3600,  # 1 hour
-                "time_limit": 1800,  # 30 minutes
             },
         },
     }
