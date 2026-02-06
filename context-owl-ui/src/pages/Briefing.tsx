@@ -102,9 +102,13 @@ function renderNarrative(narrative: string): React.ReactNode[] {
  * Recommended reading item component
  */
 function RecommendationItem({ recommendation }: { recommendation: BriefingRecommendation }) {
+  const href = recommendation.narrative_id
+    ? `/narratives?highlight=${recommendation.narrative_id}`
+    : '/narratives';
+
   return (
     <Link
-      to="/narratives"
+      to={href}
       className="group block py-3"
     >
       <div className="flex items-start gap-3">
