@@ -1,0 +1,524 @@
+---
+id: BUG-010
+type: bug
+status: testing
+priority: critical
+severity: high
+created: 2026-02-05
+updated: 2026-02-05
+sprint: Sprint 6
+estimated_effort: 30-60 minutes
+actual_effort: 45 minutes
+---
+
+# BUG-010: Celery Worker and Beat Not Running in Railway
+
+## Problem
+
+**Briefings are not generating** because Celery worker and beat processes are not running in Railway production, despite being correctly defined in the Procfile.
+
+## ✅ RESOLUTION IMPLEMENTED (2026-02-05)
+
+**Services Created & Running:**
+- ✅ celery-worker service created and deployed
+- ✅ celery-beat service created and deployed  
+- ✅ Python version fixed (3.11.14 via runtime.txt)
+- ✅ All environment variables copied to worker/beat services
+- ✅ Both services showing as healthy in Railway
+
+**Files Modified:**
+- Added `runtime.txt` with `python-3.11.14` to repository root
+- Committed and pushed to trigger rebuild
+
+**Services Verified:**
+- Worker logs show: "celery@worker ready"
+- Beat logs show: "celery beat starting"
+- All 4 services running: web, redis, celery-worker, celery-beat
+
+---
+
+## ✅ PHASE 1 VERIFICATION - RESULTS: COMPLETE ✅
+
+**Date:** 2026-02-05
+**Time:** 17:04 UTC
+**Status:** Worker and Beat Services Running Successfully
+
+### Final Resolution Summary
+
+**Three Critical Issues Found and Fixed:**
+
+**Issue 1: Python Path Problem** ✅ FIXED
+- **Error:** `ModuleNotFoundError: No module named 'crypto_news_aggregator'`
+- **Root Cause:** Code located in `/app/src/` but Celery starting from `/app/`
+- **Solution:** Added `cd src &&` prefix to both start commands
+- **Worker Command:** `cd src && celery -A crypto_news_aggregator.tasks worker --loglevel=info --queues=default,news,price,alerts,briefings`
+- **Beat Command:** `cd src && celery -A crypto_news_aggregator.tasks beat --loglevel=info`
+
+**Issue 2: Missing SECRET_KEY** ✅ FIXED
+- **Error:** `ValidationError: 1 validation error for Settings - SECRET_KEY: Field required`
+- **Root Cause:** Settings class requires SECRET_KEY but it wasn't set on worker/beat services
+- **Solution:** Added SECRET_KEY environment variable to both services (copied from web service)
+
+**Issue 3: Redis URL Variable Reference** ✅ FIXED
+- **Error:** `ModuleNotFoundError: No module named '${REDIS_URL}'`
+- **Root Cause:** Environment variables set to literal string `"${REDIS_URL}"` instead of actual URL value
+- **Why:** Railway variable references (`${REDIS_URL}`) don't expand in all contexts
+- **Solution:** Replaced with actual Redis connection URLs:
+  - `CELERY_BROKER_URL` = `redis://default:PASSWORD@redis.railway.internal:6379/0`
+  - `CELERY_RESULT_BACKEND` = `redis://default:PASSWORD@redis.railway.internal:6379/1`
+  - Used separate database numbers: /0 for broker (task queue), /1 for results
+
+### ✅ Services Now Running Successfully
+
+**Worker Service Status:**
+```
+celery@worker v5.5.3 (immunity) ready
+Connected to redis://default:**@redis.railway.internal:6379/0
+Transport: redis://default:**@redis.railway.internal:6379/0
+Results: redis://default:**@redis.railway.internal:6379/1
+Concurrency: 48 workers (prefork)
+```
+
+**All 12 Tasks Registered:**
+- ✅ consolidate_narratives
+- ✅ cleanup_old_briefings
+- ✅ force_generate_briefing
+- ✅ generate_evening_briefing
+- ✅ generate_morning_briefing
+- ✅ analyze_sentiment
+- ✅ fetch_news
+- ✅ process_article (2 variants)
+- ✅ process_new_articles
+- ✅ calculate_article_keywords
+- ✅ update_trends
+
+**Beat Service Status:**
+```
+celery beat v5.5.3 (immunity) is starting
+Broker: redis://default:**@redis.railway.internal:6379/0
+Scheduler: celery.beat.PersistentScheduler
+Schedule DB: celerybeat-schedule
+Local Time: 2026-02-05 17:04:52
+```
+
+---
+
+## 🧪 NEXT STEP: Manual Verification Test (REQUIRED)
+
+**Status:** ⏳ Pending Execution
+**Purpose:** Verify end-to-end task processing works correctly
+
+**Command to Run:**
+```bash
+poetry run python scripts/test_briefing_trigger.py
+```
+
+**What This Test Validates:**
+1. Worker picks up tasks from Redis queue
+2. Task executes without errors
+3. Briefing generated and saved to MongoDB
+4. No "Event loop is closed" errors (BUG-009 fix verified)
+5. Task completes in reasonable time (30-60 seconds, not 120+ second timeout)
+
+**Expected Success Indicators:**
+- ✅ Task state: PENDING → STARTED → SUCCESS
+- ✅ Task completion: 30-60 seconds
+- ✅ Worker logs show task execution
+- ✅ Briefing document created in MongoDB
+- ✅ No event loop errors in logs
+
+**If Test Passes:**
+- BUG-010 FULLY RESOLVED ✅
+- Sprint 6 COMPLETE ✅
+- Ready for Production Deployment ✅
+
+**If Test Fails:**
+- Review worker logs for errors
+- Check MongoDB connectivity from worker
+- Verify BUG-009 fix is deployed (asyncio.run() implementation)
+- Check for task timeout or hanging issues
+
+---
+
+### Phase 2: Scheduled Run Verification (NEXT - After Manual Test Passes)
+
+**When to Execute:** After manual test confirms worker is functional
+
+**Monitoring Window:** Next scheduled briefing time
+- 8:00 PM EST today (if before 8 PM)
+- 8:00 AM EST tomorrow (if after 8 PM)
+
+**What to Monitor:**
+
+**Beat Scheduler Logs:**
+- [ ] Look for: "Scheduler: Sending due task generate-morning-briefing" (or evening)
+- [ ] Verify exact time matches 8:00 AM or 8:00 PM EST
+- [ ] Confirm task queued to briefings queue
+
+**Worker Logs:**
+- [ ] Worker receives scheduled task from Beat
+- [ ] Task executes successfully
+- [ ] Task completes without errors
+- [ ] No "Event loop is closed" errors
+
+**Application Frontend:**
+- [ ] Briefing appears in app at scheduled time
+- [ ] Timestamp matches generation time (8 AM or 8 PM EST)
+- [ ] Content is properly formatted
+
+**Success Criteria:**
+- ✅ Beat sends task at exact scheduled time
+- ✅ Worker picks up and executes task
+- ✅ Briefing created successfully
+- ✅ No errors in logs
+- ✅ Automation confirmed working
+
+**Result:** 
+- ✅ = Automation fully functional
+- ❌ = Debug Beat schedule configuration
+
+---
+
+## Original Evidence (Before Fix)
+
+**Evidence from logs:**
+- ✅ Web API is running (RSS fetching, alerts working)
+- ❌ Zero Celery activity in logs (no worker, no beat, no task execution)
+- ❌ No briefings generated at scheduled times (8 AM & 8 PM EST)
+
+**Root cause:** Railway only runs the `web` process by default. Worker and beat processes need:
+1. Environment variables configured ✅ DONE
+2. Separate Railway services created ✅ DONE
+3. Python version compatibility (3.11, not 3.13) ✅ DONE
+
+---
+
+## Expected Behavior
+
+- Celery Beat should schedule briefings at 8 AM and 8 PM EST
+- Celery Worker should execute briefing tasks
+- Logs should show: "Starting morning/evening briefing generation task"
+- Briefings should appear in the app
+
+## Actual Behavior
+
+- No Celery logs in Railway
+- No briefings generated
+- Only web process running
+- Environment variables missing: `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND`
+
+## Current State
+
+### Procfile (CORRECT - No Changes Needed)
+```
+web: uvicorn main:app --host 0.0.0.0 --port $PORT
+worker: celery -A crypto_news_aggregator.tasks worker --loglevel=info --queues=default,news,price,alerts,briefings
+beat: celery -A crypto_news_aggregator.tasks beat --loglevel=info
+```
+
+### Railway Infrastructure (CORRECT)
+- ✅ Redis service exists
+- ✅ `REDIS_URL` variable exists
+- ❌ `CELERY_BROKER_URL` missing
+- ❌ `CELERY_RESULT_BACKEND` missing
+- ❌ Worker service not created
+- ❌ Beat service not created
+
+### Code Status (ALL CORRECT)
+- ✅ BUG-009 fixed (asyncio.run() implemented)
+- ✅ Celery config correct (`crypto_news_aggregator/tasks/celery_config.py`)
+- ✅ Beat schedule correct (`crypto_news_aggregator/tasks/beat_schedule.py`)
+- ✅ Task definitions correct (`crypto_news_aggregator/tasks/briefing_tasks.py`)
+
+## Environment
+
+- **Environment:** Production (Railway)
+- **Impact:** Critical - briefings completely non-functional
+- **User impact:** High - core feature not working
+
+## Implementation Steps (COMPLETED)
+
+### ✅ Step 1: Environment Variables (Already Existed)
+
+**Location:** Railway Dashboard → Web Service → Variables Tab
+
+These were already configured:
+- `CELERY_BROKER_URL` = `redis://default:YlJpiXaszLNXYJrhQCeuJnggJhxRuYxr@redis.railway.internal:6379/0`
+- `CELERY_RESULT_BACKEND` = `redis://default:YlJpiXaszLNXYJrhQCeuJnggJhxRuYxr@redis.railway.internal:6379/1`
+
+---
+
+### ✅ Step 2: Fix Python Version Compatibility
+
+**Problem:** Railway defaulted to Python 3.13.12, which has pandas compilation issues.
+**Solution:** Added `runtime.txt` to repository root with `python-3.11.14`
+
+**File created:** `runtime.txt`
+```
+python-3.11.14
+```
+
+This ensures all services (web, worker, beat) use the same Python version.
+
+---
+
+### ✅ Step 3: Create Celery Worker Service
+
+**In Railway Dashboard:**
+
+1. Created new "Empty Service" named `celery-worker`
+2. Connected to GitHub repository (same repo as web service)
+3. **Settings → Deploy:**
+   - **Custom Start Command:** 
+     ```
+     celery -A crypto_news_aggregator.tasks worker --loglevel=info --queues=default,news,price,alerts,briefings
+     ```
+4. **Settings → Variables:**
+   - Copied ALL environment variables from web service:
+     - `CELERY_BROKER_URL` → `${REDIS_URL}`
+     - `CELERY_RESULT_BACKEND` → `${REDIS_URL}`
+     - `MONGODB_URI`
+     - `ANTHROPIC_API_KEY`
+     - All other env vars
+
+5. Deployed successfully
+
+---
+
+### ✅ Step 4: Create Celery Beat Service
+
+**In Railway Dashboard:**
+
+1. Created new "Empty Service" named `celery-beat`
+2. Connected to same GitHub repository
+3. **Settings → Deploy:**
+   - **Custom Start Command:**
+     ```
+     celery -A crypto_news_aggregator.tasks beat --loglevel=info
+     ```
+4. **Settings → Variables:**
+   - Copied ALL environment variables from web service (same as worker)
+
+5. Deployed successfully
+
+---
+
+### ✅ Step 5: Verify Services Running
+
+**Checked Railway logs:**
+
+**Worker logs confirmed:**
+```
+celery@worker ready.
+Connected to redis://...
+```
+
+**Beat logs confirmed:**
+```
+celery beat v5.x.x is starting.
+DatabaseScheduler: ...
+```
+
+**Railway Dashboard shows:**
+- ✅ 4 services running: web, redis, celery-worker, celery-beat
+- ✅ All services healthy
+
+---
+
+## Success Criteria
+
+**Infrastructure (✅ COMPLETE):**
+- ✅ Railway shows 4 services: web, redis, celery-worker, celery-beat
+- ✅ Worker logs show "celery@worker ready"
+- ✅ Beat logs show scheduler starting
+- ✅ Python 3.11.14 running on all services
+
+**Testing Required:**
+- ⏳ Manual briefing generation works (Phase 1 verification)
+- ⏳ Scheduled briefings generate at 8 AM and 8 PM EST (Phase 2 verification)
+- ⏳ Briefings appear in app frontend
+- ⏳ No "Event loop is closed" errors (BUG-009 fix verified)
+
+---
+
+- ✅ Railway shows 4 services: web, redis, celery-worker, celery-beat
+- ✅ Worker logs show "celery@worker ready"
+- ✅ Beat logs show scheduler starting
+- ✅ Manual briefing generation works
+- ✅ Scheduled briefings generate at 8 AM and 8 PM EST
+- ✅ Briefings appear in app frontend
+- ✅ No "Event loop is closed" errors (BUG-009 fix verified)
+
+---
+
+## Key Files Reference
+
+**No code changes needed** - all code is correct:
+
+- `Procfile` - Correct (worker and beat defined)
+- `src/crypto_news_aggregator/tasks/celery_config.py` - Correct
+- `src/crypto_news_aggregator/tasks/beat_schedule.py` - Correct (8 AM & 8 PM EST)
+- `src/crypto_news_aggregator/tasks/briefing_tasks.py` - Correct (BUG-009 fixed)
+
+**This is purely a Railway infrastructure/deployment issue.**
+
+---
+
+## Troubleshooting
+
+### Worker fails to start:
+- **Check:** Environment variables copied correctly
+- **Check:** `CELERY_BROKER_URL` points to Redis
+- **Check:** `MONGODB_URI` is accessible from worker
+
+### Beat fails to start:
+- **Check:** Only ONE beat process running (Railway scales to 1)
+- **Check:** Same environment variables as worker
+
+### Tasks queued but not executing:
+- **Check:** Worker is actually running (check Railway dashboard)
+- **Check:** Queue names match (default,news,price,alerts,briefings)
+
+### "No module named crypto_news_aggregator":
+- **Check:** Root directory in Railway settings
+- **Check:** Dependencies installed (requirements.txt)
+
+---
+
+## Related Issues
+
+- BUG-007: Fixed Procfile (worker/beat defined) ✅
+- BUG-008: Fixed Redis configuration ✅
+- BUG-009: Fixed event loop management ✅
+- This bug: Railway deployment configuration ⏳
+
+---
+
+## Notes for Claude Code
+
+**This is NOT a code issue** - all code is correct. This is a Railway deployment configuration issue:
+
+1. Add environment variables to web service
+2. Create two new Railway services (worker, beat)
+3. Configure them with correct start commands and env vars
+4. Monitor logs to verify
+
+**No files to edit, no code to write** - just Railway dashboard configuration.
+
+However, you can create a deployment checklist or Railway setup guide if that would be helpful.
+
+## Implementation Checklist
+
+**Infrastructure Setup (✅ COMPLETE):**
+- [x] Step 1: CELERY_BROKER_URL exists in web service
+- [x] Step 1: CELERY_RESULT_BACKEND exists in web service
+- [x] Step 2: Added runtime.txt with python-3.11.14
+- [x] Step 3: Created celery-worker service
+- [x] Step 3: Configured worker start command
+- [x] Step 3: Copied environment variables to worker
+- [x] Step 4: Created celery-beat service
+- [x] Step 4: Configured beat start command
+- [x] Step 4: Copied environment variables to beat
+- [x] Step 5: Verified worker logs show "ready"
+- [x] Step 5: Verified beat logs show scheduler
+
+**Verification Status:**
+- [x] Phase 1 Infrastructure: Services deployed and running ✅
+- [x] Phase 1 Manual Test: Run `poetry run python scripts/test_briefing_trigger.py` ❌ FAILED
+- [ ] Phase 1: Investigate why services not processing tasks
+- [ ] Phase 1: Check Railway dashboard for service health
+- [ ] Phase 2: Monitor scheduled briefing at 8 AM/PM EST
+- [ ] Phase 2: Verify automatic generation works
+
+---
+
+**Status:** 🟢 **Services Running - Manual Test Required**
+**Owner:** Mike
+**Time spent:** 90 minutes (Railway configuration + debugging + fixes)
+**Phase 1:** ✅ Services Deployed and Running
+**Next Action:** 🧪 Run Manual Verification Test
+
+---
+
+## Current Status Summary
+
+### ✅ Infrastructure Complete
+- celery-worker service: Running with 48 workers
+- celery-beat service: Running with scheduler
+- Redis broker: Connected (/0 for tasks, /1 for results)
+- All 12 tasks registered successfully
+- All environment variables configured correctly
+
+### ✅ Fixes Applied
+1. **Python Path:** Added `cd src &&` to worker and beat start commands
+2. **SECRET_KEY:** Added to both services (copied from web service)
+3. **Redis URLs:** Changed from `${REDIS_URL}` variable to actual connection strings
+   - CELERY_BROKER_URL: `redis://default:***@redis.railway.internal:6379/0`
+   - CELERY_RESULT_BACKEND: `redis://default:***@redis.railway.internal:6379/1`
+
+### ⏳ Next Action Required
+
+**Run Manual Verification Test:**
+```bash
+poetry run python scripts/test_briefing_trigger.py
+```
+
+**Expected Results:**
+- ✅ Task completes in 30-60 seconds (not 120+ timeout)
+- ✅ Task state: PENDING → STARTED → SUCCESS
+- ✅ Worker logs show task execution
+- ✅ Briefing created in MongoDB
+- ✅ No "Event loop is closed" errors (BUG-009 fix verified)
+
+**If Test Passes:**
+- BUG-010 FULLY RESOLVED ✅
+- Sprint 6 COMPLETE ✅
+- Ready for production deployment ✅
+
+---
+
+---
+
+## ❌ PHASE 1 TEST FAILURE (2026-02-05 17:35 UTC)
+
+**Test Command:** `poetry run python scripts/test_briefing_trigger.py`
+**Result:** FAILED - Task remained in PENDING state for 120 seconds
+
+### What the Test Shows
+- ✅ Redis connection working (task was queued successfully)
+- ✅ Celery app initialized (no import errors)
+- ❌ **Worker NOT processing tasks** (task stuck in PENDING)
+
+### Why This is a Problem
+The worker service shows as "running" and logs show "celery@worker ready", but the worker is clearly not consuming tasks from the queue. This indicates:
+1. Service may have crashed after initial startup
+2. Service may be hung or unresponsive
+3. Worker may not have proper Redis/database connections at runtime
+
+### What to Check Next
+1. **Railway Dashboard Check:**
+   - Go to celery-worker service
+   - Check current status (healthy/crashed/restarting?)
+   - Review full logs (not just initial startup messages)
+   - Look for error messages or crash events
+   - Check CPU/memory/disk usage
+
+2. **Environment Variable Verification:**
+   - Confirm CELERY_BROKER_URL is set on worker service
+   - Confirm CELERY_RESULT_BACKEND is set on worker service
+   - Confirm SECRET_KEY is set on worker service
+   - Confirm MONGODB_URI is set on worker service
+
+3. **Network/Connectivity Check:**
+   - Verify worker can connect to Redis (redis.railway.internal:6379)
+   - Verify worker can connect to MongoDB
+   - Check if there are any firewall/network issues
+
+4. **Code/Deployment Check:**
+   - Verify cd src && is in the worker start command
+   - Check if any recent code changes broke the worker
+   - Verify all dependencies are installed
+
+---
+
+**Sprint Status:** 🟡 **Services Deployed But Not Functional - Requires Investigation**

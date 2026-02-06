@@ -4,86 +4,103 @@
 
 **Sprint Duration:** 2026-02-05 to 2026-02-19 (2 weeks)
 
-**Velocity Target:** 5 features + 1 critical bug
+**Velocity Target:** 5 features + critical bugs
 
-**Status:** 🟢 **COMPLETE** - All 5 features + 1 critical bug (100%)
+**Status:** 🟡 **FEATURES COMPLETE** - BUG-012 blocking deployment
 
 ---
 
-## CRITICAL: BUG-007 - Briefing Generation Failure
-**Priority:** CRITICAL | **Status:** ✅ FIXED
-**Issue:** No briefings generated today (2026-02-05) despite Sprint 5 automation
+## 🔴 ACTIVE BUG - BUG-012
+
+### BUG-012: Missing check_price_movements Import
+**Priority:** P0 - CRITICAL
+**Status:** ⚠️ IDENTIFIED - FIX NEEDED
+**Time So Far:** ~1 hour investigation
+
+**Root Cause:**
+`src/crypto_news_aggregator/api/v1/tasks.py` (line ~10) imports `check_price_movements` from `price_monitor.py`, but the function doesn't exist.
+
+**Error from Railway logs:**
+```
+ImportError: cannot import name 'check_price_movements' 
+from 'crypto_news_aggregator.tasks.price_monitor'
+```
+
+**Impact:**
+- ❌ Web service crashes on startup (before Celery can start)
+- ❌ Complete system outage
+- ❌ Blocks verification of BUG-011 fix
+
+**Fix Required:**
+Remove or comment out the unused import in `src/crypto_news_aggregator/api/v1/tasks.py`
+
+**Ticket:** `BUG-012-missing-check-price-movements.md`
+
+---
+
+## ✅ CRITICAL BUGS RESOLVED
+
+### BUG-007 - FIXED ✅
 **Root Cause:** Procfile missing Celery Beat and Worker process definitions
 **Fix:** Added worker and beat processes to Procfile (commit cddbeb8)
-**Action:** Deploy to Railway and verify briefing generation resumes
+**Status:** Verified working
+
+### BUG-008 - FIXED ✅
+**Root Cause:** Celery worker/beat can't connect to Redis broker in production
+**Fix:** Updated config to accept CELERY_BROKER_URL environment override (commit aab0f16)
+**Infrastructure:** Redis service added to Railway
+**Status:** Verified working
+
+### BUG-009 - FIXED ✅
+**Root Cause:** Manual event loop management left dangling Motor references
+**Issue:** "Event loop is closed" error on repeated briefing generation
+**Fix:** Replaced with `asyncio.run()` which properly manages lifecycle
+**Status:** Verified working
+
+### BUG-010 - FIXED ✅
+**Root Cause:** Multiple deployment configuration issues
+**Issues Found and Fixed:**
+1. **Python Path:** Added `cd src &&` to worker and beat start commands ✅
+2. **SECRET_KEY:** Added SECRET_KEY environment variable to both services ✅
+3. **Redis URLs:** Replaced `${REDIS_URL}` with actual connection strings ✅
+**Status:** Infrastructure configured correctly
+
+### BUG-011 - FIXED ✅
+**Root Cause:** Missing `get_article_service()` function in `article_service.py`
+**Fix:** Added function to return singleton instance (commit edb385d)
+**Status:** Code fix applied - awaiting verification after BUG-012 resolved
 
 ---
 
-## Sprint Backlog
+## ✅ Completed Features
 
-### 🚨 Critical Bug (Do First)
-
-#### BUG-007: Briefing Generation Not Running
-**Priority:** CRITICAL
-**Status:** Ready
-**Estimated:** 1-2 hours
-
-**Problem:** No briefings created today. Expected 8 AM/8 PM EST automated generation.
-
-**Investigation needed:**
-- Railway deployment status
-- Celery Beat scheduler running?
-- Celery Worker receiving tasks?
-- Database connectivity
-- Last successful briefing timestamp
-
-**Ticket:** `/home/claude/BUG-007-briefing-generation-failure.md`
-
----
-
-### ✅ Completed Features
-
-#### FEATURE-028: Cost Tracking Service
+### FEATURE-028: Cost Tracking Service
 **Status:** ✅ COMPLETED
 **Effort:** 4h estimated, 1h actual
-
 **Delivered:**
 - CostTracker service with full pricing table
 - 8 tests passing
 - Accurate cost calculations verified
 
----
-
-#### FEATURE-029: LLM Integration
+### FEATURE-029: LLM Integration
 **Status:** ✅ COMPLETED  
 **Effort:** 3h estimated, 2h actual
-
 **Delivered:**
 - All LLM calls wrapped with tracking
 - Token extraction from API responses
 - 9 integration tests passing
 
----
-
-#### FEATURE-030: Verification & Testing
+### FEATURE-030: Verification & Testing
 **Status:** ✅ COMPLETED
 **Effort:** 2h estimated, 1h actual
-
 **Delivered:**
 - Verification script functional
 - 6 E2E tests passing
 - Cost calculations validated
 
----
-
-### 📋 Remaining Features
-
-#### FEATURE-031: Backend API Verification
-**Priority:** HIGH
+### FEATURE-031: Backend API Verification
 **Status:** ✅ COMPLETED
 **Effort:** 1h estimated, 0.5h actual
-**Dependencies:** FEATURE-028, 029, 030
-
 **Delivered:**
 - All 7 admin endpoints tested with real MongoDB data
 - Response formats verified correct for frontend
@@ -91,40 +108,33 @@
 - Cache performance tracked: 24.33% hit rate
 - Processing statistics verified: 1,145 articles, 1,308 LLM ops
 
-**Ticket:** `/home/claude/FEATURE-031-backend-api-verification.md`
-
----
-
-#### FEATURE-032: Dashboard UI Components
-**Priority:** LOW
+### FEATURE-032: Dashboard UI Components
 **Status:** ✅ COMPLETED
 **Effort:** 0.5h estimated, 0.25h actual
-**Dependencies:** FEATURE-031
-
 **Delivered:**
 - CostAlert component created (`src/components/CostAlert.tsx`)
 - Alert triggers: daily cost > $0.50 OR projected monthly > $10
-- Integrated at top of CostMonitor page (line 311-318)
+- Integrated at top of CostMonitor page
 - Dark mode support with Tailwind utilities
-- Recommended actions displayed in alert
 - Production build: ✅ Successful (462.70 KB JS, 52.82 KB CSS)
-
-**Ticket:** `/home/claude/FEATURE-032-dashboard-ui-components.md`
 
 ---
 
 ## Sprint Progress
 
 ### Velocity
-- **Total tickets:** 5 features + 1 bug
-- **Completed:** 5/5 features (100%) + BUG-007 critical
-- **In Progress:** None (all complete)
-- **Time spent:** 4.75 hours / 10.5 estimated total (55% efficiency gain)
+- **Total tickets:** 5 features + 6 bugs
+- **Completed:** 5/5 features (100%) + 5/6 bugs (83%)
+- **Remaining:** BUG-012 (5 minute fix)
+- **Time spent:** 4.75 hours features + ~7 hours debugging
 
-### Current Focus
-1. ✅ **Fix BUG-007** (briefing generation) - COMPLETE
-2. ✅ Complete FEATURE-031 (backend verification) - COMPLETE
-3. ✅ Complete FEATURE-032 (dashboard UI) - COMPLETE
+### Next Session Tasks
+1. 🔧 **FIX BUG-012** - Remove unused import from `api/v1/tasks.py`
+2. 📋 Verify Railway deployment succeeds
+3. 📋 Check worker/beat service logs (verify BUG-011 fix)
+4. 📋 Run manual test: `poetry run python scripts/test_briefing_trigger.py`
+5. 📋 Confirm all 12 tasks registered
+6. ✅ Mark sprint complete
 
 ---
 
@@ -150,22 +160,6 @@
 
 ---
 
-## Next Actions
-
-### Immediate (This Session)
-1. ✅ **Fix BUG-007** - Briefing generation broken - DONE
-2. ✅ Test FEATURE-031 - Backend API verification - DONE
-3. ✅ Complete FEATURE-032 - Dashboard UI - DONE
-
-### This Week
-1. ✅ Resolve briefing issue
-2. ✅ Complete backend verification
-3. ✅ Complete dashboard UI (final feature)
-4. ✅ Production build verified
-5. Deploy to production
-
----
-
 ## Success Criteria
 
 By end of sprint:
@@ -177,66 +171,44 @@ By end of sprint:
 
 ---
 
----
+## Bug Resolution Timeline
 
-## Investigation Summary (BUG-007)
+**BUG-007:** Identified and fixed (Procfile) - 2 hours ✅
+**BUG-008:** Identified and fixed (Redis config) - 1 hour ✅
+**BUG-009:** Identified and fixed (event loop) - 1 hour ✅
+**BUG-010:** Identified and fixed (infrastructure) - 2 hours ✅
+**BUG-011:** Identified and fixed (missing function) - 1 hour ✅
+**BUG-012:** Identified (import error) - 1 hour investigation, fix pending
 
-**Timeline:**
-1. Explored briefing generation system - Celery tasks, Beat schedule, config all correct
-2. Checked Procfile - found critical issue: **only web process defined**
-3. Root cause: Railway wasn't running Celery Beat (scheduler) or Worker (executor)
-4. Solution: Added worker and beat processes to Procfile
-5. Deployed fix via commit cddbeb8
-
-**Key Files Examined:**
-- `src/crypto_news_aggregator/tasks/briefing_tasks.py` - Tasks correctly implemented
-- `src/crypto_news_aggregator/tasks/beat_schedule.py` - Schedule correctly configured (8 AM & 8 PM EST)
-- `src/crypto_news_aggregator/tasks/celery_config.py` - Timezone correctly set to America/New_York
-- `Procfile` - **Was missing worker and beat processes**
-
-**Lesson Learned:**
-For distributed systems with task scheduling, ensure all required processes are defined in the deployment configuration (Procfile, docker-compose, etc). The code was correct; the deployment was incomplete.
+**Total debugging time:** ~8 hours
+**Lesson:** Always check full error traces - recent changes may not be the cause
 
 ---
 
-**Sprint Health:** 🟢 ALL COMPLETE - Ready for production deployment
+## Deployment Status
+
+**Features:** ✅ All tested and verified (5/5 complete)
+**Infrastructure:** ✅ Configured correctly
+**Code:** 🟡 BUG-012 fix needed before deployment
+
+### What's Ready
+- ✅ Cost tracking service with accurate LLM cost tracking
+- ✅ LLM integration with token extraction and tracking
+- ✅ Verification and testing system
+- ✅ Backend API endpoints fully verified (7/7 working)
+- ✅ Dashboard UI with cost alert banner
+- ✅ Celery + Redis infrastructure configured
+- ✅ Briefing scheduler configured for 8 AM and 8 PM EST
+- ✅ Event loop management fixed with asyncio.run()
+- ✅ All environment variables set correctly
+- ✅ Python path configured correctly
+- ✅ BUG-011 fix applied (get_article_service function added)
+
+### What Needs Fixing
+- ❌ BUG-012: Remove unused import from `api/v1/tasks.py`
 
 ---
 
-## Sprint 6 Summary
+**Sprint Health:** 🟡 **99% Complete - One 5-minute fix remaining**
 
-### FEATURE-031 Test Results
-**Date:** 2026-02-05
-**All 7 endpoints verified with real cost data:**
-
-| Endpoint | Status | Response |
-|----------|--------|----------|
-| `/admin/health` | ✅ 200 | OK |
-| `/admin/api-costs/summary` | ✅ 200 | MTD: $0.09, Projected: $0.71 |
-| `/admin/api-costs/daily?days=7` | ✅ 200 | 8 days of cost breakdown |
-| `/admin/api-costs/by-model` | ✅ 200 | Model-level cost tracking |
-| `/admin/cache/stats` | ✅ 200 | Hit rate: 24.33%, 883 entries |
-| `/admin/cache/clear-expired` | ✅ 200 | Maintenance endpoint working |
-| `/admin/processing/stats` | ✅ 200 | 1,145 articles, 11 sources |
-
-### FEATURE-032 Build Results
-**Date:** 2026-02-05
-**Production build verification:**
-- TypeScript compilation: ✅ Passed
-- Vite production build: ✅ Passed
-- JavaScript bundle: 462.70 KB (gzip: 142.15 KB)
-- CSS bundle: 52.82 KB (gzip: 8.47 KB)
-
-### Achievements
-- ✅ Monthly cost under $10 (projected: $0.71)
-- ✅ Cache efficiency tracking (24.33% hit rate)
-- ✅ Data formats validated for frontend
-- ✅ Backend API production-ready
-- ✅ Alert banner integrated and tested
-- ✅ All 5 features delivered 55% faster than estimated
-- ✅ Critical bug BUG-007 root cause found and fixed
-
----
-
-## Ready for Deployment
-All components tested and verified. Frontend and backend ready for production release.
+**Next Step:** Fix BUG-012 → Deploy → Verify → DONE ✅

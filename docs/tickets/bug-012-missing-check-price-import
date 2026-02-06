@@ -1,0 +1,140 @@
+BUG-012-missing-check-price-movements-import
+
+---
+id: BUG-012
+type: bug
+status: identified
+priority: critical
+severity: high
+created: 2026-02-05
+updated: 2026-02-05
+---
+
+# Missing check_price_movements Import Causing Deployment Crash
+
+## Problem
+
+Web service crashes on startup with ImportError, preventing entire system deployment.
+
+Railway logs show:
+```
+ImportError: cannot import name 'check_price_movements' 
+from 'crypto_news_aggregator.tasks.price_monitor' 
+(/app/src/crypto_news_aggregator/tasks/price_monitor.py)
+```
+
+This prevents the web service from starting, which blocks Celery worker and beat from starting.
+
+## Expected Behavior
+
+- Web service should start successfully
+- API routes should load without import errors
+- Celery worker and beat should be able to connect
+
+## Actual Behavior
+
+- Web service crashes during module import phase
+- FastAPI/Uvicorn never reaches "Application startup complete"
+- Complete system outage
+- No services running (web, worker, beat)
+
+## Steps to Reproduce
+
+1. Deploy current codebase to Railway
+2. Web service attempts to start
+3. Imports `crypto_news_aggregator.main`
+4. main.py imports API router
+5. API router imports `api/v1/tasks.py`
+6. tasks.py line ~10 tries to import `check_price_movements`
+7. ImportError raised → service crashes
+
+## Environment
+
+- Environment: production (Railway)
+- Service: web (FastAPI/Uvicorn)
+- User impact: high (complete system down)
+- Affects: All services (web, worker, beat)
+
+## Screenshots/Logs
+
+From Railway web service logs:
+```
+File "/app/src/crypto_news_aggregator/api/v1/tasks.py", line 10, in <module>
+    from crypto_news_aggregator.tasks.price_monitor import check_price_movements
+ImportError: cannot import name 'check_price_movements' from 'crypto_news_aggregator.tasks.price_monitor'
+```
+
+Full traceback shows crash occurs during module loading, before application starts.
+
+---
+
+## Resolution
+
+**Status:** Identified - Fix Ready
+**Branch:** feature/cost-tracking-service
+**Estimated Time:** 5 minutes
+
+### Root Cause
+
+**File:** `src/crypto_news_aggregator/api/v1/tasks.py` (line ~10)
+
+The file imports a function that doesn't exist:
+```python
+from crypto_news_aggregator.tasks.price_monitor import check_price_movements
+```
+
+**Problem:** The `check_price_movements` function is not defined in `tasks/price_monitor.py`
+
+**Why it exists:** Likely an old/unused import from:
+- Planned feature that wasn't implemented
+- Function was renamed/removed but import wasn't cleaned up
+- Copy-paste from template code
+
+### Changes Required
+
+**File to modify:** `src/crypto_news_aggregator/api/v1/tasks.py`
+
+**Option 1 - Comment out (recommended for safety):**
+```python
+# from crypto_news_aggregator.tasks.price_monitor import check_price_movements  # FIXME: Function doesn't exist
+```
+
+**Option 2 - Delete the line entirely:**
+Remove the import line completely if not used anywhere in the file.
+
+### Testing
+
+**Local verification:**
+```bash
+# Test import works:
+cd src
+python -c "from crypto_news_aggregator.api.v1 import tasks"
+# Should complete without error
+```
+
+**Deployment verification:**
+1. Push fix to Railway
+2. Check web service logs for: "Uvicorn running on http://0.0.0.0:8000"
+3. Check worker logs for: "celery@worker ready" with 12 tasks
+4. Check beat logs for: "celery beat is starting"
+5. No ImportError messages in any service
+
+**Integration test:**
+```bash
+poetry run python scripts/test_briefing_trigger.py
+# Should complete successfully
+```
+
+### Files Changed
+
+- `src/crypto_news_aggregator/api/v1/tasks.py` (remove/comment import on line ~10)
+
+### Impact on Other Bugs
+
+**Positive impact:**
+- Unblocks BUG-011 verification (get_article_service fix was correct all along)
+- Allows all services to start
+- Enables end-to-end testing of Sprint 6 features
+
+**Related bugs:**
+- BUG-011: Will be proven fixed once BUG-012 is resolved

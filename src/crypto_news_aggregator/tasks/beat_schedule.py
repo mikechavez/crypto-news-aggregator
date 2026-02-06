@@ -26,15 +26,6 @@ def get_schedule():
                 "time_limit": 600,  # 10 minutes
             },
         },
-        # Check for price movements every 5 minutes
-        "check-price-movements": {
-            "task": "crypto_news_aggregator.tasks.price_monitor.check_price_movements",
-            "schedule": timedelta(seconds=settings.PRICE_CHECK_INTERVAL),
-            "options": {
-                "expires": settings.PRICE_CHECK_INTERVAL / 2,
-                "time_limit": 300,  # 5 minutes
-            },
-        },
         # Check and process price alerts every 5 minutes
         "check-price-alerts": {
             "task": "crypto_news_aggregator.tasks.alert_tasks.check_price_alerts",

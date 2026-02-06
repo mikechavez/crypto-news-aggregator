@@ -1,0 +1,370 @@
+---
+id: BUG-008-TESTING
+type: testing
+status: ready
+priority: critical
+severity: critical
+created: 2026-02-05
+sprint: Sprint 6
+---
+
+# BUG-008 Testing: Verify Celery + Redis Briefing Generation
+
+## Context
+BUG-008 has been fixed with code changes and infrastructure setup:
+- ✅ Code updated to accept CELERY_BROKER_URL environment variable (commit aab0f16)
+- ✅ Redis service added to Railway
+- ✅ Environment variables configured:
+  - CELERY_BROKER_URL = ${Redis.REDIS_URL}/0
+  - CELERY_RESULT_BACKEND = ${Redis.REDIS_URL}/1
+
+## Objective
+Verify that the Celery worker and beat scheduler can now connect to Redis and successfully generate briefings.
+
+## Test Script Location
+`scripts/test_briefing_trigger.py` (in project root)
+
+## How to Execute
+
+### Option 1: Local Development
+```bash
+# From project root with poetry
+poetry run python scripts/test_briefing_trigger.py
+```
+
+### Option 2: Via Railway CLI (Recommended for production)
+```bash
+# From your local machine with Railway CLI installed
+railway run python scripts/test_briefing_trigger.py
+```
+
+### Option 3: Via Railway Dashboard
+1. Go to Railway dashboard
+2. Select your Context Owl project
+3. Click on your app service
+4. Go to "Settings" → "Deploy"
+5. Run one-off command: `poetry run python scripts/test_briefing_trigger.py`
+
+### Option 4: SSH into Railway
+```bash
+railway ssh
+poetry run python scripts/test_briefing_trigger.py
+```
+
+## Expected Output
+
+### Success Scenario:
+```
+======================================================================
+MANUAL BRIEFING GENERATION TEST
+======================================================================
+
+📋 Triggering briefing generation task...
+   This will queue the task and return immediately.
+
+✅ Task queued successfully!
+   Task ID: <some-uuid>
+
+📊 Task Status:
+   State: PENDING
+
+⏳ Waiting for task to complete...
+   (This may take 30-60 seconds depending on article count)
+
+======================================================================
+✅ BRIEFING GENERATION COMPLETE!
+======================================================================
+
+Result: {'success': True, 'briefing_id': '<mongodb-id>', ...}
+
+🎉 Success! Your Celery worker and Redis broker are working correctly.
+
+Next steps:
+  1. Check MongoDB for the new briefing document
+  2. Verify scheduled briefings will run at 8 AM and 8 PM EST
+```
+
+### Failure Scenario:
+```
+❌ TASK FAILED
+Error: ConnectionError: Error 111 connecting to localhost:6379
+
+Troubleshooting:
+  1. Check that Redis is running
+  2. Check that Celery worker is running
+  3. Check Railway logs for errors
+```
+
+## What to Verify
+
+1. **Task Queues Successfully**
+   - Task ID returned
+   - No connection errors
+
+2. **Worker Processes Task**
+   - Check Railway logs for worker activity
+   - Look for "Task briefing_tasks.generate_daily_briefing[<id>] succeeded"
+
+3. **Briefing Created in MongoDB**
+   - New document in `briefings` collection
+   - Contains content from recent articles
+   - Has correct timestamp
+
+4. **Check Railway Logs**
+   - Worker log: "celery@worker ready"
+   - Beat log: "beat: Starting..."
+   - No Redis connection errors
+
+## Success Criteria
+
+- ✅ Script completes without errors
+- ✅ Task ID returned
+- ✅ Task state goes from PENDING → SUCCESS
+- ✅ New briefing document created in MongoDB
+- ✅ Railway logs show successful worker and beat processes
+- ✅ No connection errors to Redis
+
+## Failure Recovery
+
+If the test fails:
+
+1. **Check Redis Service**
+   - Verify Redis service is running in Railway
+   - Check Redis logs for errors
+
+2. **Check Environment Variables**
+   - Verify CELERY_BROKER_URL is set correctly
+   - Verify CELERY_RESULT_BACKEND is set correctly
+   - Format should be: `redis://default:password@host:port/0`
+
+3. **Check Worker and Beat Processes**
+   - Verify both are defined in Procfile
+   - Check Railway logs for process startup
+   - Look for "celery@worker ready" and "beat: Starting..."
+
+4. **Re-check Configuration**
+   - Verify config.py changes were deployed
+   - Check commit aab0f16 is in production
+
+## Next Steps After Success
+
+1. **Monitor Scheduled Briefings**
+   - Wait for next scheduled time (8 AM or 8 PM EST)
+   - Verify automatic briefing generation
+
+2. **Update Documentation**
+   - Mark BUG-008 as RESOLVED
+   - Update sprint status to COMPLETE
+
+3. **Production Validation**
+   - Monitor for 24 hours
+   - Verify both morning and evening briefings generate
+
+## Files Referenced
+- Test script: `scripts/test_briefing_trigger.py`
+- Celery config: `src/crypto_news_aggregator/tasks/celery_config.py`
+- Briefing tasks: `src/crypto_news_aggregator/tasks/briefing_tasks.py`
+- Sprint doc: `docs/current-sprint.md`
+- Session doc: `docs/session-start.md`
+
+---
+
+## Test Execution Results (2026-02-04)
+
+**Status:** ✅ REDIS CONNECTION VERIFIED - New issue discovered during testing
+
+### What Worked
+- ✅ Task successfully queued to Redis (Task ID: 154a04b3-c043-4a47-a8f7-00118737976f)
+- ✅ Celery worker received and processed task
+- ✅ Briefing generated successfully in MongoDB (ID: 6983ddc6fe95325db279d767)
+- ✅ Generation time: 134.06 seconds
+- ✅ Cost tracking accurate: $0.0060-0.0063 per briefing
+- ✅ 3 additional briefings generated in subsequent tests
+- ✅ PENDING → SUCCESS state transition working correctly
+
+### Issue Discovered: Event Loop Management Bug
+
+**Problem:** `RuntimeError: Event loop is closed` when running manual briefing tests after the first execution
+
+**Root Cause:** In `src/crypto_news_aggregator/tasks/briefing_tasks.py`, the `_run_async()` helper function:
+```python
+def _run_async(coro):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()  # ← Closes loop too early
+```
+
+Motor (async MongoDB driver) holds references to this closed loop. When subsequent calls try to use it, they get `RuntimeError: Event loop is closed`.
+
+**Error Stack:**
+```
+memory_manager.load_memory()
+  → get_briefings_last_n_days()
+    → cursor.to_list()
+      → _refresh()
+        → RuntimeError: Event loop is closed
+```
+
+**Impact:**
+- First manual briefing test succeeds
+- Subsequent tests fail with "generation_returned_none" (memory loading fails)
+- Risk to scheduled briefings if same worker processes multiple tasks
+
+## Proposed Fixes (for next session)
+
+### Option 1: Use asyncio.run() (Recommended - Simplest)
+Replace `_run_async()` with Python 3.7+ built-in:
+```python
+def _run_async(coro):
+    """Run an async coroutine in a sync context."""
+    return asyncio.run(coro)
+```
+**Pros:** Built-in loop lifecycle management, no manual cleanup
+**Cons:** Only works Python 3.7+, can't customize loop behavior
+
+### Option 2: Keep loop alive across calls
+Store the event loop as a module-level variable and reuse:
+```python
+_event_loop = None
+
+def _get_event_loop():
+    global _event_loop
+    if _event_loop is None or _event_loop.is_closed():
+        _event_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(_event_loop)
+    return _event_loop
+
+def _run_async(coro):
+    loop = _get_event_loop()
+    return loop.run_until_complete(coro)
+```
+**Pros:** Reuses loop, avoids repeated creation overhead
+**Cons:** More complex, loop lifetime harder to manage
+
+### Option 3: Make Celery task directly async
+Use celery-gevent or async task support:
+```python
+@shared_task
+async def force_generate_briefing_task(briefing_type: str = "morning"):
+    await _ensure_mongodb()
+    agent = get_briefing_agent()
+    return await agent.generate_briefing(briefing_type, force=True)
+```
+**Pros:** Native async support, proper event loop management
+**Cons:** Requires celery configuration changes, more involved refactor
+
+### Recommendation
+**Option 1** (`asyncio.run()`) - Simplest fix, cleanest code, no ongoing maintenance needed.
+
+## Files to Update
+- `src/crypto_news_aggregator/tasks/briefing_tasks.py` (lines 28-35)
+
+## Testing Strategy
+After fix:
+1. Run manual briefing test multiple times
+2. Verify all return SUCCESS and generate briefings
+3. Run both morning and evening briefing tests
+4. Monitor scheduled briefings at 8 AM and 8 PM EST
+5. Check Railway logs for any event loop errors
+
+---
+
+## Phase 1 Verification Results (2026-02-05)
+
+**Test Date:** 2026-02-05
+**Executed by:** Claude Code
+**Status:** ❌ FAILED - Worker Not Processing Tasks
+
+### Test Summary
+
+**Command Run:**
+```
+poetry run python scripts/test_briefing_trigger.py
+```
+
+**Timeline:**
+- T+0s: Celery app initialized successfully
+- T+2s: Task queued to Redis successfully (Task ID: 0cb69807-b7b1-4acd-8764-4f6265741842)
+- T+2s to T+120s: Worker did not process task
+- T+120s: Timeout - task still in PENDING state
+
+### ✅ Working Components
+
+1. **Celery App Initialization:** No import errors, app loaded successfully
+2. **Redis Broker Connection:** Task queued without connection errors
+3. **Task Registration:** Task accepted by queue system
+4. **Queue System:** `briefings` queue accepting messages
+
+### ❌ Failed Components
+
+1. **Celery Worker:** Did not pick up queued task
+2. **Task Processing:** Task remained in PENDING state for entire duration
+3. **Worker Monitoring:** No activity detected on briefings queue
+
+### Root Cause
+
+The task was placed in Redis but the Celery worker never retrieved it. Possible causes:
+
+1. **Worker Service Not Running** (Most Likely)
+   - Railway shows services, but worker process may have crashed
+   - Worker may not have started successfully
+   - Worker may be in restart loop
+
+2. **Worker Cannot Connect to Redis**
+   - CELERY_BROKER_URL misconfigured in worker environment
+   - Worker authentication failure
+   - Network connectivity issue
+
+3. **Worker Not Monitoring Correct Queue**
+   - Queue name mismatch
+   - Worker monitoring different queue than `briefings`
+
+### Investigation Needed
+
+**Priority 1 (Immediate):**
+- [ ] Check Railway dashboard - verify celery-worker service status
+- [ ] Review celery-worker service logs for startup errors
+- [ ] Verify CELERY_BROKER_URL environment variable in worker service
+- [ ] Check if worker process is hung or in crash loop
+
+**Priority 2 (Diagnostics):**
+- [ ] Test Redis connectivity from worker container
+- [ ] Verify MongoDB connection from worker
+- [ ] Check module imports in worker environment
+- [ ] Monitor worker resource usage (CPU, memory)
+
+**Priority 3 (Debug):**
+- [ ] Add verbose logging to worker startup
+- [ ] Test worker locally with same configuration
+- [ ] Review recent changes affecting worker
+
+### Files Reference
+
+- Test script: `scripts/test_briefing_trigger.py` (lines 36-234)
+- Worker start command: `Procfile` (line 2)
+- Celery config: `src/crypto_news_aggregator/tasks/celery_config.py`
+- Celery app: `src/crypto_news_aggregator/tasks/__init__.py`
+
+### Next Actions
+
+1. Access Railway dashboard to check worker service status
+2. Inspect worker logs for initialization errors
+3. Verify all environment variables copied correctly to worker
+4. Restart worker service if needed
+5. Re-run Phase 1 verification after fixes
+
+### Related Bugs
+
+- BUG-009: Event loop management (fixed with asyncio.run) ✅
+- BUG-008: Redis configuration (fixed with CELERY_BROKER_URL) ✅
+- BUG-007: Procfile processes (fixed with worker/beat) ✅
+- BUG-010: Worker deployment (current investigation)
+
+---
+
+**Status:** ⚠️ INVESTIGATION IN PROGRESS - Worker Service Issue Detected
+**Priority:** Critical - core briefing functionality blocked
+**Blocker:** Yes - worker must be running to complete Phase 1 verification
