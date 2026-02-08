@@ -46,16 +46,16 @@ async def _ensure_mongodb():
         return True
 
 
-async def _generate_morning_briefing_async() -> Optional[Dict[str, Any]]:
+async def _generate_morning_briefing_async(is_smoke: bool = False, task_id: str | None = None) -> Optional[Dict[str, Any]]:
     """Async implementation of morning briefing generation."""
     await _ensure_mongodb()
-    return await generate_morning_briefing(force=False)
+    return await generate_morning_briefing(force=False, is_smoke=is_smoke, task_id=task_id)
 
 
-async def _generate_evening_briefing_async() -> Optional[Dict[str, Any]]:
+async def _generate_evening_briefing_async(is_smoke: bool = False, task_id: str | None = None) -> Optional[Dict[str, Any]]:
     """Async implementation of evening briefing generation."""
     await _ensure_mongodb()
-    return await generate_evening_briefing(force=False)
+    return await generate_evening_briefing(force=False, is_smoke=is_smoke, task_id=task_id)
 
 
 @shared_task(
@@ -64,9 +64,12 @@ async def _generate_evening_briefing_async() -> Optional[Dict[str, Any]]:
     max_retries=2,
     default_retry_delay=300,  # 5 minutes
 )
-def generate_morning_briefing_task(self) -> Dict[str, Any]:
+def generate_morning_briefing_task(self, is_smoke: bool = False) -> Dict[str, Any]:
     """
     Generate the morning crypto briefing.
+
+    Args:
+        is_smoke: If True, marks this as a smoke test (won't appear in production feed)
 
     Scheduled to run at 8:00 AM EST (13:00 UTC) every day.
     If generation fails, retries up to 2 times with 5-minute delay.
@@ -74,11 +77,19 @@ def generate_morning_briefing_task(self) -> Dict[str, Any]:
     Returns:
         Dict with generation result or error info
     """
-    logger.info("Starting morning briefing generation task")
+    # Get task ID from bound task (self.request.id) - more reliable than current_task
+    task_id = self.request.id
+
+    logger.info("Starting morning briefing generation task",
+                extra={"is_smoke": is_smoke, "task_id": task_id})
     start_time = datetime.now(timezone.utc)
 
     try:
-        briefing = _run_async(_generate_morning_briefing_async())
+        # Pass task_id explicitly to service layer for correlation
+        briefing = _run_async(_generate_morning_briefing_async(
+            is_smoke=is_smoke,
+            task_id=task_id
+        ))
 
         if briefing:
             duration = (datetime.now(timezone.utc) - start_time).total_seconds()
@@ -111,9 +122,12 @@ def generate_morning_briefing_task(self) -> Dict[str, Any]:
     max_retries=2,
     default_retry_delay=300,  # 5 minutes
 )
-def generate_evening_briefing_task(self) -> Dict[str, Any]:
+def generate_evening_briefing_task(self, is_smoke: bool = False) -> Dict[str, Any]:
     """
     Generate the evening crypto briefing.
+
+    Args:
+        is_smoke: If True, marks this as a smoke test (won't appear in production feed)
 
     Scheduled to run at 8:00 PM EST (01:00 UTC next day) every day.
     If generation fails, retries up to 2 times with 5-minute delay.
@@ -121,11 +135,19 @@ def generate_evening_briefing_task(self) -> Dict[str, Any]:
     Returns:
         Dict with generation result or error info
     """
-    logger.info("Starting evening briefing generation task")
+    # Get task ID from bound task (self.request.id) - more reliable than current_task
+    task_id = self.request.id
+
+    logger.info("Starting evening briefing generation task",
+                extra={"is_smoke": is_smoke, "task_id": task_id})
     start_time = datetime.now(timezone.utc)
 
     try:
-        briefing = _run_async(_generate_evening_briefing_async())
+        # Pass task_id explicitly to service layer for correlation
+        briefing = _run_async(_generate_evening_briefing_async(
+            is_smoke=is_smoke,
+            task_id=task_id
+        ))
 
         if briefing:
             duration = (datetime.now(timezone.utc) - start_time).total_seconds()

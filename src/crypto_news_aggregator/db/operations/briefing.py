@@ -14,6 +14,27 @@ from crypto_news_aggregator.db.mongodb import mongo_manager
 
 
 # ============================================================================
+# Helper Functions
+# ============================================================================
+
+def _get_production_briefings_filter() -> dict:
+    """Standard filter for production briefings (excludes smoke tests, includes historical).
+
+    Uses $or with $exists to safely handle the transition:
+    - New smoke tests have `published=False, is_smoke=True`
+    - New production briefings have `published=True, is_smoke=False`
+    - Historical briefings may lack the `published` field entirely
+    """
+    return {
+        "$or": [
+            {"published": True},
+            {"published": {"$exists": False}}  # Include historical briefings
+        ],
+        "is_smoke": {"$ne": True}
+    }
+
+
+# ============================================================================
 # Briefing Operations
 # ============================================================================
 
@@ -50,7 +71,7 @@ async def get_latest_briefing() -> Optional[Dict[str, Any]]:
     collection = db.daily_briefings
 
     briefing = await collection.find_one(
-        {},
+        _get_production_briefings_filter(),
         sort=[("generated_at", -1)]
     )
 
@@ -79,6 +100,7 @@ async def get_briefing_by_type_and_date(
     end_of_day = start_of_day + timedelta(days=1)
 
     briefing = await collection.find_one({
+        **_get_production_briefings_filter(),
         "type": briefing_type,
         "generated_at": {
             "$gte": start_of_day,
@@ -105,7 +127,10 @@ async def get_briefings_last_n_days(days: int = 7) -> List[Dict[str, Any]]:
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     cursor = collection.find(
-        {"generated_at": {"$gte": cutoff}},
+        {
+            **_get_production_briefings_filter(),
+            "generated_at": {"$gte": cutoff}
+        },
         sort=[("generated_at", -1)]
     )
 
