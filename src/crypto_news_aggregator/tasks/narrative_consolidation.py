@@ -47,6 +47,7 @@ def consolidate_narratives_task():
         logger.error(f"Consolidation task failed: {e}", exc_info=True)
         raise
     finally:
+        asyncio.set_event_loop(None)  # Clear before closing
         loop.close()
 
 

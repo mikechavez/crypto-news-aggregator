@@ -26,8 +26,14 @@ logger = logging.getLogger(__name__)
 
 
 def _run_async(coro):
-    """Run an async coroutine in a sync context."""
-    return asyncio.run(coro)
+    """Run async code with proper event loop handling for Celery workers."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)  # Set as current so Motor can find it
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        asyncio.set_event_loop(None)  # Clear before closing
+        loop.close()
 
 
 async def _ensure_mongodb():

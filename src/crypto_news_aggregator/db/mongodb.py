@@ -297,7 +297,9 @@ class MongoManager:
 
     def __init__(self):
         """Initialize the MongoDB connection manager."""
-        pass
+        self._client_loop = None  # Track which loop owns the client
+        self._connection_uri = None  # Store URI for client recreation
+        self._connection_kwargs = None  # Store kwargs for client recreation
 
     def _ensure_settings(self):
         # Always fetch fresh settings to support test overrides and runtime config
@@ -350,15 +352,14 @@ class MongoManager:
                 if use_tls:
                     client_kwargs["tlsCAFile"] = certifi.where()
 
-                self._async_client = AsyncIOMotorClient(
-                    uri,
-                    **client_kwargs,
-                )
-
-                await self._async_client.admin.command("ping")
+                # Store connection settings for later client creation
+                # Don't create Motor client here - get_async_client() will create it
+                # with the correct event loop
+                self._connection_uri = uri
+                self._connection_kwargs = client_kwargs
 
                 self._initialized = True
-                logger.info("Async MongoDB connection initialized successfully.")
+                logger.info("Async MongoDB connection settings loaded successfully.")
                 return True
 
             except Exception as e:
@@ -367,7 +368,7 @@ class MongoManager:
                 return False
 
     async def get_async_client(self) -> AsyncIOMotorClient:
-        """Get the async MongoDB client.
+        """Get the async MongoDB client, recreating if event loop changed.
 
         Returns:
             AsyncIOMotorClient: The MongoDB async client instance.
@@ -375,10 +376,71 @@ class MongoManager:
         Raises:
             RuntimeError: If the client cannot be initialized.
         """
-        if not self._initialized or self._async_client is None:
+        # Lazy initialize if needed (safe now that initialize() is settings-only)
+        if not self._initialized:
+            await self.initialize()
+
+        if self._connection_uri is None:
             raise RuntimeError(
-                "Async client is not initialized. Call `initialize()` first."
+                "MongoDB connection settings not loaded. Call `initialize()` first."
             )
+
+        # Get current running event loop (more reliable than get_event_loop)
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            raise RuntimeError(
+                "No running event loop found. Must be called from async context."
+            )
+
+        # Recreate client if:
+        # - No client exists yet
+        # - Loop reference is None
+        # - Current loop is different from client's loop
+        # - Client's loop is closed
+        needs_recreation = (
+            self._async_client is None or
+            self._client_loop is None or
+            self._client_loop != current_loop or
+            self._client_loop.is_closed()
+        )
+
+        if needs_recreation:
+            # Log when loop changes (normal in Celery workers)
+            if self._client_loop is not None and self._client_loop != current_loop:
+                logger.info(
+                    "Event loop changed - recreating Motor client for new loop"
+                )
+
+            # Close old client if it exists
+            if self._async_client is not None:
+                try:
+                    self._async_client.close()
+                except Exception as e:
+                    logger.warning(f"Error closing old Motor client: {e}")
+
+            # Create new client with current loop
+            logger.info(
+                f"Creating Motor client for loop {id(current_loop)}"
+            )
+            self._async_client = AsyncIOMotorClient(
+                self._connection_uri,
+                **self._connection_kwargs,
+            )
+
+            # Verify connection with ping
+            try:
+                await self._async_client.admin.command("ping")
+                logger.info("Motor client connected to MongoDB successfully")
+                # Track the loop this client is bound to (AFTER successful ping)
+                self._client_loop = current_loop
+            except Exception as e:
+                logger.error(f"Failed to ping MongoDB: {e}")
+                # SAFETY: Clear both client and loop on ping failure
+                self._async_client = None
+                self._client_loop = None
+                raise
+
         return self._async_client
 
     @property
