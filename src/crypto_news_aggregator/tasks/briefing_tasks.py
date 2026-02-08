@@ -53,7 +53,7 @@ async def _generate_evening_briefing_async() -> Optional[Dict[str, Any]]:
 
 
 @shared_task(
-    name="crypto_news_aggregator.tasks.briefing_tasks.generate_morning_briefing",
+    name="generate_morning_briefing",
     bind=True,
     max_retries=2,
     default_retry_delay=300,  # 5 minutes
@@ -100,7 +100,7 @@ def generate_morning_briefing_task(self) -> Dict[str, Any]:
 
 
 @shared_task(
-    name="crypto_news_aggregator.tasks.briefing_tasks.generate_evening_briefing",
+    name="generate_evening_briefing",
     bind=True,
     max_retries=2,
     default_retry_delay=300,  # 5 minutes
@@ -147,7 +147,7 @@ def generate_evening_briefing_task(self) -> Dict[str, Any]:
 
 
 @shared_task(
-    name="crypto_news_aggregator.tasks.briefing_tasks.force_generate_briefing",
+    name="force_generate_briefing",
 )
 def force_generate_briefing_task(briefing_type: str = "morning") -> Dict[str, Any]:
     """
@@ -197,7 +197,7 @@ def force_generate_briefing_task(briefing_type: str = "morning") -> Dict[str, An
 
 
 @shared_task(
-    name="crypto_news_aggregator.tasks.briefing_tasks.cleanup_old_briefings",
+    name="cleanup_old_briefings",
 )
 def cleanup_old_briefings_task(retention_days: int = 30) -> Dict[str, Any]:
     """
