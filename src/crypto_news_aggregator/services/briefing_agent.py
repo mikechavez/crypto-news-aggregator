@@ -112,6 +112,8 @@ class BriefingAgent:
         self,
         briefing_type: str = "morning",
         force: bool = False,
+        is_smoke: bool = False,
+        task_id: str | None = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Generate a new briefing.
@@ -119,6 +121,8 @@ class BriefingAgent:
         Args:
             briefing_type: "morning" or "evening"
             force: If True, generate even if one already exists for this slot
+            is_smoke: If True, mark as smoke test (don't publish to production)
+            task_id: Celery task ID for correlation (passed from bound task)
 
         Returns:
             Generated briefing document or None if skipped/failed
@@ -146,7 +150,7 @@ class BriefingAgent:
 
             # Step 4: Save briefing to database
             briefing_doc = await self._save_briefing(
-                briefing_type, briefing_input, refined
+                briefing_type, briefing_input, refined, is_smoke=is_smoke, task_id=task_id
             )
 
             # Step 5: Save detected patterns
@@ -834,6 +838,8 @@ Return ONLY valid JSON in the same format as before."""
         briefing_type: str,
         briefing_input: BriefingInput,
         generated: GeneratedBriefing,
+        is_smoke: bool = False,
+        task_id: str | None = None,
     ) -> Dict[str, Any]:
         """Save the generated briefing to the database."""
         from bson import ObjectId
@@ -857,6 +863,7 @@ Return ONLY valid JSON in the same format as before."""
 
         briefing_doc = {
             "type": briefing_type,
+            "title": f"🔬 SMOKE TEST - {briefing_type.title()} Briefing" if is_smoke else None,
             "generated_at": briefing_input.generated_at,
             "version": "2.0",  # Agent-generated briefings
             "content": {
@@ -875,6 +882,9 @@ Return ONLY valid JSON in the same format as before."""
                 "model": DEFAULT_MODEL,
                 "refinement_iterations": iteration_count,  # NEW: Track iterations
             },
+            "is_smoke": is_smoke,
+            "published": not is_smoke,  # Don't publish smoke tests
+            "task_id": task_id,  # For correlation: Beat → Worker → DB (None if called outside Celery)
         }
 
         briefing_id = await insert_briefing(briefing_doc)
@@ -913,13 +923,13 @@ def get_briefing_agent() -> BriefingAgent:
     return _briefing_agent
 
 
-async def generate_morning_briefing(force: bool = False) -> Optional[Dict[str, Any]]:
+async def generate_morning_briefing(force: bool = False, is_smoke: bool = False, task_id: str | None = None) -> Optional[Dict[str, Any]]:
     """Convenience function to generate morning briefing."""
     agent = get_briefing_agent()
-    return await agent.generate_briefing("morning", force=force)
+    return await agent.generate_briefing("morning", force=force, is_smoke=is_smoke, task_id=task_id)
 
 
-async def generate_evening_briefing(force: bool = False) -> Optional[Dict[str, Any]]:
+async def generate_evening_briefing(force: bool = False, is_smoke: bool = False, task_id: str | None = None) -> Optional[Dict[str, Any]]:
     """Convenience function to generate evening briefing."""
     agent = get_briefing_agent()
-    return await agent.generate_briefing("evening", force=force)
+    return await agent.generate_briefing("evening", force=force, is_smoke=is_smoke, task_id=task_id)
