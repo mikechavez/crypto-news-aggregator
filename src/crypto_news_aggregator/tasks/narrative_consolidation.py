@@ -24,8 +24,10 @@ def consolidate_narratives_task():
     """
     logger.info("Starting narrative consolidation task")
 
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        result = asyncio.run(_run_consolidation())
+        result = loop.run_until_complete(_run_consolidation())
 
         logger.info(
             f"Consolidation complete: {result['merge_count']} merges, "
@@ -44,6 +46,8 @@ def consolidate_narratives_task():
     except Exception as e:
         logger.error(f"Consolidation task failed: {e}", exc_info=True)
         raise
+    finally:
+        loop.close()
 
 
 async def _run_consolidation():

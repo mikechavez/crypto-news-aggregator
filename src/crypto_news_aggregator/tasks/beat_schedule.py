@@ -45,7 +45,7 @@ def get_schedule():
         # Morning briefing at 8:00 AM EST (13:00 UTC, or 12:00 UTC during DST)
         # Using America/New_York timezone for automatic DST handling
         "generate-morning-briefing": {
-            "task": "crypto_news_aggregator.tasks.briefing_tasks.generate_morning_briefing",
+            "task": "generate_morning_briefing",
             "schedule": crontab(
                 hour=8,
                 minute=0,
@@ -60,7 +60,7 @@ def get_schedule():
         },
         # Evening briefing at 8:00 PM EST (01:00 UTC next day, or 00:00 UTC during DST)
         "generate-evening-briefing": {
-            "task": "crypto_news_aggregator.tasks.briefing_tasks.generate_evening_briefing",
+            "task": "generate_evening_briefing",
             "schedule": crontab(
                 hour=20,
                 minute=0,
@@ -72,7 +72,7 @@ def get_schedule():
         },
         # Weekly cleanup of old briefings (every Sunday at 3 AM EST)
         "cleanup-old-briefings": {
-            "task": "crypto_news_aggregator.tasks.briefing_tasks.cleanup_old_briefings",
+            "task": "cleanup_old_briefings",
             "schedule": crontab(
                 hour=3,
                 minute=0,
