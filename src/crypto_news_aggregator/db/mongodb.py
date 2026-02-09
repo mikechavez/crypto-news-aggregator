@@ -489,43 +489,27 @@ class MongoManager:
     async def get_async_database(
         self, db_name: Optional[str] = None
     ) -> AsyncIOMotorDatabase:
-        """Get an asynchronous database instance with logging."""
+        """Get an asynchronous database instance with lazy client creation.
+
+        Supports test injection via _db attribute and lazy Motor client creation.
+        """
         target_db_name = db_name or getattr(self, "db_name", DB_NAME)
         logger.debug("[MongoManager] Getting async database: %s", target_db_name)
 
-        if self._async_client is None:
-            # Support tests that inject a database handle directly
-            injected_db = getattr(self, "_db", None)
-            if injected_db is not None:
-                logger.debug(
-                    "[MongoManager] Using injected async database handle for %s",
-                    target_db_name,
-                )
-                return injected_db
-
-            initialized = await self.initialize()
-            if not initialized or self._async_client is None:
-                raise RuntimeError("Async MongoDB client is not initialized")
-
-        try:
-            # Ensure the client is initialized
-            if not self._initialized or self._async_client is None:
-                logger.info("[MongoManager] Client not initialized, initializing...")
-                success = await self.initialize()
-                if not success:
-                    raise RuntimeError("Failed to initialize MongoDB client")
-
-            db = self._async_client[target_db_name]
-            logger.debug("[MongoManager] Successfully got database: %s", db_name)
-            return db
-        except Exception as e:
-            logger.error(
-                "[MongoManager] Error getting database %s: %s",
-                db_name,
-                e,
-                exc_info=True,
+        # Support tests that inject a database handle directly
+        injected_db = getattr(self, "_db", None)
+        if injected_db is not None:
+            logger.debug(
+                "[MongoManager] Using injected async database handle for %s",
+                target_db_name,
             )
-            raise
+            return injected_db
+
+        # Get client (with lazy creation if needed)
+        client = await self.get_async_client()
+        db = client[target_db_name]
+        logger.debug("[MongoManager] Successfully got database: %s", target_db_name)
+        return db
 
     def get_collection(
         self, collection_name: str, db_name: Optional[str] = None
@@ -697,6 +681,26 @@ class MongoManager:
                 logger.info("Attempting to reconnect to MongoDB...")
                 return await self.initialize(force_reconnect=True)
             return False
+
+    async def verify_connection(self) -> bool:
+        """Verify MongoDB connection is working (for startup verification).
+
+        Uses ping-only to avoid requiring elevated permissions.
+
+        Returns:
+            bool: True if connection is working, False otherwise.
+
+        Raises:
+            RuntimeError: If MongoDB is unreachable or connection fails.
+        """
+        try:
+            client = await self.get_async_client()
+            await client.admin.command("ping")
+            logger.info("✅ MongoDB connection verified successfully")
+            return True
+        except Exception as e:
+            logger.error(f"❌ MongoDB connection verification failed: {e}")
+            raise RuntimeError(f"MongoDB is not reachable: {e}") from e
 
     async def aclose(self):
         """Asynchronously close all MongoDB connections."""
