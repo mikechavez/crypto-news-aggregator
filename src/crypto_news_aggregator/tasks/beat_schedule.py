@@ -40,7 +40,7 @@ def get_schedule():
             },
         },
         # ============================================================
-        # Briefing Tasks - Daily crypto briefings at 8 AM and 8 PM EST
+        # Briefing Tasks - Daily crypto briefings at 8 AM, 2 PM, and 8 PM EST
         # ============================================================
         # Morning briefing at 8:00 AM EST (13:00 UTC, or 12:00 UTC during DST)
         # Using America/New_York timezone for automatic DST handling
@@ -53,6 +53,21 @@ def get_schedule():
                 # 8 AM EST = 13:00 UTC (or 12:00 UTC during EDT)
                 # For production, set celery timezone to America/New_York
             ),
+            "kwargs": {"force": False},  # Prevent duplicates for scheduled tasks
+            "options": {
+                "expires": 3600,  # 1 hour
+                "time_limit": 600,  # 10 minutes
+            },
+        },
+        # Afternoon briefing at 2:00 PM EST (19:00 UTC, or 18:00 UTC during DST)
+        # Provides midday market coverage between morning and evening briefings
+        "generate-afternoon-briefing": {
+            "task": "generate_afternoon_briefing",
+            "schedule": crontab(
+                hour=14,
+                minute=0,
+            ),
+            "kwargs": {"force": False},  # Prevent duplicates for scheduled tasks
             "options": {
                 "expires": 3600,  # 1 hour
                 "time_limit": 600,  # 10 minutes
@@ -65,6 +80,7 @@ def get_schedule():
                 hour=20,
                 minute=0,
             ),
+            "kwargs": {"force": False},  # Prevent duplicates for scheduled tasks
             "options": {
                 "expires": 3600,  # 1 hour
                 "time_limit": 600,  # 10 minutes
