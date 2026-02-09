@@ -6,8 +6,9 @@ and processing statistics.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Security
 
@@ -392,9 +393,29 @@ class TaskResponse(BaseModel):
     message: str
 
 
+def _get_briefing_type_from_est_time() -> str:
+    """
+    Auto-detect briefing type based on current EST time.
+
+    Returns:
+        "morning" (before 2 PM EST), "afternoon" (2-8 PM EST), or "evening" (after 8 PM EST)
+    """
+    est_tz = ZoneInfo("America/New_York")
+    now_est = datetime.now(est_tz)
+    hour = now_est.hour
+
+    if hour < 14:  # Before 2 PM
+        return "morning"
+    elif hour < 20:  # 2 PM to 8 PM
+        return "afternoon"
+    else:  # After 8 PM
+        return "evening"
+
+
 @router.post("/trigger-briefing", response_model=TaskResponse)
 async def trigger_briefing(
-    briefing_type: str = "morning",
+    briefing_type: str | None = None,
+    force: bool = True,
     is_smoke: bool = False
 ) -> TaskResponse:
     """
@@ -404,56 +425,71 @@ async def trigger_briefing(
     before scheduled runs, especially after deployments.
 
     Args:
-        briefing_type: "morning" or "evening"
+        briefing_type: "morning", "afternoon", or "evening" (auto-detected from EST time if omitted)
+        force: If True (default), bypasses duplicate check to allow multiple briefings per day
         is_smoke: If True, generates but doesn't publish (for testing)
 
     Returns:
         Task ID and details for monitoring in worker logs
 
-    Usage:
-        POST /admin/trigger-briefing?briefing_type=morning&is_smoke=true
+    Usage examples:
+        # Auto-detect type based on current EST time
+        POST /admin/trigger-briefing?is_smoke=false
+
+        # Force specific type
+        POST /admin/trigger-briefing?briefing_type=afternoon&is_smoke=false
+
+        # Allow duplicate (force=true is default for manual triggers)
+        POST /admin/trigger-briefing?briefing_type=morning&force=true&is_smoke=false
 
     Success response:
         {
             "task_id": "abc123...",
             "task_name": "generate_morning_briefing",
-            "kwargs": {"is_smoke": true},
-            "message": "✅ Morning briefing task queued. Check celery-worker logs for task_id=abc123..."
+            "kwargs": {"force": true, "is_smoke": false},
+            "message": "✅ Morning briefing task queued (force=true). Check celery-worker logs for task_id=abc123..."
         }
     """
     from crypto_news_aggregator.tasks.briefing_tasks import (
         generate_morning_briefing_task,
+        generate_afternoon_briefing_task,
         generate_evening_briefing_task
     )
 
+    # Auto-detect type if not provided
+    if briefing_type is None:
+        briefing_type = _get_briefing_type_from_est_time()
+        logger.info(f"🕐 Auto-detected briefing type: {briefing_type} (EST time-based)")
+
     # Validate briefing type
-    if briefing_type not in ["morning", "evening"]:
+    if briefing_type not in ["morning", "afternoon", "evening"]:
         raise HTTPException(
             status_code=400,
-            detail="briefing_type must be 'morning' or 'evening'"
+            detail="briefing_type must be 'morning', 'afternoon', or 'evening'"
         )
 
     # Select task based on type
-    task = (
-        generate_morning_briefing_task
-        if briefing_type == "morning"
-        else generate_evening_briefing_task
-    )
+    task_map = {
+        "morning": generate_morning_briefing_task,
+        "afternoon": generate_afternoon_briefing_task,
+        "evening": generate_evening_briefing_task
+    }
+    task = task_map[briefing_type]
 
-    # Queue the task
+    # Queue the task with force parameter
     try:
-        result = task.apply_async(kwargs={'is_smoke': is_smoke})
+        result = task.apply_async(kwargs={'force': force, 'is_smoke': is_smoke})
         logger.info(
             f"🔬 Manual briefing trigger: {briefing_type} briefing "
-            f"(is_smoke={is_smoke}) - task_id={result.id}"
+            f"(force={force}, is_smoke={is_smoke}) - task_id={result.id}"
         )
 
         return TaskResponse(
             task_id=result.id,
             task_name=task.name,
-            kwargs={"is_smoke": is_smoke},
+            kwargs={"force": force, "is_smoke": is_smoke},
             message=(
-                f"✅ {briefing_type.capitalize()} briefing task queued. "
+                f"✅ {briefing_type.capitalize()} briefing task queued (force={force}). "
                 f"Check celery-worker logs for task_id={result.id}"
             )
         )
