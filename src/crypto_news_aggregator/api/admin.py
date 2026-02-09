@@ -375,3 +375,91 @@ async def get_processing_stats(
             "total_simple_extractions": sum(s["simple_extractions"] for s in source_stats.values())
         }
     }
+
+
+# ==================== BRIEFING TRIGGER ENDPOINTS ====================
+
+
+from pydantic import BaseModel
+from fastapi import HTTPException
+
+
+class TaskResponse(BaseModel):
+    """Response model for task trigger endpoints."""
+    task_id: str
+    task_name: str
+    kwargs: dict
+    message: str
+
+
+@router.post("/trigger-briefing", response_model=TaskResponse)
+async def trigger_briefing(
+    briefing_type: str = "morning",
+    is_smoke: bool = False
+) -> TaskResponse:
+    """
+    Manually trigger a briefing generation task for testing.
+
+    This endpoint is useful for verifying the briefing pipeline works
+    before scheduled runs, especially after deployments.
+
+    Args:
+        briefing_type: "morning" or "evening"
+        is_smoke: If True, generates but doesn't publish (for testing)
+
+    Returns:
+        Task ID and details for monitoring in worker logs
+
+    Usage:
+        POST /admin/trigger-briefing?briefing_type=morning&is_smoke=true
+
+    Success response:
+        {
+            "task_id": "abc123...",
+            "task_name": "generate_morning_briefing",
+            "kwargs": {"is_smoke": true},
+            "message": "✅ Morning briefing task queued. Check celery-worker logs for task_id=abc123..."
+        }
+    """
+    from crypto_news_aggregator.tasks.briefing_tasks import (
+        generate_morning_briefing_task,
+        generate_evening_briefing_task
+    )
+
+    # Validate briefing type
+    if briefing_type not in ["morning", "evening"]:
+        raise HTTPException(
+            status_code=400,
+            detail="briefing_type must be 'morning' or 'evening'"
+        )
+
+    # Select task based on type
+    task = (
+        generate_morning_briefing_task
+        if briefing_type == "morning"
+        else generate_evening_briefing_task
+    )
+
+    # Queue the task
+    try:
+        result = task.apply_async(kwargs={'is_smoke': is_smoke})
+        logger.info(
+            f"🔬 Manual briefing trigger: {briefing_type} briefing "
+            f"(is_smoke={is_smoke}) - task_id={result.id}"
+        )
+
+        return TaskResponse(
+            task_id=result.id,
+            task_name=task.name,
+            kwargs={"is_smoke": is_smoke},
+            message=(
+                f"✅ {briefing_type.capitalize()} briefing task queued. "
+                f"Check celery-worker logs for task_id={result.id}"
+            )
+        )
+    except Exception as e:
+        logger.error(f"Failed to queue briefing task: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to queue task: {str(e)}"
+        )
