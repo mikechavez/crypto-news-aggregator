@@ -129,11 +129,52 @@ Each pattern document:
 
 **narratives** collection (used for recommendations):
 - Each narrative has `_id: ObjectId`, `title: string`, and `description: string`
+- Includes `fingerprint` field (SHA1 hash of nucleus_entity + top_actors) for matching and deduplication
 - **Reference:** `src/crypto_news_aggregator/services/briefing_agent.py:859-862` (matching recommendations to narrative IDs)
 
 **articles** collection (sources for briefings):
 - Each article has `title`, `content`, `source`, `published_at`, sentiment, entities
 - Briefings cite articles indirectly through narratives and patterns
+
+### Query Performance Trade-offs
+
+**Context:** October 2025 signals performance optimization revealed that batch queries don't always outperform parallel indexed queries.
+
+**Batch Query Approach (Using $in operator):**
+- Single query with `{entity: {$in: [...]}}` on large collection
+- Requires MongoDB to sort/filter entire collection during scan
+- Performance: 18-33 seconds (slow due to collection scan overhead)
+- Advantage: Simple logic, fewer network round-trips
+- Disadvantage: Scans large collection regardless of existing indexes
+
+**Parallel Indexed Query Approach:**
+- Run 50 parallel indexed queries with `{entity: exact_value}` using compound index
+- Each query uses existing `entity_mentions(entity, timestamp)` compound index
+- Performance: ~6 seconds cold, <0.1s cached (40% faster + better caching)
+- Advantage: Leverages existing indexes, allows concurrent execution, excellent cache locality
+- Disadvantage: More network round-trips
+
+**Key Learning:** Don't assume batch queries are faster. For indexed queries, parallel execution with proper indexes (6s) beats batch queries that scan large collections (18-33s). Indexes matter more than query count.
+
+**Reference:** SIGNALS_PERFORMANCE_FINAL_SUMMARY.md, Performance section (lines 28-57)
+
+### Narrative Matching & Fingerprint Backfill Sequence
+
+The narrative matching system deduplicates detected clusters by comparing fingerprints to existing narratives. This required a one-time backfill because legacy narratives (created before fingerprinting was implemented) lacked the `fingerprint` field.
+
+**Oct 2025 Matching Deployment Sequence:**
+1. **Oct 15**: Test detected 0% match rate (39 clusters, zero matches) — fingerprints missing on existing narratives
+2. **Oct 15-16 overnight**: NARRATIVE_FINGERPRINT_BACKFILL.py runs — computes SHA1 fingerprints for all existing narratives using nucleus_entity + top_actors (idempotent: skips if fingerprint exists)
+3. **Oct 16**: Test re-run shows 89.1% match rate (46 clusters, 41 matches at 0.800 similarity) — fingerprints now present
+4. **Oct 16 (same day)**: Threshold fix applied: changed similarity check from `> 0.6` to `>= 0.6` to include boundary matches
+
+**Combined Effect:**
+- Fingerprints alone: 62.5% match rate (many still rejected at boundary)
+- Fingerprints + threshold fix: 89.1% match rate (proper deduplication)
+
+**Idempotency:** Fingerprint backfill skips narratives with existing fingerprint field, so it's safe to re-run if needed.
+
+**Reference:** NARRATIVE_FINGERPRINT_BACKFILL.md, NARRATIVE_MATCHING_TEST_RESULTS.md (Oct 15, 0% rate), NARRATIVE_MATCHING_FIX_VERIFICATION.md (Oct 16, 89.1% rate)
 
 ## Operational Checks
 
