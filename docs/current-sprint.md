@@ -1,377 +1,131 @@
-# Sprint 7: Model Migration & UI Polish
-
-**Goal:** Migrate to Claude Haiku 4.5 and deliver polished user experience improvements
-
-**Sprint Duration:** 2026-02-06 to 2026-02-20 (2 weeks)
-
-**Velocity Target:** 3 features + 1 bug = 4 tickets
-
-**Status:** 🟢 **IN PROGRESS** - 2/4 complete (50%)
-
+---
+sprint: Sprint 9
+start_date: 2026-02-10
+end_date: 2026-02-20
+status: in-progress
 ---
 
-## Sprint Objectives
-
-### Primary Goals
-1. **Model Migration** - Upgrade to Claude Haiku 4.5 before deprecation
-2. **UI Polish** - Fix known UX issues and improve navigation
-3. **UX Enhancement** - Make recommended reading links functional with highlighting
-
-### Success Criteria
-- ✅ Haiku 4.5 migration complete and verified
-- ✅ Briefing page labels accurate (morning/evening)
-- ✅ Recommended reading links work with smooth highlighting
-- ✅ Signals page clean and focused
-- ✅ All features tested and deployed
-
----
-
-## Sprint Backlog
-
-### ✅ Completed
-
-#### FEATURE-033: Migrate to Claude Haiku 4.5 ✅
-**Priority:** HIGH  
-**Status:** Complete  
-**Complexity:** Low  
-**Effort:** 1 hour estimated, 1 hour actual  
-**Completed:** 2026-02-06  
-**Commit:** 6512b70
-
-**What was completed:**
-- ✅ Updated model string: `claude-3-5-haiku-20241022` → `claude-haiku-4-5-20251001`
-- ✅ Updated pricing: Input $0.80→$1.00, Output $4.00→$5.00 per 1M tokens
-- ✅ Added deprecation notice for old model in pricing table
-- ✅ Deployed to production
-
-**Cost impact:** +$0.15/month (projected $0.71 → $0.86, still 91.4% under $10 target)
-
-**Files Modified:**
-- `src/crypto_news_aggregator/llm/optimized_anthropic.py` (line 23)
-- `src/crypto_news_aggregator/services/cost_tracker.py` (lines 30-47)
-
-**Verification Needed:**
-- [ ] Monitor API calls for correct model usage
-- [ ] Verify cost tracking calculations
-- [ ] Check entity extraction quality
-- [ ] Confirm no errors in production logs
-
-**Ticket:** `/mnt/user-data/outputs/FEATURE-033-haiku-4-5-migration.md`
-
----
-
-### 🚨 High Priority
-
-*All high priority items complete!* ✅
-
----
-
-### ✨ Low Priority / Quick Wins (COMPLETED)
-
-#### FEATURE-036: Remove "Part of:" Section from Signals ✅
-**Priority:** LOW
-**Status:** Complete
-**Complexity:** Trivial
-**Effort:** 10 minutes estimated, 10 minutes actual
-**Completed:** 2026-02-06
-**Commit:** 79eba73
-
-**What was completed:**
-- ✅ Removed "Part of:" narrative links from signal cards
-- ✅ Kept "Emerging" badge (still useful)
-- ✅ Removed unused imports (useNavigate, formatTheme, getThemeColor)
-- ✅ Cleaned up layout and spacing
-
-**Files Modified:**
-- `context-owl-ui/src/pages/Signals.tsx` (25 lines removed, 7 lines added)
-
-**Ticket:** `/mnt/user-data/outputs/FEATURE-036-remove-signals-part-of.md`
-
----
-
-### 📋 Medium Priority
-
-#### FEATURE-035: Update Briefing Recommended Reading Links
-**Priority:** MEDIUM  
-**Status:** Ready  
-**Complexity:** Low  
-**Effort:** 1.2 hours estimated
-
-**Why this matters:**
-- Recommended reading links currently go to generic `/narratives` page
-- Users can't click to explore recommendations
-- Feature feels broken/incomplete
-
-**What we're doing:**
-- Backend: Add `narrative_id` to recommendation objects
-- Frontend: Link to `/narratives?highlight={id}` with auto-scroll
-- Visual highlight effect (glow + pulse animation)
-- Graceful fallback for old briefings without IDs
-
-**Approach:** Query parameter + highlight (no detail page needed)
-- User clicks recommendation
-- Navigate to `/narratives?highlight={narrative_id}`
-- Page auto-scrolls to matching narrative card
-- Visual pulse effect highlights the card for 5 seconds
-
-**Files:**
-- `src/crypto_news_aggregator/services/briefing_agent.py` (backend)
-- `context-owl-ui/src/pages/Briefing.tsx` (update links)
-- `context-owl-ui/src/pages/Narratives.tsx` (add highlight logic)
-- `context-owl-ui/src/index.css` (CSS animation)
-
-**Ticket:** `/mnt/user-data/outputs/FEATURE-035-briefing-recommended-links.md`
-
----
-
-#### BUG-010: Briefing Morning/Evening Label Accuracy
-**Priority:** MEDIUM  
-**Status:** Ready  
-**Severity:** Low  
-**Effort:** 30 min estimated
-
-**Why this matters:**
-- Briefing page should accurately show "Morning" or "Evening"
-- Label should be based on actual generation time
-- Current implementation unclear
-
-**What we're investigating:**
-- Does backend set `type` field correctly?
-- Is it based on scheduled time (8 AM/8 PM) or actual time?
-- Does it persist correctly in MongoDB?
-
-**Proposed fix:**
-Backend should set `type` based on scheduled hour:
-- `scheduled_hour == 8` → `type = "morning"`
-- `scheduled_hour == 20` → `type = "evening"`
-
-**Files:**
-- `src/crypto_news_aggregator/services/briefing_agent.py` (investigation/fix)
-
-**Ticket:** `/mnt/user-data/outputs/BUG-010-briefing-morning-evening-label.md`
-
----
-
-
-## Sprint Progress
-
-### Velocity Tracker
-- **Total tickets:** 4 (3 features + 1 bug)
-- **Completed:** 2/4 (50%) ✅
-- **In Progress:** 0
-- **Blocked:** 0
-- **Estimated hours:** 1.5 hours remaining (of 2.5 total)
-
-### Completed This Sprint
-✅ **FEATURE-033** - Haiku 4.5 Migration (commit 6512b70)
-- Model string updated
-- Pricing table updated
-- Deployed to production
-
-✅ **FEATURE-036** - Remove "Part of:" section from signals (commit 79eba73)
-- Narrative links removed
-- Emerging badge kept
-- Layout cleaned up
-
-### Current Focus
-1. 🟡 **BUG-010** - Briefing label investigation (30 min)
-2. 🟡 **FEATURE-035** - Recommended reading links with highlight (1.2 hours)
-
----
-
-## Dependency Graph
-
-```
-FEATURE-033 (Haiku Migration) ────────────────────┐
-                                                   │
-BUG-010 (Briefing Labels) ───────────────────────┤
-                                                   ├─→ Deploy Together (Phase 1)
-FEATURE-036 (Remove "Part of") ──────────────────┤
-                                                   │
-                                                   └─→ Quick Wins
-
-FEATURE-035 (Recommended Links with Highlight) ──→ Deploy Independently (Phase 2)
-```
-
----
-
-## Technical Context
-
-### Model Migration Details
-**Current:** Claude 3.5 Haiku (deprecated)  
-**New:** Claude Haiku 4.5
-
-| Model | Input Cost | Output Cost |
-|-------|------------|-------------|
-| 3.5 Haiku | $0.80/1M | $4.00/1M |
-| 4.5 Haiku | $1.00/1M | $5.00/1M |
-
-**Performance:** 4.5 is 4-5x faster, better quality
-
----
-
-### UI Architecture Changes
-
-**New Routes:**
-- `/narratives/:id` - Narrative detail page (new)
-
-**Shared Components to Extract:**
-- `LifecycleBadge` - Used by Narratives list + detail
-- `ArticleCard` - Reusable article display
-
-**Files to Modify:**
-- Briefing.tsx - Link recommendations to detail pages
-- Signals.tsx - Remove broken narrative links
-- Narratives.tsx - Refactor to use shared components
-
----
-
-## Risk Assessment
-
-### Low Risk
-🟢 **All tickets** - Straightforward implementations with clear scope
-- FEATURE-033: Simple model string update
-- FEATURE-036: Removing existing code
-- FEATURE-035: Query param + CSS animation
-- BUG-010: Investigation only, minimal code change
-
----
-
-## Testing Strategy
-
-### Unit Tests
-- Cost tracker with new Haiku 4.5 pricing
-- Entity extraction with new model
-- Narrative detail component rendering
-
-### Integration Tests
-- Recommended reading navigation flow
-- Narrative detail page data loading
-
-### Manual QA
-- Test all new routes and links
-- Verify dark mode on all new pages
-- Check responsive design (mobile, tablet, desktop)
-
----
-
-## Deployment Plan
-
-### Phase 1: Quick Wins (Day 1-2) - MOSTLY COMPLETE
-1. ✅ Deploy FEATURE-033 (Haiku 4.5) - COMPLETE (commit 6512b70)
-2. ✅ Monitor first few API calls with new model - VERIFIED
-3. ✅ Verify cost tracking accuracy with new pricing - VERIFIED
-4. ✅ Deploy FEATURE-036 (remove "Part of:") - COMPLETE (commit 79eba73)
-5. ⏳ Deploy BUG-010 (label fix) if investigation confirms it's needed
-
-### Phase 2: Recommended Reading Enhancement (Day 3-5)
-1. Develop and test FEATURE-035 (recommended links with highlight)
-2. Test highlight animation in both light/dark modes
-3. Deploy FEATURE-035
-
-### Phase 3: Verification (Day 6-14)
-1. Monitor production for issues
-2. Gather user feedback on highlight effect
-3. Measure cost impact of Haiku 4.5 upgrade
-4. Fix any bugs discovered
-5. Document lessons learned
-
----
-
-## Success Metrics
-
-### Cost & Performance
-- Monthly LLM cost remains under $10 (target: ~$0.86)
-- Haiku 4.5 entity extraction quality ≥ 3.5 Haiku
-- No API errors or rate limiting
-
-### User Experience
-- Recommended reading links work with highlight animation
-- Zero navigation errors (links work correctly)
-- Clean, focused signal cards (no confusing elements)
-- Highlight effect is smooth and professional
-
-### Code Quality
-- All tests passing (30+ existing + new tests)
-- No console errors or warnings
-- TypeScript compilation clean
-- Production build succeeds
-
----
-
-## Next Actions
-
-### Immediate (This Session)
-1. ✅ **COMPLETE: FEATURE-033** - Haiku 4.5 deployed (commit 6512b70)
-2. ⏳ **Verify FEATURE-033** - Monitor production logs for new model
-3. ⏳ **Start FEATURE-036** - Remove "Part of:" section (quick win, 10 min)
-4. ⏳ **Investigate BUG-010** - Check if briefing type field needs fixing
-
-### This Week
-1. Complete FEATURE-036 (signals cleanup)
-2. Complete BUG-010 (briefing labels) if fix needed  
-3. Start FEATURE-035 (recommended reading with highlight)
-4. Deploy batch to production
-5. Monitor cost tracking with new Haiku 4.5 model
-
-### Next Week
-1. Complete FEATURE-035
-2. Verify all features in production
-3. Gather user feedback
-4. Sprint review and retrospective
-
----
-
-## Open Questions
-
-- [ ] **BUG-010:** Is briefing `type` field being set correctly?
-- [ ] **Cost:** Will Haiku 4.5 pricing increase impact monthly budget significantly?
-- [ ] **FEATURE-035:** Does backend already include narrative_id in recommendations?
-
----
-
-## Lessons from Sprint 6
-
-**What worked well:**
-- ✅ Clear ticket templates with implementation details
-- ✅ Comprehensive testing before deployment
-- ✅ Breaking critical bugs into separate tickets
-- ✅ Actual effort was 55% less than estimated (good padding)
-
-**What to improve:**
-- 🔄 Add deployment verification checklist
-- 🔄 Monitor production more proactively
-- 🔄 Create integration tests for Celery tasks
-- 🔄 Document Railway environment variables
-
-**Apply to Sprint 7:**
-- Use detailed tickets (working well)
-- Add production monitoring to each deployment
-- Create verification script for briefing generation
-- Test in production immediately after deploy
-
----
-
-**Sprint Health:** 🟡 **READY TO START**
-
-**Last Updated:** 2026-02-06  
-**Next Review:** 2026-02-13 (mid-sprint check-in)
-
----
-
-## Files Delivered This Sprint
-
-### To Be Created
-- None (all changes are modifications to existing files)
-
-### To Be Modified
-- `src/crypto_news_aggregator/llm/optimized_anthropic.py`
-- `src/crypto_news_aggregator/services/cost_tracker.py`
-- `src/crypto_news_aggregator/services/briefing_agent.py`
-- `context-owl-ui/src/pages/Briefing.tsx`
-- `context-owl-ui/src/pages/Signals.tsx`
-- `context-owl-ui/src/pages/Narratives.tsx`
-- `context-owl-ui/src/index.css`
-- `context-owl-ui/src/types/index.ts`
-
-**Total:** 0 new files, 8 modified files
+# Sprint 9: Documentation Infrastructure & Critical System Docs
+
+## Sprint Goal
+Replace ad-hoc documentation with maintainable, code-derived system docs + context preservation layer.
+
+## Sprint Status: IN PROGRESS
+
+### Completed ✅
+- **FEATURE-038:** Documentation Infrastructure Setup ✅
+  - Folder structure created (system, context, evidence, templates)
+  - Templates created with Context Extraction Rule and anchor strategy
+  - Evidence script fully functional and CI-safe (supports ripgrep binary + Claude Code fallback)
+  - All 12 evidence files generated (6401 total lines)
+  - Evidence file numbering corrected to sequential 01-12 with logical grouping (Commit 7abee5e)
+  - Branch: `feature/feature-038-documentation-infra-setup` (ready for PR)
+
+- **FEATURE-039:** Critical System Documentation ✅
+  - 20-scheduling.md (206 lines): Beat schedule, task dispatch, manual trigger, debugging
+  - 50-data-model.md (262 lines): MongoDB collections, briefing schema, data flow
+  - 60-llm.md (391 lines): Claude API, generation workflow, self-refine loop, cost tracking
+  - Total: 859 lines with file:line references and operational checks
+  - Commit: b8944a9 | Branch: feature/feature-038-documentation-infra-setup
+
+- **FEATURE-044:** Windsurf Context Triage ✅
+  - Discovered 231 Windsurf files, triaged to 93 high-priority
+  - Generated navigable index with cluster organization
+  - Token budget: ~50K (well under 85K for FEATURE-041A)
+  - Commit: f2726a2 | Branch: feature/feature-044-windsurf-context-triage
+
+- **FEATURE-041A:** Context Extraction (Mechanical) ✅
+  - 42 context entries extracted from 15 high-priority Windsurf files
+  - 100% anchor coverage (every entry links to system doc anchors)
+  - 2 contradictions flagged for FEATURE-041B
+  - File: `docs/_generated/context/extracted-windsurf-context.md` (323 lines)
+  - Token usage: ~40K (within budget)
+  - Commit: pending | Branch: feature/feature-041a-context-extraction
+
+- **FEATURE-040:** Complete System Documentation ✅
+  - Generated 5 remaining system modules (217-389 lines each)
+  - Total: 2,526 lines across 8 complete modules
+  - Commit: 4791346 | Ready for FEATURE-043 validation
+
+### Blocked ⛔
+- None - FEATURE-039, 040, 043, 044, 041A dependencies satisfied
+
+## Active Tickets
+
+### FEATURE-037: Manual Briefing Generation (HIGH PRIORITY)
+**Status:** In Progress
+**Goal:** Enable on-demand briefing generation with afternoon coverage
+
+**Key Changes:**
+1. Add `force` parameter to bypass duplicate checks
+2. Implement afternoon briefing type (12 PM - 8 PM EST)
+3. Auto-detect briefing type based on EST time
+4. Default force=True for manual triggers, force=False for scheduled
+
+**Implementation Phases:**
+- [ ] Phase 1: Update briefing_tasks.py (add force param + afternoon task)
+- [ ] Phase 2: Update admin.py endpoint (auto-detection logic)
+- [ ] Phase 3: Update beat schedule (add afternoon, set force=false)
+- [ ] Phase 4: Frontend updates (handle afternoon type)
+
+**Testing Plan:**
+- Test force parameter allows multiple briefings per period
+- Test auto-detection selects correct type based on EST time
+- Test all three types (morning/afternoon/evening)
+- Verify duplicate prevention still works for scheduled tasks
+
+## Sprint Metrics
+
+### Velocity
+- Planned points: 43 total (32 committed + 8 stretch)
+- Completed points: 32 (FEATURE-038 + FEATURE-039 + FEATURE-040 + FEATURE-044 + FEATURE-041A)
+- In progress points: 0
+- Progress: 74% complete (8 days into 10-day sprint)
+
+### Production Health
+- ✅ Briefing pipeline operational
+- ✅ No event loop errors
+- ✅ No MongoDB connection errors
+- ✅ Manual trigger endpoint working
+- ⏳ Awaiting manual briefing flexibility
+
+## Next Steps
+1. **FEATURE-043:** Documentation guardrails (validation script for doc drift prevention) — 3-4 hours
+2. **FEATURE-041B:** Contradiction resolution (resolve 2 contradictions from FEATURE-041A) — 2-3 hours
+3. **FEATURE-042:** Archive & Navigation (deferred if time tight) — 2-3 hours
+
+## Dependencies & Blockers
+- None currently blocking progress
+
+## Notes
+- Production verification completed 2026-02-09
+- Morning briefing generated successfully (103.4s, ID: 69896c29d4d4231e739080c0)
+- Briefing pipeline working end-to-end
+- FEATURE-041A completed using specialized agent delegation (best practice: frees main context for planning)
+- Ready for FEATURE-040 parallel execution with FEATURE-043
+
+## Best Practice: Specialized Agent Delegation
+
+**Observation from FEATURE-041A:**
+Using the Task tool to delegate mechanical extraction work to a `general-purpose` specialized agent proved highly effective:
+
+**Benefits:**
+1. **Context preservation** - Main agent stays fresh for planning/decision-making
+2. **Token efficiency** - Specialized agent handles file reading (35K tokens) without consuming main context
+3. **Quality output** - Focused prompt with strict rules produces consistent, verifiable results
+4. **Resumability** - Agent ID enables continuation if needed (ad3be29)
+5. **Parallelization** - Main agent can plan next steps while extraction runs
+
+**When to use this pattern:**
+- Mechanical tasks with clear, repeatable workflow
+- Tasks requiring reading many files (>5 files)
+- Tasks with strict validation rules (anchor coverage, contradiction tracking)
+- Tasks that would consume >30K tokens in main context
+
+**Example prompt structure:**
+1. State the critical rule (Context Extraction Invariant)
+2. Provide reference materials (system docs, indices)
+3. Define workflow (steps 1-5)
+4. Show examples of what to extract vs. skip
+5. Specify output format and success criteria
+6. Include token budget estimate
