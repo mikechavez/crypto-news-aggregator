@@ -73,36 +73,36 @@ generate_evidence "01-entrypoints" "Application entry points and server initiali
 
 echo "⏰ Celery & Scheduling..."
 generate_evidence "02-celery-registration" "Celery task registration" '@shared_task|@celery\.task|@app\.task' --type py .
-generate_evidence "02-celery-beat" "Scheduled task configuration (Celery Beat)" 'beat_schedule|periodic_task|crontab|CELERY_BEAT' --type py .
+generate_evidence "03-celery-beat" "Scheduled task configuration (Celery Beat)" 'beat_schedule|periodic_task|crontab|CELERY_BEAT' --type py .
 
 echo "🗄️  MongoDB..."
-generate_evidence "03-mongo-init" "MongoDB client initialization" 'mongo_manager|MongoClient|motor_asyncio|get_db' --type py .
-generate_evidence "03-mongo-collections" "Database collection usage patterns" 'db\[|get_collection|collection_name|briefing' --type py .
+generate_evidence "04-mongo-init" "MongoDB client initialization" 'mongo_manager|MongoClient|motor_asyncio|get_db' --type py .
+generate_evidence "05-mongo-collections" "Database collection usage patterns" 'db\[|get_collection|collection_name|briefing' --type py .
 
 echo "🧠 LLM Integration..."
-generate_evidence "04-llm-client" "LLM client initialization" 'Anthropic|anthropic|get_llm_provider|claude' --type py .
-generate_evidence "04-llm-prompts" "Prompt construction and message formatting" 'system_prompt|messages|SystemMessage|content' --type py .
+generate_evidence "06-llm-client" "LLM client initialization" 'Anthropic|anthropic|get_llm_provider|claude' --type py .
+generate_evidence "07-llm-prompts" "Prompt construction and message formatting" 'system_prompt|messages|SystemMessage|content' --type py .
 
 echo "📰 Briefing Generation..."
-generate_evidence "05-briefing-generation" "Briefing agent workflow" 'BriefingAgent|generate_briefing|briefing_agent' --type py .
-generate_evidence "05-briefing-save" "Database persistence operations for briefings" 'save_briefing|insert_one|update_one|publish' --type py .
+generate_evidence "08-briefing-generation" "Briefing agent workflow" 'BriefingAgent|generate_briefing|briefing_agent' --type py .
+generate_evidence "09-briefing-save" "Database persistence operations for briefings" 'save_briefing|insert_one|update_one|publish' --type py .
 
 echo "🌐 Frontend Routing..."
 # Note: Some ripgrep versions don't support tsx type, so we search all files
-generate_evidence "06-frontend-routes" "Frontend routing patterns" 'useRouter|useNavigate|Route|path|navigate' .
+generate_evidence "10-frontend-routes" "Frontend routing patterns" 'useRouter|useNavigate|Route|path|navigate' .
 
 echo "⚠️  Error Handling..."
-generate_evidence "07-error-handlers" "Exception handling patterns" 'except|raise|logger\.error|RuntimeError' --type py .
+generate_evidence "11-error-handlers" "Exception handling patterns" 'except|raise|logger\.error|RuntimeError' --type py .
 
 echo "⚙️  Configuration..."
-generate_evidence "08-config" "Configuration and settings" 'settings|Config|environ|get_settings' --type py .
+generate_evidence "12-config" "Configuration and settings" 'settings|Config|environ|get_settings' --type py .
 
 echo ""
 echo "📚 Validation..."
 echo ""
 
 # Validation: exit non-zero if any file is missing or empty
-EXPECTED_FILES=(01-entrypoints 02-celery-registration 02-celery-beat 03-mongo-init 03-mongo-collections 04-llm-client 04-llm-prompts 05-briefing-generation 05-briefing-save 06-frontend-routes 07-error-handlers 08-config)
+EXPECTED_FILES=(01-entrypoints 02-celery-registration 03-celery-beat 04-mongo-init 05-mongo-collections 06-llm-client 07-llm-prompts 08-briefing-generation 09-briefing-save 10-frontend-routes 11-error-handlers 12-config)
 FAILED=0
 for file in "${EXPECTED_FILES[@]}"; do
     filepath="$OUTPUT_DIR/${file}.txt"
