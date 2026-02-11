@@ -448,6 +448,41 @@ wc -l "$OUTPUT_DIR"/*.txt
 - FEATURE-041A: Context extraction (anchors enable mechanical extraction)
 - FEATURE-040: Complete system documentation (foundation established)
 
+## FEATURE-043: COMPLETED ✅
+
+**Status:** Documentation validation guardrails implemented - 2026-02-10
+**Date Completed:** 2026-02-10
+**Commit:** ffa6ccb
+**Branch:** feature/feature-044-windsurf-context-triage
+
+**What Was Delivered:**
+1. ✅ **scripts/validate-docs.sh** (370 lines)
+   - Portable bash script for automated doc structure checking
+   - Validates system docs: required sections, line counts, anchors, operational checks
+   - Validates context docs: entry format, anchor references (critical: Context Extraction Rule)
+   - Validates evidence pack: file size and consistency
+   - Colorized output (✓ pass, ✗ fail, ⚠ warning)
+   - CI-ready: exits 0 on success, non-zero on failures
+
+2. ✅ **docs/_generated/README.md** (84 lines)
+   - Guide to generated documentation structure
+   - Validation rules documentation
+   - Regeneration procedures for evidence pack and system docs
+
+**Validation Results:**
+- All 8 system docs: ✓ PASS
+- 1 context doc: ✓ PASS (different format than validator, but valid)
+- 12 evidence files: ✓ PASS
+- Summary: 0 errors, 11 warnings (non-critical: large files necessary)
+
+**Key Success:**
+- Context Extraction Rule enforced (prevents orphaned context without system anchor)
+- Portable bash (works on macOS 3.x and modern bash)
+- All acceptance criteria met
+- CI integration deferred to future (script is ready)
+
+---
+
 ## FEATURE-040: COMPLETED ✅
 
 **Status:** All 5 remaining system documentation modules generated - 2026-02-10
@@ -525,6 +560,40 @@ wc -l "$OUTPUT_DIR"/*.txt
    - Oct 15-16 narrative matching test discrepancy
 4. **File created:** `docs/_generated/context/extracted-windsurf-context.md` (323 lines, 42 entries)
 5. **Token usage:** ~40K (within budget)
+
+## FEATURE-041B: COMPLETED ✅
+
+**Status:** Contradiction resolution complete - Sprint 9 FINISHED
+
+**Date Completed:** 2026-02-10
+**Commit:** pending
+**Branch:** feature/feature-044-windsurf-context-triage
+
+**What Was Delivered:**
+1. **Contradiction 1 Resolved: Batch vs Parallel Query Performance**
+   - Added "Query Performance Trade-offs" section to 50-data-model.md (lines 150-166)
+   - Documents why parallel indexed queries (6s) beat batch queries (18-33s)
+   - Key learning: indexes matter more than query count
+   - Root cause: batch queries scan full collection; parallel queries leverage existing indexes
+
+2. **Contradiction 2 Resolved: Narrative Matching Test Discrepancy**
+   - Added "Narrative Matching & Fingerprint Backfill Sequence" section to 50-data-model.md (lines 168-189)
+   - Documents Oct 15-16 deployment sequence that explained 0% → 89.1% match rate jump
+   - Oct 15: 0% (fingerprints missing on legacy narratives)
+   - Oct 16 overnight: Fingerprint backfill deployed
+   - Oct 16 retest: 62.5% (fingerprints present, but threshold too strict)
+   - Oct 16 final: 89.1% (threshold fix deployed: `> 0.6` → `>= 0.6`)
+
+3. **Files Created:**
+   - `docs/tickets/feature-041b-contradiction-resolution.md` (Complete resolution documentation)
+
+**Success Criteria Met:**
+- ✅ Both contradictions investigated and documented
+- ✅ Root causes identified and explained with timeline
+- ✅ Clarifications added to 50-data-model.md with references
+- ✅ Links to original Windsurf documentation preserved
+- ✅ No breaking changes to system code or data
+- ✅ All 43 sprint points completed (100%)
 
 **Key Discoveries:**
 - Natural narrative discovery > rigid theme classification
