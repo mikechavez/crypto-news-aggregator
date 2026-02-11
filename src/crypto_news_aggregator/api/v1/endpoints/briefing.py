@@ -399,7 +399,7 @@ async def get_next_briefing_time_endpoint():
 class GenerateBriefingRequest(BaseModel):
     """Request to manually generate a briefing."""
 
-    type: str = Field("morning", description="Briefing type: 'morning' or 'evening'")
+    type: str = Field("morning", description="Briefing type: 'morning', 'afternoon', or 'evening'")
     force: bool = Field(True, description="Force generation even if one exists today")
 
 
@@ -425,15 +425,17 @@ async def generate_briefing_endpoint(request: GenerateBriefingRequest):
     Returns:
         GenerateBriefingResponse with success status and briefing ID
     """
-    from ....services.briefing_agent import generate_morning_briefing, generate_evening_briefing
+    from ....services.briefing_agent import generate_morning_briefing, generate_afternoon_briefing, generate_evening_briefing
 
     try:
         if request.type == "morning":
             briefing = await generate_morning_briefing(force=request.force)
+        elif request.type == "afternoon":
+            briefing = await generate_afternoon_briefing(force=request.force)
         elif request.type == "evening":
             briefing = await generate_evening_briefing(force=request.force)
         else:
-            raise HTTPException(status_code=400, detail="Invalid briefing type. Use 'morning' or 'evening'")
+            raise HTTPException(status_code=400, detail="Invalid briefing type. Use 'morning', 'afternoon', or 'evening'")
 
         if briefing:
             return GenerateBriefingResponse(

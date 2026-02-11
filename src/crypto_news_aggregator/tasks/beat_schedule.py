@@ -59,20 +59,6 @@ def get_schedule():
                 "time_limit": 600,  # 10 minutes
             },
         },
-        # Afternoon briefing at 2:00 PM EST (19:00 UTC, or 18:00 UTC during DST)
-        # Provides midday market coverage between morning and evening briefings
-        "generate-afternoon-briefing": {
-            "task": "generate_afternoon_briefing",
-            "schedule": crontab(
-                hour=14,
-                minute=0,
-            ),
-            "kwargs": {"force": False},  # Prevent duplicates for scheduled tasks
-            "options": {
-                "expires": 3600,  # 1 hour
-                "time_limit": 600,  # 10 minutes
-            },
-        },
         # Evening briefing at 8:00 PM EST (01:00 UTC next day, or 00:00 UTC during DST)
         "generate-evening-briefing": {
             "task": "generate_evening_briefing",

@@ -929,6 +929,12 @@ async def generate_morning_briefing(force: bool = False, is_smoke: bool = False,
     return await agent.generate_briefing("morning", force=force, is_smoke=is_smoke, task_id=task_id)
 
 
+async def generate_afternoon_briefing(force: bool = False, is_smoke: bool = False, task_id: str | None = None) -> Optional[Dict[str, Any]]:
+    """Convenience function to generate afternoon briefing (manual trigger only)."""
+    agent = get_briefing_agent()
+    return await agent.generate_briefing("afternoon", force=force, is_smoke=is_smoke, task_id=task_id)
+
+
 async def generate_evening_briefing(force: bool = False, is_smoke: bool = False, task_id: str | None = None) -> Optional[Dict[str, Any]]:
     """Convenience function to generate evening briefing."""
     agent = get_briefing_agent()
