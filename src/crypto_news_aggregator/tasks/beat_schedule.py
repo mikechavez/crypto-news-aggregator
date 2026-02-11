@@ -40,7 +40,8 @@ def get_schedule():
             },
         },
         # ============================================================
-        # Briefing Tasks - Daily crypto briefings at 8 AM, 2 PM, and 8 PM EST
+        # Briefing Tasks - Daily crypto briefings at 8 AM and 8 PM EST
+        # Afternoon briefing available via manual API trigger only
         # ============================================================
         # Morning briefing at 8:00 AM EST (13:00 UTC, or 12:00 UTC during DST)
         # Using America/New_York timezone for automatic DST handling
