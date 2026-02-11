@@ -70,12 +70,10 @@ async def get_latest_briefing() -> Optional[Dict[str, Any]]:
     db = await mongo_manager.get_async_database()
     collection = db.daily_briefings
 
-    briefing = await collection.find_one(
-        _get_production_briefings_filter(),
-        sort=[("generated_at", -1)]
-    )
+    cursor = collection.find(_get_production_briefings_filter()).sort("generated_at", -1).limit(1)
+    briefing = await cursor.to_list(length=1)
 
-    return briefing
+    return briefing[0] if briefing else None
 
 
 async def get_briefing_by_type_and_date(
